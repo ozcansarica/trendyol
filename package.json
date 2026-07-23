@@ -1,0 +1,11 @@
+{
+  "name": "trendyol-maliyet-hesaplama",
+  "version": "1.0.0",
+  "description": "Trendyol maliyet & kâr hesaplama aracı",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
