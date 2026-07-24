@@ -23,8 +23,10 @@
   .settings { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .settings .lbl { font-size: 12px; color: var(--muted); font-weight: 700; }
   .tarife-toggle { display: flex; gap: 6px; }
-  .tarife-toggle button { padding: 7px 14px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .tarife-toggle button { padding: 7px 14px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: left; }
   .tarife-toggle button.active { border-color: var(--orange); background: #fff3e8; color: var(--orange); }
+  .tarife-toggle button .tarih { display: block; font-size: 10px; font-weight: 500; color: #94a3b8; margin-top: 2px; }
+  .tarife-toggle button.active .tarih { color: #c2760f; }
   .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 480px; }
 
   .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -67,6 +69,8 @@
   .aralik-kar .kv-line.small .pos { color: var(--green); font-weight: 700; }
   .aralik-kar .kv-line.small .neg { color: var(--red); font-weight: 700; }
   .aralik-cell.best { background: var(--green-bg); outline: 2px solid var(--green); outline-offset: -2px; }
+  .aralik-cell.na { background: #f8f9fb; opacity: .65; }
+  .aralik-cell.na .na-text { font-size: 11px; color: #b0b7c3; margin-top: 8px; font-style: italic; }
   .trophy { font-size: 11px; }
 
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
@@ -95,8 +99,8 @@
   <div class="settings">
     <span class="lbl">Tarife:</span>
     <div class="tarife-toggle">
-      <button id="btn-3gun" onclick="setTarife('3gun')">3 Günlük</button>
-      <button id="btn-4gun" onclick="setTarife('4gun')">4 Günlük</button>
+      <button id="btn-3gun" onclick="setTarife('3gun')">3 Günlük<span class="tarih" id="tarih3gun"></span></button>
+      <button id="btn-4gun" onclick="setTarife('4gun')">4 Günlük<span class="tarih" id="tarih4gun"></span></button>
     </div>
     <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
@@ -177,6 +181,15 @@ function updateStatusUI() {
   }
 }
 
+// Tarife butonlarının yanında gösterilecek tarih aralığını, veride ilk
+// bulunan dolu değerden alır (bir haftalık dosyada tüm ürünlerde aynıdır).
+function updateTarifeDates() {
+  const t3 = activeUrunler.find(u => u.tarih_3gun)?.tarih_3gun || '';
+  const t4 = activeUrunler.find(u => u.tarih_4gun)?.tarih_4gun || '';
+  document.getElementById('tarih3gun').textContent = t3;
+  document.getElementById('tarih4gun').textContent = t4;
+}
+
 function showMsg(elId, msg) {
   const el = document.getElementById(elId);
   el.textContent = msg;
@@ -196,6 +209,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ urunler, fileName: file.name, uploadedAt: activeMeta.uploadedAt }));
     if (warnings.length > 0) showMsg('uploadWarn', `${warnings.length} satır eksik fiyat verisi nedeniyle atlandı.`);
     updateStatusUI();
+    updateTarifeDates();
     render();
   } catch (err) {
     showMsg('uploadError', `Excel okunamadı: ${err.message}`);
@@ -226,6 +240,7 @@ function tierInfo(u) {
   ];
 
   const results = tiers.map((t, i) => {
+    if (!t.komisyon) return { ...t, sellPrice: null, kar: null, karOrani: null }; // komisyon 0/tanımsız → bu aralık geçersiz
     let sellPrice;
     if (i === 0) sellPrice = Math.max(t.minPrice, u.guncel_tsf);
     else sellPrice = t.maxPrice;
@@ -234,8 +249,9 @@ function tierInfo(u) {
     return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani };
   });
 
-  const bestKarOrani = Math.max(...results.map(r => r.karOrani));
-  results.forEach(r => { r.isBest = r.karOrani === bestKarOrani; });
+  const gecerli = results.filter(r => r.karOrani !== null);
+  const bestKarOrani = gecerli.length > 0 ? Math.max(...gecerli.map(r => r.karOrani)) : null;
+  results.forEach(r => { r.isBest = r.karOrani !== null && r.karOrani === bestKarOrani; });
   return results;
 }
 
@@ -261,6 +277,9 @@ function render() {
       </div>`;
 
     const aralikCells = tiers.map(t => {
+      if (t.karOrani === null) {
+        return `<td><div class="aralik-cell na"><div class="aralik-range"><b>${t.rangeText}</b></div><div class="na-text">Bu üründe geçerli değil</div></div></td>`;
+      }
       const cls = 'aralik-cell' + (t.isBest ? ' best' : '');
       const karCls = t.karOrani >= 0 ? 'pos' : 'neg';
       return `<td>
@@ -284,6 +303,7 @@ function render() {
 
 loadFromStorage();
 updateStatusUI();
+updateTarifeDates();
 setTarife('3gun');
 </script>
 </body>

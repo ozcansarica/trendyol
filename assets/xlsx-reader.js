@@ -164,6 +164,8 @@ export async function parseUrunlerXlsx(arrayBuffer) {
       f3_ust: num(row[iF3Ust]),
       f3_alt: num(row[iF3Alt]),
       f4_ust: num(row[iF4Ust]),
+      tarih_3gun: row[i3Gun] != null ? String(row[i3Gun]) : '',
+      tarih_4gun: row[i4Gun] != null ? String(row[i4Gun]) : '',
       k3_1: num(row[i3Gun + 1]), k3_2: num(row[i3Gun + 2]), k3_3: num(row[i3Gun + 3]), k3_4: num(row[i3Gun + 4]),
       k4_1: num(row[i4Gun + 1]), k4_2: num(row[i4Gun + 2]), k4_3: num(row[i4Gun + 3]), k4_4: num(row[i4Gun + 4]),
       komisyon_fiyat: num(row[iKomisyonFiyat]),
