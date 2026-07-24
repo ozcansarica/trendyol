@@ -19,7 +19,7 @@ KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:
 Ürünler her hafta değişebildiği için sayfadaki **Excel Yükle** butonuyla yeni
 `.xlsx` dosyası seçilebilir. Veriler tarayıcıda anında ayrıştırılıp tabloya
 yansır ve bu tarayıcıda kalıcı olarak saklanır (sayfa yenilense de kaybolmaz).
-"Varsayılana Dön" ile depodaki varsayılan veriye dönülebilir.
+En son yüklenen dosya geçerli veri kaynağıdır.
 
 ## Çıktılar (aralık başına)
 - Fiyat aralığı ve komisyon oranı
