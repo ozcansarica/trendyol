@@ -6,8 +6,11 @@
 // JSZip global olarak yüklenmiş olmalı (bkz. index.html <script src="assets/vendor/jszip.min.js">).
 
 // Beklenen kolon başlıkları (Excel'in ilk satırı). Sıra değişebilir, isimle eşleştirilir.
+// Not: "Maliyet" kolonu artık zorunlu değil — maliyetler sayfadaki Maliyet Girişi
+// panelinden barkoda göre giriliyor (bkz. index.html applyMaliyetKayitlari()).
+// Eski format dosyalarda "Maliyet" kolonu varsa yine okunur (aşağıya bakın).
 const REQUIRED_COLUMNS = [
-  'ÜRÜN İSMİ', 'Maliyet',
+  'ÜRÜN İSMİ',
   '1.Fiyat Alt Limit', '2.Fiyat Üst Limiti', '2.Fiyat Alt Limit',
   '3.Fiyat Üst Limiti', '3.Fiyat Alt Limit', '4.Fiyat Üst Limiti',
   'Tarih aralığı (3 Gün)', 'Tarih aralığı (4 Gün)',
@@ -142,7 +145,9 @@ export async function parseUrunlerXlsx(arrayBuffer) {
     const urunAdi = row[iUrun];
     if (urunAdi == null || String(urunAdi).trim() === '') continue; // boş satır
 
-    const maliyet = num(row[iMaliyet]);
+    // Excel'de "Maliyet" kolonu yoksa 0 kabul edilir; sayfa açılışında
+    // applyMaliyetKayitlari() barkoda göre kayıtlı maliyeti otomatik uygular.
+    const maliyet = iMaliyet !== -1 ? num(row[iMaliyet]) : 0;
     const f1Alt = num(row[iF1Alt]);
     const guncelTsf = num(row[iGuncelTsf]);
     if (!f1Alt || !guncelTsf) {
