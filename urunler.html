@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trendyol Ürün Maliyet Tablosu</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --orange: #f27a1a; --orange-d: #e55a00; --navy: #1e293b; --line: #e6e9ef;
+    --bg: #f4f6f9; --green: #15803d; --red: #dc2626; --muted: #64748b;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #111827; padding-bottom: 40px; }
+
+  .header { background: linear-gradient(135deg, var(--orange) 0%, var(--orange-d) 100%); color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .header-logo { font-size: 26px; }
+  .header h1 { font-size: 18px; font-weight: 800; }
+  .header p { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+  .header nav { margin-left: auto; }
+  .header nav a { color: #fff; font-size: 12px; text-decoration: none; background: rgba(255,255,255,0.18); padding: 7px 12px; border-radius: 8px; font-weight: 600; }
+  .header nav a:hover { background: rgba(255,255,255,0.3); }
+
+  .wrap { max-width: 1280px; margin: 18px auto; padding: 0 14px; }
+
+  .settings { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .settings label { font-size: 12px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .settings input { width: 80px; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--navy); }
+  .settings input:focus { outline: none; border-color: var(--orange); }
+  .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card .l { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .card .v { font-size: 20px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .card .v.g { color: var(--green); } .card .v.o { color: var(--orange); }
+
+  .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 68vh; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; white-space: nowrap; }
+  thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 9px 10px; text-align: right; cursor: pointer; user-select: none; }
+  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  thead th:hover { background: #2b3a52; }
+  th .ar { opacity: .5; font-size: 10px; }
+  tbody td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #f0f2f5; font-variant-numeric: tabular-nums; }
+  tbody td:first-child { text-align: left; color: var(--muted); }
+  tbody td.nm { text-align: left; white-space: normal; min-width: 220px; max-width: 320px; font-weight: 600; }
+  tbody tr:hover { background: #fff8f0; }
+  .pos { color: var(--green); font-weight: 700; } .neg { color: var(--red); font-weight: 700; }
+  tfoot td { position: sticky; bottom: 0; background: #eef2f8; font-weight: 800; padding: 9px 10px; text-align: right; border-top: 2px solid #cbd5e1; }
+  tfoot td:first-child { text-align: left; }
+
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+  footer code { background:#eef1f6; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">🛒</div>
+  <div>
+    <h1>Trendyol Ürün Maliyet Tablosu</h1>
+    <p>Excel'den içe aktarılan ürünler için toplu kâr & KDV hesaplaması</p>
+  </div>
+  <nav><a href="./index.html">← Tekli Hesaplama</a></nav>
+</div>
+
+<div class="wrap">
+  <div class="settings">
+    <label>KDV % <input type="number" id="kdv" value="20" step="0.01" min="0" oninput="render()"></label>
+    <label>Kargo (₺) <input type="number" id="kargo" value="0" step="0.01" min="0" oninput="render()"></label>
+    <span class="hint">*Kaynak Excel'de KDV ve kargo bilgisi yoktu; varsayılan değerler yukarıdan değiştirilebilir. Kolon başlığına tıklayarak sırala.</span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="tablewrap"><table id="t"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+
+  <footer>
+    Girdiler <code>assets/urunler-data.js</code> içindeki <code>URUNLER</code> dizisinden, hesaplama <code>assets/calc.js</code>'den gelir.
+    Yeni ürün eklemek/güncellemek için o dosyayı düzenleyin.
+  </footer>
+</div>
+
+<script type="module">
+import { computeMaliyet } from './assets/calc.js';
+import { URUNLER } from './assets/urunler-data.js';
+
+const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
+const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+
+const COLS = [
+  { k: 'urun', t: 'Ürün İsmi', nm: true },
+  { k: 'maliyet', t: 'Maliyet', m: true },
+  { k: 'satis', t: 'Satış', m: true },
+  { k: 'kom', t: 'Kom %', p1: true },
+  { k: 'komisyon', t: 'Komisyon', m: true },
+  { k: 'hizmet', t: 'Hizmet Bed.', m: true },
+  { k: 'stopaj', t: 'Stopaj', m: true },
+  { k: 'satisKdv', t: 'Satıştan KDV', m: true },
+  { k: 'alisKdv', t: 'Alıştan KDV', m: true },
+  { k: 'komKdv', t: 'Komisyondan KDV', m: true },
+  { k: 'hizmetKdv', t: 'Hizmet KDV', m: true },
+  { k: 'odenecekKdv', t: 'Ödenecek KDV', m: true },
+  { k: 'kar', t: 'Kâr', m: true, prof: true },
+  { k: 'karOrani', t: 'Kâr Oranı', p: true, prof: true },
+  { k: 'roi', t: 'ROI', p: true, prof: true },
+];
+
+let sortK = null, asc = false, rows = [];
+
+function computeRows() {
+  const kdvPct = parseFloat(document.getElementById('kdv').value) || 0;
+  const kargo = parseFloat(document.getElementById('kargo').value) || 0;
+  return URUNLER.map(u => {
+    const c = computeMaliyet({ satis: u.satis, alis: u.maliyet, komPct: u.kom, kdvPct, kargo });
+    return { urun: u.urun, maliyet: u.maliyet, satis: u.satis, kom: u.kom, ...c };
+  });
+}
+
+function fmt(c, v) {
+  if (c.nm) return v;
+  if (c.m) return tl(v);
+  if (c.p || c.p1) return pc(v);
+  return v;
+}
+
+function render() {
+  rows = computeRows();
+
+  document.querySelector('#t thead').innerHTML = '<tr>' + COLS.map((c, i) =>
+    `<th data-i="${i}">${c.t} <span class="ar">${sortK === c.k ? (asc ? '▲' : '▼') : '↕'}</span></th>`
+  ).join('') + '</tr>';
+
+  let sorted = [...rows];
+  if (sortK) {
+    sorted.sort((a, b) => {
+      const x = a[sortK], y = b[sortK];
+      if (typeof x === 'string') return asc ? x.localeCompare(y, 'tr') : y.localeCompare(x, 'tr');
+      return asc ? x - y : y - x;
+    });
+  }
+
+  document.querySelector('#t tbody').innerHTML = sorted.map(r => '<tr>' + COLS.map(c => {
+    const v = fmt(c, r[c.k]);
+    let cls = c.nm ? 'nm' : '';
+    if (c.prof) cls += (r.kar < 0 ? ' neg' : ' pos');
+    return `<td class="${cls}">${v}</td>`;
+  }).join('') + '</tr>').join('');
+
+  document.querySelectorAll('#t thead th').forEach(th => th.onclick = () => {
+    const c = COLS[+th.dataset.i];
+    if (sortK === c.k) asc = !asc; else { sortK = c.k; asc = false; }
+    render();
+  });
+
+  const totMal = rows.reduce((s, r) => s + r.maliyet, 0);
+  const totSat = rows.reduce((s, r) => s + r.satis, 0);
+  const totKom = rows.reduce((s, r) => s + r.komisyon, 0);
+  const totHiz = rows.reduce((s, r) => s + r.hizmet, 0);
+  const totStp = rows.reduce((s, r) => s + r.stopaj, 0);
+  const totOd = rows.reduce((s, r) => s + r.odenecekKdv, 0);
+  const totKar = rows.reduce((s, r) => s + r.kar, 0);
+
+  document.querySelector('#t tfoot').innerHTML =
+    `<tr><td>TOPLAM (${rows.length} ürün)</td><td>${tl(totMal)}</td><td>${tl(totSat)}</td><td>—</td>` +
+    `<td>${tl(totKom)}</td><td>${tl(totHiz)}</td><td>${tl(totStp)}</td><td colspan="4">—</td><td>${tl(totOd)}</td>` +
+    `<td class="pos">${tl(totKar)}</td><td class="pos">${pc(totKar / totMal * 100)}</td><td class="pos">${pc(totKar / (totMal / (1 + (parseFloat(document.getElementById('kdv').value) || 0) / 100)) * 100)}</td></tr>`;
+
+  const karli = rows.filter(r => r.kar > 0).length;
+  const zarar = rows.filter(r => r.kar < 0).length;
+  document.getElementById('cards').innerHTML = [
+    ['Ürün', rows.length, ''],
+    ['Toplam Kâr', tl(totKar), 'g'],
+    ['Ort. Kâr Oranı', pc(totKar / totMal * 100), 'o'],
+    ['Kârlı Ürün', karli, 'g'],
+    ['Zararlı Ürün', zarar, ''],
+  ].map(c => `<div class="card"><div class="l">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('');
+}
+
+window.render = render;
+render();
+</script>
+</body>
+</html>
