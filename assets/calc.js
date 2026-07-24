@@ -1,21 +1,11 @@
 // Trendyol maliyet & kâr hesaplama çekirdeği.
 // Hem tarayıcıda (index.html) hem de Node testlerinde (tests/) kullanılır.
 
-// Trendyol sabit hizmet bedeli (KDV dahil) - sipariş tutarı aralıklarına göre.
-// Trendyol tarifelerini güncellemek için bu tabloyu düzenleyin.
-export const HIZMET_BEDELI_TABLOSU = [
-  { max: 149.99, ucret: 8.49 },
-  { max: 299.99, ucret: 13.19 },
-  { max: 499.99, ucret: 20.39 },
-  { max: 749.99, ucret: 27.59 },
-  { max: Infinity, ucret: 34.79 },
-];
+// Trendyol sabit hizmet bedeli (KDV dahil) - tüm satışlarda sabit tutar.
+export const HIZMET_BEDELI_SABIT = 8.39;
 
 export function hizmetBedeli(satis) {
-  for (const b of HIZMET_BEDELI_TABLOSU) {
-    if (satis <= b.max) return b.ucret;
-  }
-  return 0;
+  return HIZMET_BEDELI_SABIT;
 }
 
 // Yarıya yukarı yuvarlama (42.525 -> 42.53)
