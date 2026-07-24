@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trendyol Ürün Maliyet Tablosu</title>
+<title>Trendyol Ürün Fiyat Aralığı & Maliyet Tablosu</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --orange: #f27a1a; --orange-d: #e55a00; --navy: #1e293b; --line: #e6e9ef;
-    --bg: #f4f6f9; --green: #15803d; --red: #dc2626; --muted: #64748b;
+    --bg: #f4f6f9; --green: #15803d; --green-bg: #eaf7ee; --red: #dc2626; --muted: #64748b; --blue: #1d4ed8;
   }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #111827; padding-bottom: 40px; }
 
@@ -21,13 +21,17 @@
   .header nav a { color: #fff; font-size: 12px; text-decoration: none; background: rgba(255,255,255,0.18); padding: 7px 12px; border-radius: 8px; font-weight: 600; }
   .header nav a:hover { background: rgba(255,255,255,0.3); }
 
-  .wrap { max-width: 1280px; margin: 18px auto; padding: 0 14px; }
+  .wrap { max-width: 1400px; margin: 18px auto; padding: 0 14px; }
 
   .settings { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .settings .lbl { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .tarife-toggle { display: flex; gap: 6px; }
+  .tarife-toggle button { padding: 7px 14px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .tarife-toggle button.active { border-color: var(--orange); background: #fff3e8; color: var(--orange); }
   .settings label { font-size: 12px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
-  .settings input { width: 80px; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--navy); }
+  .settings input { width: 70px; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--navy); }
   .settings input:focus { outline: none; border-color: var(--orange); }
-  .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; }
+  .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 420px; }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
@@ -35,19 +39,38 @@
   .card .v { font-size: 20px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .card .v.g { color: var(--green); } .card .v.o { color: var(--orange); }
 
-  .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 68vh; }
-  table { border-collapse: collapse; width: 100%; font-size: 12.5px; white-space: nowrap; }
-  thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 9px 10px; text-align: right; cursor: pointer; user-select: none; }
-  thead th:first-child, thead th:nth-child(2) { text-align: left; }
-  thead th:hover { background: #2b3a52; }
-  th .ar { opacity: .5; font-size: 10px; }
-  tbody td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #f0f2f5; font-variant-numeric: tabular-nums; }
-  tbody td:first-child { text-align: left; color: var(--muted); }
-  tbody td.nm { text-align: left; white-space: normal; min-width: 220px; max-width: 320px; font-weight: 600; }
+  .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 74vh; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 10px 12px; text-align: left; white-space: nowrap; z-index: 2; }
+  thead th.aralik { text-align: center; min-width: 168px; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
   tbody tr:hover { background: #fff8f0; }
-  .pos { color: var(--green); font-weight: 700; } .neg { color: var(--red); font-weight: 700; }
-  tfoot td { position: sticky; bottom: 0; background: #eef2f8; font-weight: 800; padding: 9px 10px; text-align: right; border-top: 2px solid #cbd5e1; }
-  tfoot td:first-child { text-align: left; }
+
+  .urun-cell { display: flex; gap: 10px; min-width: 230px; max-width: 280px; }
+  .urun-icon { width: 34px; height: 34px; background: linear-gradient(135deg, #f27a1a22, #f27a1a11); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .urun-name { font-size: 12.5px; font-weight: 700; color: var(--navy); line-height: 1.35; }
+  .urun-meta { font-size: 10.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+  .fiyat-cell { min-width: 150px; font-size: 12px; }
+  .fiyat-cell .row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+  .fiyat-cell .k { color: var(--muted); }
+  .fiyat-cell .v { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .fiyat-cell .v.komisyon { color: var(--orange); }
+
+  .aralik-cell { text-align: center; padding: 8px 10px; border-radius: 10px; }
+  .aralik-cell.valid { background: var(--green-bg); }
+  .aralik-range { font-size: 11px; color: var(--muted); line-height: 1.4; margin-bottom: 4px; }
+  .aralik-range b { color: var(--navy); }
+  .aralik-kom { font-size: 20px; font-weight: 800; color: var(--orange); }
+  .aralik-kom span { font-size: 11px; font-weight: 600; color: #94a3b8; }
+  .aralik-badge { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
+  .aralik-badge.valid { background: var(--green); color: #fff; }
+  .aralik-badge.sec { background: #f1f3f6; color: var(--muted); }
+  .aralik-kar { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #d8dee8; font-size: 11px; }
+  .aralik-kar .kv { font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .aralik-kar .kv.pos { color: var(--green); } .aralik-kar .kv.neg { color: var(--red); }
+  .aralik-cell.best { outline: 2px solid var(--green); outline-offset: -2px; }
+  .trophy { font-size: 11px; }
 
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
   footer code { background:#eef1f6; padding:1px 5px; border-radius:4px; }
@@ -58,26 +81,45 @@
 <div class="header">
   <div class="header-logo">🛒</div>
   <div>
-    <h1>Trendyol Ürün Maliyet Tablosu</h1>
-    <p>Excel'den içe aktarılan ürünler için toplu kâr & KDV hesaplaması</p>
+    <h1>Ürün Fiyat Aralığı & Maliyet Tablosu</h1>
+    <p>Her ürün için 4 fiyat aralığı, komisyon% ve maliyete göre kâr — tek tabloda</p>
   </div>
   <nav><a href="./index.html">← Tekli Hesaplama</a></nav>
 </div>
 
 <div class="wrap">
   <div class="settings">
+    <span class="lbl">Tarife:</span>
+    <div class="tarife-toggle">
+      <button id="btn-3gun" onclick="setTarife('3gun')">3 Günlük</button>
+      <button id="btn-4gun" onclick="setTarife('4gun')">4 Günlük</button>
+    </div>
     <label>KDV % <input type="number" id="kdv" value="20" step="0.01" min="0" oninput="render()"></label>
     <label>Kargo (₺) <input type="number" id="kargo" value="0" step="0.01" min="0" oninput="render()"></label>
-    <span class="hint">*Kaynak Excel'de KDV ve kargo bilgisi yoktu; varsayılan değerler yukarıdan değiştirilebilir. Kolon başlığına tıklayarak sırala.</span>
+    <span class="hint">Yeşil çerçeve = o aralıktaki maliyete göre en yüksek kâr. "Geçerli aralık" = ürünün güncel satış fiyatının düştüğü aralık.</span>
   </div>
 
   <div class="cards" id="cards"></div>
 
-  <div class="tablewrap"><table id="t"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ürün Bilgileri</th>
+          <th>Güncel Fiyat ve Komisyon</th>
+          <th class="aralik">1. Fiyat Aralığı</th>
+          <th class="aralik">2. Fiyat Aralığı</th>
+          <th class="aralik">3. Fiyat Aralığı</th>
+          <th class="aralik">4. Fiyat Aralığı</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
 
   <footer>
-    Girdiler <code>assets/urunler-data.js</code> içindeki <code>URUNLER</code> dizisinden, hesaplama <code>assets/calc.js</code>'den gelir.
-    Yeni ürün eklemek/güncellemek için o dosyayı düzenleyin.
+    Girdiler <code>assets/urunler-data.js</code> içindeki <code>URUNLER</code> dizisinden (Excel'den içe aktarıldı),
+    kâr hesaplaması <code>assets/calc.js</code>'den gelir. KDV %20 / Kargo 0 varsayılan; üstten değiştirilebilir.
   </footer>
 </div>
 
@@ -88,97 +130,115 @@ import { URUNLER } from './assets/urunler-data.js';
 const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
 const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 
-const COLS = [
-  { k: 'urun', t: 'Ürün İsmi', nm: true },
-  { k: 'maliyet', t: 'Maliyet', m: true },
-  { k: 'satis', t: 'Satış', m: true },
-  { k: 'kom', t: 'Kom %', p1: true },
-  { k: 'komisyon', t: 'Komisyon', m: true },
-  { k: 'hizmet', t: 'Hizmet Bed.', m: true },
-  { k: 'stopaj', t: 'Stopaj', m: true },
-  { k: 'satisKdv', t: 'Satıştan KDV', m: true },
-  { k: 'alisKdv', t: 'Alıştan KDV', m: true },
-  { k: 'komKdv', t: 'Komisyondan KDV', m: true },
-  { k: 'hizmetKdv', t: 'Hizmet KDV', m: true },
-  { k: 'odenecekKdv', t: 'Ödenecek KDV', m: true },
-  { k: 'kar', t: 'Kâr', m: true, prof: true },
-  { k: 'karOrani', t: 'Kâr Oranı', p: true, prof: true },
-  { k: 'roi', t: 'ROI', p: true, prof: true },
-];
+const CAT_EMOJI = {
+  'Toka':'💇','Anahtarlık':'🔑','Balon':'🎈','Maket Bıçak':'🔪','Eğitici Oyuncak':'🧩','Cetvel':'📏',
+  'Askılık':'🧥','Karakter Figür Oyuncak':'🎭','Bijuteri Kolye':'📿','Oyun Hamuru':'🎨','Temizlik Bezi':'🧹','Pasta Cila':'✨',
+};
 
-let sortK = null, asc = false, rows = [];
+let tarife = '3gun';
 
-function computeRows() {
+window.setTarife = function (t) {
+  tarife = t;
+  document.getElementById('btn-3gun').classList.toggle('active', t === '3gun');
+  document.getElementById('btn-4gun').classList.toggle('active', t === '4gun');
+  render();
+};
+
+function tierInfo(u) {
+  const k = tarife === '3gun'
+    ? [u.k3_1, u.k3_2, u.k3_3, u.k3_4]
+    : [u.k4_1, u.k4_2, u.k4_3, u.k4_4];
+
+  const tiers = [
+    { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
+    { num: 2, komisyon: k[1], rangeText: `${u.f2_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f2_alt, maxPrice: u.f2_ust },
+    { num: 3, komisyon: k[2], rangeText: `${u.f3_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f3_alt, maxPrice: u.f3_ust },
+    { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
+  ];
+
+  const tsf = u.guncel_tsf;
+  let currentTier = -1;
+  if (tsf >= u.f1_alt) currentTier = 0;
+  else if (tsf >= u.f2_alt && tsf <= u.f2_ust) currentTier = 1;
+  else if (tsf >= u.f3_alt && tsf <= u.f3_ust) currentTier = 2;
+  else if (tsf <= u.f4_ust) currentTier = 3;
+
   const kdvPct = parseFloat(document.getElementById('kdv').value) || 0;
   const kargo = parseFloat(document.getElementById('kargo').value) || 0;
-  return URUNLER.map(u => {
-    const c = computeMaliyet({ satis: u.satis, alis: u.maliyet, komPct: u.kom, kdvPct, kargo });
-    return { urun: u.urun, maliyet: u.maliyet, satis: u.satis, kom: u.kom, ...c };
-  });
-}
 
-function fmt(c, v) {
-  if (c.nm) return v;
-  if (c.m) return tl(v);
-  if (c.p || c.p1) return pc(v);
-  return v;
+  const results = tiers.map((t, i) => {
+    let sellPrice;
+    if (i === 0) sellPrice = Math.max(t.minPrice, tsf);
+    else sellPrice = t.maxPrice;
+    const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct, kargo });
+    return { ...t, sellPrice, isCurrent: i === currentTier, kar: c.kar };
+  });
+
+  const bestKar = Math.max(...results.map(r => r.kar));
+  results.forEach(r => { r.isBest = r.kar === bestKar; });
+  return results;
 }
 
 function render() {
-  rows = computeRows();
+  const kdvPct = parseFloat(document.getElementById('kdv').value) || 0;
+  const kargo = parseFloat(document.getElementById('kargo').value) || 0;
 
-  document.querySelector('#t thead').innerHTML = '<tr>' + COLS.map((c, i) =>
-    `<th data-i="${i}">${c.t} <span class="ar">${sortK === c.k ? (asc ? '▲' : '▼') : '↕'}</span></th>`
-  ).join('') + '</tr>';
+  let totKar = 0, karli = 0, zarar = 0;
+  const rowsHtml = URUNLER.map(u => {
+    const tiers = tierInfo(u);
+    const activeKar = tiers.find(t => t.isCurrent)?.kar ?? tiers[0].kar;
+    totKar += activeKar;
+    if (activeKar > 0) karli++; else if (activeKar < 0) zarar++;
 
-  let sorted = [...rows];
-  if (sortK) {
-    sorted.sort((a, b) => {
-      const x = a[sortK], y = b[sortK];
-      if (typeof x === 'string') return asc ? x.localeCompare(y, 'tr') : y.localeCompare(x, 'tr');
-      return asc ? x - y : y - x;
-    });
-  }
+    const emoji = CAT_EMOJI[u.kategori] || '📦';
+    const urunCell = `
+      <div class="urun-cell">
+        <div class="urun-icon">${emoji}</div>
+        <div>
+          <div class="urun-name">${u.urun}</div>
+          <div class="urun-meta">Model: ${u.model || '-'}<br>Barkod: ${u.barkod || '-'}<br>Stok: ${u.stok} · Maliyet: ${tl(u.maliyet)}</div>
+        </div>
+      </div>`;
 
-  document.querySelector('#t tbody').innerHTML = sorted.map(r => '<tr>' + COLS.map(c => {
-    const v = fmt(c, r[c.k]);
-    let cls = c.nm ? 'nm' : '';
-    if (c.prof) cls += (r.kar < 0 ? ' neg' : ' pos');
-    return `<td class="${cls}">${v}</td>`;
-  }).join('') + '</tr>').join('');
+    const fiyatCell = `
+      <div class="fiyat-cell">
+        <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
+        <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
+        <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+      </div>`;
 
-  document.querySelectorAll('#t thead th').forEach(th => th.onclick = () => {
-    const c = COLS[+th.dataset.i];
-    if (sortK === c.k) asc = !asc; else { sortK = c.k; asc = false; }
-    render();
-  });
+    const aralikCells = tiers.map(t => {
+      let cls = 'aralik-cell';
+      if (t.isCurrent) cls += ' valid';
+      if (t.isBest) cls += ' best';
+      const badge = t.isCurrent
+        ? '<div class="aralik-badge valid">✓ Geçerli aralık</div>'
+        : '<div class="aralik-badge sec">○ Seçilmedi</div>';
+      const karCls = t.kar >= 0 ? 'pos' : 'neg';
+      return `<td>
+        <div class="${cls}">
+          <div class="aralik-range"><b>${t.rangeText}</b></div>
+          <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
+          ${badge}
+          <div class="aralik-kar">Kâr (maliyete göre): <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
+        </div>
+      </td>`;
+    }).join('');
 
-  const totMal = rows.reduce((s, r) => s + r.maliyet, 0);
-  const totSat = rows.reduce((s, r) => s + r.satis, 0);
-  const totKom = rows.reduce((s, r) => s + r.komisyon, 0);
-  const totHiz = rows.reduce((s, r) => s + r.hizmet, 0);
-  const totStp = rows.reduce((s, r) => s + r.stopaj, 0);
-  const totOd = rows.reduce((s, r) => s + r.odenecekKdv, 0);
-  const totKar = rows.reduce((s, r) => s + r.kar, 0);
+    return `<tr><td>${urunCell}</td><td>${fiyatCell}</td>${aralikCells}</tr>`;
+  }).join('');
 
-  document.querySelector('#t tfoot').innerHTML =
-    `<tr><td>TOPLAM (${rows.length} ürün)</td><td>${tl(totMal)}</td><td>${tl(totSat)}</td><td>—</td>` +
-    `<td>${tl(totKom)}</td><td>${tl(totHiz)}</td><td>${tl(totStp)}</td><td colspan="4">—</td><td>${tl(totOd)}</td>` +
-    `<td class="pos">${tl(totKar)}</td><td class="pos">${pc(totKar / totMal * 100)}</td><td class="pos">${pc(totKar / (totMal / (1 + (parseFloat(document.getElementById('kdv').value) || 0) / 100)) * 100)}</td></tr>`;
+  document.getElementById('tbody').innerHTML = rowsHtml;
 
-  const karli = rows.filter(r => r.kar > 0).length;
-  const zarar = rows.filter(r => r.kar < 0).length;
   document.getElementById('cards').innerHTML = [
-    ['Ürün', rows.length, ''],
-    ['Toplam Kâr', tl(totKar), 'g'],
-    ['Ort. Kâr Oranı', pc(totKar / totMal * 100), 'o'],
-    ['Kârlı Ürün', karli, 'g'],
-    ['Zararlı Ürün', zarar, ''],
+    ['Ürün', URUNLER.length, ''],
+    ['Geçerli Aralıkta Toplam Kâr', tl(totKar), 'g'],
+    ['Kârlı Ürün (güncel fiyatta)', karli, 'g'],
+    ['Zararlı Ürün (güncel fiyatta)', zarar, ''],
   ].map(c => `<div class="card"><div class="l">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('');
 }
 
-window.render = render;
-render();
+setTarife('3gun');
 </script>
 </body>
 </html>
