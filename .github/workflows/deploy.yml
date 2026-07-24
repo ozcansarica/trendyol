@@ -32,6 +32,12 @@ jobs:
           # Pages ayarı "GitHub Actions" değilse otomatik etkinleştirmeyi dener
           enablement: true
 
+      - name: Cache-busting sürüm etiketini uygula
+        # ES module importlarındaki __BUILD_VERSION__ yer tutucusunu commit SHA'sı ile
+        # değiştirir, böylece her deploy'da tarayıcı/CDN eski assets/*.js'i önbellekten
+        # sunmak yerine yeni sürümü çeker. Sadece deploy artifact'inde değişir, repoda değil.
+        run: sed -i "s/__BUILD_VERSION__/${GITHUB_SHA}/g" index.html urunler.html
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

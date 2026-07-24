@@ -119,8 +119,8 @@
 </div>
 
 <script type="module">
-import { computeMaliyet } from './assets/calc.js';
-import { URUNLER } from './assets/urunler-data.js';
+import { computeMaliyet } from './assets/calc.js?v=__BUILD_VERSION__';
+import { URUNLER } from './assets/urunler-data.js?v=__BUILD_VERSION__';
 
 const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
 const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
