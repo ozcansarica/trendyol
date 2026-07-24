@@ -15,18 +15,21 @@ Ayrıntılar için `CONTRIBUTING.md`.
 
 ## Proje yapısı
 
+Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/link yok.
+
 | Yol | Açıklama |
 |-----|----------|
-| `index.html` | Maliyet & Kâr hesaplama arayüzü (ana sayfa) |
+| `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (tek sayfa) |
 | `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır) |
-| `trendyol_komisyon_hesaplayici.html` | Ürün bazlı komisyon/tarife karşılaştırma aracı |
+| `assets/urunler-data.js` | Excel'den içe aktarılan ürün verisi (fiyat aralıkları, komisyonlar, maliyet) |
 | `tests/calc.test.js` | Referans senaryo ve kenar durum testleri |
 | `.github/workflows/ci.yml` | PR/branch testleri |
-| `.github/workflows/deploy.yml` | `main` → GitHub Pages deploy |
+| `.github/workflows/deploy.yml` | `main` → GitHub Pages deploy (JS import'larına cache-busting sürüm etiketi de bu adımda uygulanır) |
 
 ## Hesaplama mantığı (özet)
 
-Girdiler KDV **dahil** verilir. `r = kdv / (100 + kdv)`.
+Girdiler KDV **dahil** verilir. KDV sabit **%20**: `r = 20 / 120`.
+Kargo, satış fiyatına göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`, `>350₺→98₺`.
 
 - Komisyon = Satış × Komisyon%
 - Hizmet Bedeli = satış tutarı aralığına göre sabit tablo (`HIZMET_BEDELI_TABLOSU`)
@@ -35,9 +38,14 @@ Girdiler KDV **dahil** verilir. `r = kdv / (100 + kdv)`.
 - Stopaj = (Satış / (1 + kdv/100)) × %1
 - Kâr = Satış − Alış − Kargo − Komisyon − Hizmet Bedeli − Stopaj − Ödenecek KDV
 - Kâr Oranı = Kâr / Alış × 100
-- Yatırım Geri Dönüş Oranı (ROI) = Kâr / (Alış / (1 + kdv/100)) × 100
 
-İhracat seçiliyse satış KDV'si ve stopaj 0 (KDV istisnası) kabul edilir.
-Kargo "Satıcıya Ait" değilse kargo maliyeti hesaba katılmaz.
+Her ürün için 4 fiyat aralığının komisyonuyla ayrı ayrı hesaplanır; en yüksek
+kâr oranını veren aralık arayüzde 🏆 ile vurgulanır.
 
 Hesaplama kuralını değiştirirken önce `tests/calc.test.js`, sonra `assets/calc.js`.
+
+## Yeni ürün eklemek/güncellemek
+
+`assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (Excel'den dışa
+aktarılan alanlarla aynı yapıda: `maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`,
+`k3_1..4`, `k4_1..4`, `komisyon_fiyat`, `guncel_komisyon`, `guncel_tsf`).
