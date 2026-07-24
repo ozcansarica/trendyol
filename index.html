@@ -30,8 +30,6 @@
   .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .upload-btn:hover { background: #2b3a52; }
-  .reset-btn { padding: 9px 14px; background: #f1f3f6; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
-  .reset-btn:hover { background: #e9ecf1; }
   .databar .status { font-size: 12px; color: var(--navy); font-weight: 600; }
   .databar .status b { color: var(--orange); }
   .upload-msg { font-size: 12px; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.5; }
@@ -90,7 +88,6 @@
     <label class="upload-btn" for="fileInput">📤 Excel Yükle (.xlsx)</label>
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <span class="status" id="dataStatus"></span>
-    <button class="reset-btn" id="resetBtn" onclick="resetToDefault()" style="display:none">Varsayılana Dön</button>
   </div>
   <div class="upload-msg error" id="uploadError" style="display:none"></div>
   <div class="upload-msg warn" id="uploadWarn" style="display:none"></div>
@@ -170,16 +167,13 @@ function loadFromStorage() {
 
 function updateStatusUI() {
   const statusEl = document.getElementById('dataStatus');
-  const resetBtn = document.getElementById('resetBtn');
   if (activeMeta) {
     const tarih = new Date(activeMeta.uploadedAt).toLocaleString('tr-TR', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
     statusEl.innerHTML = `Yüklenen: <b>${activeMeta.fileName}</b> · ${activeUrunler.length} ürün · ${tarih}`;
-    resetBtn.style.display = '';
   } else {
     statusEl.innerHTML = `Varsayılan veri · ${activeUrunler.length} ürün`;
-    resetBtn.style.display = 'none';
   }
 }
 
@@ -188,16 +182,6 @@ function showMsg(elId, msg) {
   el.textContent = msg;
   el.style.display = msg ? '' : 'none';
 }
-
-window.resetToDefault = function () {
-  localStorage.removeItem(STORAGE_KEY);
-  activeUrunler = URUNLER;
-  activeMeta = null;
-  showMsg('uploadError', '');
-  showMsg('uploadWarn', '');
-  updateStatusUI();
-  render();
-};
 
 document.getElementById('fileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];

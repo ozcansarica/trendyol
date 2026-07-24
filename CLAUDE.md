@@ -50,10 +50,11 @@ Hesaplama kuralını değiştirirken önce `tests/calc.test.js`, sonra `assets/c
 
 **Haftalık güncelleme (kullanıcı için):** Sayfadaki **Excel Yükle** butonuyla yeni
 `.xlsx` dosyası seçilir; veriler tarayıcıda ayrıştırılıp `localStorage`'da saklanır,
-sayfa yenilense de kalıcı kalır. "Varsayılana Dön" ile depodaki varsayılan veriye
-dönülür. Beklenen format: Trendyol "KomisyonTarifeleriÜrünleri" export'u (kolon
-adları `assets/xlsx-reader.js` içindeki `REQUIRED_COLUMNS`'da listelidir; sıra
-önemli değildir, isimle eşleştirilir).
+sayfa yenilense de kalıcı kalır. En son yüklenen dosya geçerli veri kaynağıdır;
+varsayılana dönme seçeneği yoktur — yeniden varsayılan veriyi kullanmak için
+kullanıcı bu tarayıcının localStorage'ını temizlemelidir. Beklenen format:
+Trendyol "KomisyonTarifeleriÜrünleri" export'u (kolon adları `assets/xlsx-reader.js`
+içindeki `REQUIRED_COLUMNS`'da listelidir; sıra önemli değildir, isimle eşleştirilir).
 
 **Depodaki varsayılan veriyi güncellemek (kalıcı, kod değişikliği):**
 `assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (alanlar:
