@@ -190,7 +190,7 @@
 </div>
 
 <script type="module">
-import { computeMaliyet, round2 } from './assets/calc.js';
+import { computeMaliyet, round2 } from './assets/calc.js?v=__BUILD_VERSION__';
 
 function tl(x) { return round2(x).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺'; }
 function pct(x) { return round2(x).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
