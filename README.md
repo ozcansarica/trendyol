@@ -18,8 +18,8 @@ KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:
 
 Düşük fiyatlı ürünlerde Trendyol tek adet siparişe izin vermiyor; müşteri en
 az zorunlu sipariş adedi kadar almak zorunda (`0–25₺→6`, `25–35₺→4`,
-`35–50₺→3`, `50–75₺→2` adet). Kargo bedeli sipariş başına alındığından, birim
-başına düşen kargo maliyeti bu adede bölünerek hesaba katılır.
+`35–50₺→3`, `50–75₺→2` adet). Kargo bedeli olduğu gibi kalır; maliyet ve satış
+tutarı bu adetle çarpılarak o siparişin gerçek kâr/kâr oranı hesaplanır.
 
 ## Ürünleri güncelleme (haftalık)
 
