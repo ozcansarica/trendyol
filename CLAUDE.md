@@ -21,7 +21,9 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 |-----|----------|
 | `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (tek sayfa) |
 | `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır) |
-| `assets/urunler-data.js` | Excel'den içe aktarılan ürün verisi (fiyat aralıkları, komisyonlar, maliyet) |
+| `assets/urunler-data.js` | Varsayılan ürün verisi (Excel'den içe aktarıldı; kullanıcı yeni dosya yüklemezse bu kullanılır) |
+| `assets/xlsx-reader.js` | Tarayıcıda .xlsx dosyası okuyup `URUNLER` formatına çeviren ayrıştırıcı (JSZip + native DOMParser/TextDecoder) |
+| `assets/vendor/jszip.min.js` | Vendorlanmış JSZip (ZIP açma) — SheetJS gibi hazır kütüphaneler bazı Türkçe karakterleri (Ç, Ğ) yanlış çözdüğü için bilinçli olarak kullanılmıyor |
 | `tests/calc.test.js` | Referans senaryo ve kenar durum testleri |
 | `.github/workflows/ci.yml` | PR/branch testleri |
 | `.github/workflows/deploy.yml` | `main` → GitHub Pages deploy (JS import'larına cache-busting sürüm etiketi de bu adımda uygulanır) |
@@ -46,6 +48,14 @@ Hesaplama kuralını değiştirirken önce `tests/calc.test.js`, sonra `assets/c
 
 ## Yeni ürün eklemek/güncellemek
 
-`assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (Excel'den dışa
-aktarılan alanlarla aynı yapıda: `maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`,
-`k3_1..4`, `k4_1..4`, `komisyon_fiyat`, `guncel_komisyon`, `guncel_tsf`).
+**Haftalık güncelleme (kullanıcı için):** Sayfadaki **Excel Yükle** butonuyla yeni
+`.xlsx` dosyası seçilir; veriler tarayıcıda ayrıştırılıp `localStorage`'da saklanır,
+sayfa yenilense de kalıcı kalır. "Varsayılana Dön" ile depodaki varsayılan veriye
+dönülür. Beklenen format: Trendyol "KomisyonTarifeleriÜrünleri" export'u (kolon
+adları `assets/xlsx-reader.js` içindeki `REQUIRED_COLUMNS`'da listelidir; sıra
+önemli değildir, isimle eşleştirilir).
+
+**Depodaki varsayılan veriyi güncellemek (kalıcı, kod değişikliği):**
+`assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (alanlar:
+`maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`, `k3_1..4`, `k4_1..4`,
+`komisyon_fiyat`, `guncel_komisyon`, `guncel_tsf`).

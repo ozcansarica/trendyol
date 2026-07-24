@@ -14,6 +14,13 @@ oranını ve maliyete göre **kâr** ile **kâr oranını** tek tabloda gösteri
 KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:
 `<200₺ → 42₺`, `200–350₺ → 78₺`, `>350₺ → 98₺`.
 
+## Ürünleri güncelleme (haftalık)
+
+Ürünler her hafta değişebildiği için sayfadaki **Excel Yükle** butonuyla yeni
+`.xlsx` dosyası seçilebilir. Veriler tarayıcıda anında ayrıştırılıp tabloya
+yansır ve bu tarayıcıda kalıcı olarak saklanır (sayfa yenilense de kaybolmaz).
+"Varsayılana Dön" ile depodaki varsayılan veriye dönülebilir.
+
 ## Çıktılar (aralık başına)
 - Fiyat aralığı ve komisyon oranı
 - Kâr (₺) ve Kâr Oranı (%)
@@ -39,5 +46,7 @@ Her iş ayrı bir dalda yapılır, `main`'e PR ile merge edilir. Bkz. `CONTRIBUT
 ## İçerik
 - `index.html` — ürün fiyat aralığı & maliyet tablosu (tek sayfa)
 - `assets/calc.js` — hesaplama çekirdeği
-- `assets/urunler-data.js` — Excel'den içe aktarılan ürün verisi
+- `assets/urunler-data.js` — varsayılan ürün verisi (Excel'den içe aktarıldı)
+- `assets/xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı
+- `assets/vendor/jszip.min.js` — Excel yükleme için vendorlanmış JSZip
 - `tests/` — testler
