@@ -27,6 +27,17 @@
   .tarife-toggle button.active { border-color: var(--orange); background: #fff3e8; color: var(--orange); }
   .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 480px; }
 
+  .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .upload-btn:hover { background: #2b3a52; }
+  .reset-btn { padding: 9px 14px; background: #f1f3f6; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .reset-btn:hover { background: #e9ecf1; }
+  .databar .status { font-size: 12px; color: var(--navy); font-weight: 600; }
+  .databar .status b { color: var(--orange); }
+  .upload-msg { font-size: 12px; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.5; }
+  .upload-msg.error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+  .upload-msg.warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a5b13; }
+
   .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 74vh; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 10px 12px; text-align: left; white-space: nowrap; z-index: 2; }
@@ -75,6 +86,15 @@
 </div>
 
 <div class="wrap">
+  <div class="databar">
+    <label class="upload-btn" for="fileInput">📤 Excel Yükle (.xlsx)</label>
+    <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+    <span class="status" id="dataStatus"></span>
+    <button class="reset-btn" id="resetBtn" onclick="resetToDefault()" style="display:none">Varsayılana Dön</button>
+  </div>
+  <div class="upload-msg error" id="uploadError" style="display:none"></div>
+  <div class="upload-msg warn" id="uploadWarn" style="display:none"></div>
+
   <div class="settings">
     <span class="lbl">Tarife:</span>
     <div class="tarife-toggle">
@@ -101,14 +121,18 @@
   </div>
 
   <footer>
-    Girdiler <code>assets/urunler-data.js</code> içindeki <code>URUNLER</code> dizisinden (Excel'den içe aktarıldı),
-    kâr hesaplaması <code>assets/calc.js</code>'den gelir. KDV %20 / Kargo 0 varsayılan; üstten değiştirilebilir.
+    Ürünler her hafta değişebiliyorsa üstteki <b>Excel Yükle</b> ile yeni dosyayı seçin —
+    veriler bu tarayıcıda saklanır ve sayfa yenilense de kalıcı kalır. Yüklemezseniz
+    <code>assets/urunler-data.js</code> içindeki varsayılan veri kullanılır.
+    Kâr hesaplaması <code>assets/calc.js</code>'den gelir.
   </footer>
 </div>
 
+<script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
 import { computeMaliyet } from './assets/calc.js?v=__BUILD_VERSION__';
 import { URUNLER } from './assets/urunler-data.js?v=__BUILD_VERSION__';
+import { parseUrunlerXlsx } from './assets/xlsx-reader.js?v=__BUILD_VERSION__';
 
 const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
 const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
@@ -126,6 +150,75 @@ function kargoIcin(satisFiyati) {
   if (satisFiyati <= 350) return 78;
   return 98;
 }
+
+const STORAGE_KEY = 'trendyol_urunler_data_v1';
+let activeUrunler = URUNLER;
+let activeMeta = null; // { fileName, uploadedAt } — yüklenmiş bir dosya varsa dolu
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || !Array.isArray(saved.urunler) || saved.urunler.length === 0) return;
+    activeUrunler = saved.urunler;
+    activeMeta = { fileName: saved.fileName, uploadedAt: saved.uploadedAt };
+  } catch {
+    // bozuk veri varsa sessizce varsayılana düş
+  }
+}
+
+function updateStatusUI() {
+  const statusEl = document.getElementById('dataStatus');
+  const resetBtn = document.getElementById('resetBtn');
+  if (activeMeta) {
+    const tarih = new Date(activeMeta.uploadedAt).toLocaleString('tr-TR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    statusEl.innerHTML = `Yüklenen: <b>${activeMeta.fileName}</b> · ${activeUrunler.length} ürün · ${tarih}`;
+    resetBtn.style.display = '';
+  } else {
+    statusEl.innerHTML = `Varsayılan veri · ${activeUrunler.length} ürün`;
+    resetBtn.style.display = 'none';
+  }
+}
+
+function showMsg(elId, msg) {
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+}
+
+window.resetToDefault = function () {
+  localStorage.removeItem(STORAGE_KEY);
+  activeUrunler = URUNLER;
+  activeMeta = null;
+  showMsg('uploadError', '');
+  showMsg('uploadWarn', '');
+  updateStatusUI();
+  render();
+};
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showMsg('uploadError', '');
+  showMsg('uploadWarn', '');
+  try {
+    const buf = await file.arrayBuffer();
+    const { urunler, warnings } = await parseUrunlerXlsx(buf);
+    activeUrunler = urunler;
+    activeMeta = { fileName: file.name, uploadedAt: Date.now() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ urunler, fileName: file.name, uploadedAt: activeMeta.uploadedAt }));
+    if (warnings.length > 0) showMsg('uploadWarn', `${warnings.length} satır eksik fiyat verisi nedeniyle atlandı.`);
+    updateStatusUI();
+    render();
+  } catch (err) {
+    showMsg('uploadError', `Excel okunamadı: ${err.message}`);
+  } finally {
+    e.target.value = '';
+  }
+});
 
 let tarife = '3gun';
 
@@ -163,7 +256,7 @@ function tierInfo(u) {
 }
 
 function render() {
-  const rowsHtml = URUNLER.map(u => {
+  const rowsHtml = activeUrunler.map(u => {
     const tiers = tierInfo(u);
 
     const emoji = CAT_EMOJI[u.kategori] || '📦';
@@ -205,6 +298,8 @@ function render() {
   document.getElementById('tbody').innerHTML = rowsHtml;
 }
 
+loadFromStorage();
+updateStatusUI();
 setTarife('3gun');
 </script>
 </body>
