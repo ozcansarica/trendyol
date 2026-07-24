@@ -23,6 +23,7 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 | `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır) |
 | `assets/urunler-data.js` | Varsayılan ürün verisi (Excel'den içe aktarıldı; kullanıcı yeni dosya yüklemezse bu kullanılır) |
 | `assets/xlsx-reader.js` | Tarayıcıda .xlsx dosyası okuyup `URUNLER` formatına çeviren ayrıştırıcı (JSZip + native DOMParser/TextDecoder) |
+| `assets/maliyet-xlsx-reader.js` | Maliyet Girişi için "Barkod No" + "Alış Tutarı (KDV)" kolonlu .xlsx dosyalarını barkod → maliyet eşlemesine çeviren ayrıştırıcı (xlsx-reader.js ile aynı yöntem, bilinçli olarak bağımsız modül — bkz. dosya başındaki not) |
 | `assets/vendor/jszip.min.js` | Vendorlanmış JSZip (ZIP açma) — SheetJS gibi hazır kütüphaneler bazı Türkçe karakterleri (Ç, Ğ) yanlış çözdüğü için bilinçli olarak kullanılmıyor |
 | `tests/calc.test.js` | Referans senaryo ve kenar durum testleri |
 | `.github/workflows/ci.yml` | PR/branch testleri |
@@ -79,3 +80,12 @@ anlık olarak hem de **her yeni Excel yüklemesinde** (`applyMaliyetKayitlari()`
 barkoda göre otomatik uygulanır — bu sayede haftalık Excel'in kendi Maliyet
 kolonu farklı/eksik olsa bile (veya hiç yoksa) kullanıcının bir kere girdiği maliyet geçerli
 kalır. Eşleştirme anahtarı: barkod (yoksa model kodu, o da yoksa ürün adı).
+
+**Excel ile toplu maliyet yükleme:** Maliyet Girişi panelindeki **📤 Excel ile
+Toplu Yükle** butonuyla "Barkod No" + "Alış Tutarı (KDV)" kolonlu bir .xlsx
+dosyası (ör. Trendyol "Aktif-Pasif Ürün" export'u) yüklenebilir
+(`assets/maliyet-xlsx-reader.js`, `parseMaliyetXlsx()`). Dosyadaki tüm
+barkod → maliyet eşlemesi tek seferde `trendyol_maliyet_kayitlari_v1`'e
+kaydedilir (`saveMaliyetKayitlariBulk()`) ve barkodu eşleşen ürünlerin
+maliyeti anında güncellenir; eşleşmeyen barkodlar da kayıt defterinde
+saklı kalır ve o barkoda sahip bir ürün ileride yüklenirse otomatik uygulanır.
