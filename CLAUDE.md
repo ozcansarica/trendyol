@@ -54,6 +54,13 @@ yansıtır (`satis: sellPrice * adet, alis: u.maliyet * adet`).
 Her ürün için 4 fiyat aralığının komisyonuyla ayrı ayrı hesaplanır; en yüksek
 kâr oranını veren aralık arayüzde 🏆 ile vurgulanır.
 
+**Özel fiyat sorgulama:** "Güncel Fiyat ve Komisyon" hücresindeki serbest giriş
+alanına (`index.html`, `.ozel-fiyat-input`) kullanıcı kendi satış fiyatını
+girebilir; `tierForPrice()` bu fiyatın hangi fiyat aralığına (komisyon
+dilimine) düştüğünü bulur (aralıklar f1_alt'tan f4_ust'a azalan ve bitişik
+olduğundan, fiyatın karşıladığı en üst aralık kullanılır) ve `ozelFiyatHesapla()`
+o aralığın komisyonuyla (zorunlu sipariş adedi dahil) anlık kâr hesaplar.
+
 Hesaplama kuralını değiştirirken önce `tests/calc.test.js`, sonra `assets/calc.js`.
 
 ## Yeni ürün eklemek/güncellemek

@@ -44,6 +44,12 @@ barkoda göre tek seferde kaydedilir.
 - Kâr (₺) ve Kâr Oranı (%)
 - En yüksek kâr oranını veren aralık 🏆 ile vurgulanır
 
+## Özel fiyat sorgulama
+
+"Güncel Fiyat ve Komisyon" kutusundaki alana istediğiniz bir satış fiyatını
+girebilirsiniz; hangi fiyat aralığına (komisyon dilimine) düştüğü otomatik
+bulunur ve o aralığın komisyonuyla anlık kâr hesaplanır.
+
 ## Geliştirme
 
 ```bash

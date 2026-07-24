@@ -85,6 +85,17 @@
   .fiyat-cell .v { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
   .fiyat-cell .v.komisyon { color: var(--orange); }
 
+  .ozel-fiyat { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #d8dee8; }
+  .ozel-fiyat-input { width: 100%; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 7px; font-size: 12px; font-weight: 700; text-align: right; }
+  .ozel-fiyat-input:focus { outline: none; border-color: var(--orange); }
+  .ozel-fiyat-sonuc { margin-top: 6px; font-size: 11px; min-height: 1px; }
+  .ozel-fiyat-sonuc .kv-line { margin-bottom: 2px; }
+  .ozel-fiyat-sonuc .kv-line.small { font-size: 10.5px; color: var(--muted); }
+  .ozel-fiyat-sonuc .kv { font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .ozel-fiyat-sonuc .pos { color: var(--green); }
+  .ozel-fiyat-sonuc .neg { color: var(--red); }
+  .ozel-fiyat-sonuc .ozel-uyari { color: var(--muted); font-style: italic; }
+
   .aralik-cell { text-align: center; padding: 8px 10px; border-radius: 10px; }
   .aralik-range { font-size: 11px; color: var(--muted); line-height: 1.4; margin-bottom: 4px; }
   .aralik-range b { color: var(--navy); }
@@ -413,16 +424,32 @@ window.setTarife = function (t) {
   render();
 };
 
-function tierInfo(u) {
+// Bir ürünün 4 fiyat aralığının sınırlarını ve seçili tarifedeki komisyon
+// oranlarını döner (kâr hesabı içermez — tierInfo() ve tierForPrice() ortak kullanır).
+function tierTanimlari(u) {
   const grup = u.tarifeler && u.tarifeler[tarife];
   const k = grup ? grup.k : [0, 0, 0, 0];
-
-  const tiers = [
+  return [
     { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
     { num: 2, komisyon: k[1], rangeText: `${u.f2_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f2_alt, maxPrice: u.f2_ust },
     { num: 3, komisyon: k[2], rangeText: `${u.f3_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f3_alt, maxPrice: u.f3_ust },
     { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
   ];
+}
+
+// Girilen özel bir satış fiyatının hangi fiyat aralığına (komisyon dilimine)
+// düştüğünü bulur. Aralıklar en üstten (1. Aralık) en alta (4. Aralık) doğru
+// azalan ve bitişik olduğundan, fiyatın karşıladığı ilk (en üst) aralık kullanılır.
+function tierForPrice(u, price) {
+  const tiers = tierTanimlari(u);
+  for (const t of tiers) {
+    if (t.minPrice != null && price >= t.minPrice) return t;
+  }
+  return tiers[tiers.length - 1]; // en düşük aralığın da altındaysa yine en düşük aralık kullanılır
+}
+
+function tierInfo(u) {
+  const tiers = tierTanimlari(u);
 
   const results = tiers.map((t, i) => {
     if (!t.komisyon) return { ...t, sellPrice: null, kar: null, karOrani: null }; // komisyon 0/tanımsız → bu aralık geçersiz
@@ -444,7 +471,7 @@ function tierInfo(u) {
 }
 
 function render() {
-  const rowsHtml = activeUrunler.map(u => {
+  const rowsHtml = activeUrunler.map((u, idx) => {
     const tiers = tierInfo(u);
 
     const emoji = CAT_EMOJI[u.kategori] || '📦';
@@ -462,6 +489,10 @@ function render() {
         <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
         <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
         <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+        <div class="ozel-fiyat">
+          <input type="number" class="ozel-fiyat-input" placeholder="Satış fiyatı gir (₺)" min="0" step="0.01" data-idx="${idx}" oninput="ozelFiyatHesapla(this)">
+          <div class="ozel-fiyat-sonuc" id="ozelSonuc-${idx}"></div>
+        </div>
       </div>`;
 
     const aralikCells = tiers.map(t => {
@@ -489,6 +520,37 @@ function render() {
 
   document.getElementById('tbody').innerHTML = rowsHtml;
 }
+
+// Kullanıcının kendi girdiği bir satış fiyatının hangi komisyon aralığına
+// düştüğünü bulup, o aralığın komisyonuyla anlık kâr hesaplar.
+window.ozelFiyatHesapla = function (input) {
+  const idx = input.dataset.idx;
+  const u = activeUrunler[idx];
+  const resultEl = document.getElementById(`ozelSonuc-${idx}`);
+  if (!u || !resultEl) return;
+
+  const price = parseFloat(input.value);
+  if (!price || price <= 0) {
+    resultEl.innerHTML = '';
+    return;
+  }
+
+  const t = tierForPrice(u, price);
+  if (!t.komisyon) {
+    resultEl.innerHTML = `<div class="ozel-uyari">${t.num}. Fiyat Aralığı (${t.rangeText}) — bu tarifede komisyon bilgisi yok.</div>`;
+    return;
+  }
+
+  const zorunluAdet = zorunluSiparisAdedi(price);
+  const kargo = kargoIcin(price);
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+  const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
+  resultEl.innerHTML = `
+    <div class="kv-line small">${t.num}. Fiyat Aralığı · %${t.komisyon} komisyon${zorunluAdet > 1 ? ` · Zorunlu Sipariş: ${zorunluAdet} adet` : ''}</div>
+    <div class="kv-line">${zorunluAdet > 1 ? `Kâr (${zorunluAdet} adet):` : 'Kâr:'} <span class="kv ${karCls}">${tl(c.kar)}</span></div>
+    <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(c.karOrani)}</span></div>
+  `;
+};
 
 window.openMaliyetModal = function () {
   document.getElementById('maliyetModal').classList.remove('hidden');
