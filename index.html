@@ -27,12 +27,6 @@
   .tarife-toggle button.active { border-color: var(--orange); background: #fff3e8; color: var(--orange); }
   .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 480px; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-  .card .l { font-size: 12px; color: var(--muted); font-weight: 700; }
-  .card .v { font-size: 20px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
-  .card .v.g { color: var(--green); } .card .v.o { color: var(--orange); }
-
   .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 74vh; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 10px 12px; text-align: left; white-space: nowrap; z-index: 2; }
@@ -89,8 +83,6 @@
     </div>
     <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
-
-  <div class="cards" id="cards"></div>
 
   <div class="tablewrap">
     <table>
@@ -171,12 +163,8 @@ function tierInfo(u) {
 }
 
 function render() {
-  let toplamEnIyiOran = 0, karli = 0, zarar = 0;
   const rowsHtml = URUNLER.map(u => {
     const tiers = tierInfo(u);
-    const enIyi = tiers.find(t => t.isBest);
-    toplamEnIyiOran += enIyi.karOrani;
-    if (enIyi.karOrani > 0) karli++; else zarar++;
 
     const emoji = CAT_EMOJI[u.kategori] || '📦';
     const urunCell = `
@@ -203,6 +191,7 @@ function render() {
           <div class="aralik-range"><b>${t.rangeText}</b></div>
           <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
           <div class="aralik-kar">
+            <div class="kv-line small">Satış Fiyatı: <span>${tl(t.sellPrice)}</span></div>
             <div class="kv-line">Kâr: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
             <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(t.karOrani)}</span></div>
           </div>
@@ -214,14 +203,6 @@ function render() {
   }).join('');
 
   document.getElementById('tbody').innerHTML = rowsHtml;
-
-  const ortalamaOran = URUNLER.length ? toplamEnIyiOran / URUNLER.length : 0;
-  document.getElementById('cards').innerHTML = [
-    ['Ürün', URUNLER.length, ''],
-    ['Ort. En İyi Kâr Oranı', pc(ortalamaOran), 'o'],
-    ['Kârlı Ürün (en iyi aralıkta)', karli, 'g'],
-    ['Zararlı Ürün (en iyi aralıkta)', zarar, ''],
-  ].map(c => `<div class="card"><div class="l">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('');
 }
 
 setTarife('3gun');
