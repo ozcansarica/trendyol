@@ -60,3 +60,14 @@ içindeki `REQUIRED_COLUMNS`'da listelidir; sıra önemli değildir, isimle eşl
 `assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (alanlar:
 `maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`, `k3_1..4`, `k4_1..4`,
 `komisyon_fiyat`, `guncel_komisyon`, `guncel_tsf`).
+
+## Maliyet Girişi (kalıcı maliyet kaydı)
+
+Ürün maliyetleri fiyat/komisyondan bağımsız olarak **bir kere** girilip barkoda
+göre kalıcı saklanabilir: sayfadaki **💰 Maliyet Girişi** paneli, her ürün için
+düzenlenebilir bir maliyet alanı gösterir. Girilen değer `localStorage`'da
+(`trendyol_maliyet_kayitlari_v1`, barkod → maliyet eşlemesi) saklanır ve hem
+anlık olarak hem de **her yeni Excel yüklemesinde** (`applyMaliyetKayitlari()`)
+barkoda göre otomatik uygulanır — bu sayede haftalık Excel'in kendi Maliyet
+kolonu farklı/eksik olsa bile kullanıcının bir kere girdiği maliyet geçerli
+kalır. Eşleştirme anahtarı: barkod (yoksa model kodu, o da yoksa ürün adı).
