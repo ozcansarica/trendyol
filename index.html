@@ -181,13 +181,17 @@ function updateStatusUI() {
   }
 }
 
-// Tarife butonlarının yanında gösterilecek tarih aralığını, veride ilk
-// bulunan dolu değerden alır (bir haftalık dosyada tüm ürünlerde aynıdır).
+// Tarife butonlarının yanında gösterilecek tarih aralığını, o tarifede
+// gerçekten komisyon oranı olan (0 olmayan) ilk üründen alır. Komisyon oranı
+// tüm ürünlerde 0 ise (o tarife bu hafta aktif değilse) tarih gösterilmez.
+function findTarifeDate(tarihField, komFields) {
+  const u = activeUrunler.find(u => u[tarihField] && komFields.some(f => u[f] > 0));
+  return u ? u[tarihField] : '';
+}
+
 function updateTarifeDates() {
-  const t3 = activeUrunler.find(u => u.tarih_3gun)?.tarih_3gun || '';
-  const t4 = activeUrunler.find(u => u.tarih_4gun)?.tarih_4gun || '';
-  document.getElementById('tarih3gun').textContent = t3;
-  document.getElementById('tarih4gun').textContent = t4;
+  document.getElementById('tarih3gun').textContent = findTarifeDate('tarih_3gun', ['k3_1', 'k3_2', 'k3_3', 'k3_4']);
+  document.getElementById('tarih4gun').textContent = findTarifeDate('tarih_4gun', ['k4_1', 'k4_2', 'k4_3', 'k4_4']);
 }
 
 function showMsg(elId, msg) {
