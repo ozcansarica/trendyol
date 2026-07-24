@@ -34,6 +34,14 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 Girdiler KDV **dahil** verilir. KDV sabit **%20**: `r = 20 / 120`.
 Kargo, satış fiyatına göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`, `>350₺→98₺`.
 
+**Zorunlu sipariş adedi:** Düşük fiyatlı ürünlerde Trendyol tek adet siparişe
+izin vermiyor; müşteri en az belirli bir adet almak zorunda
+(`zorunluSiparisAdedi()`, `index.html`): `0–25₺→6`, `25–35₺→4`, `35–50₺→3`,
+`50–75₺→2`, `>75₺→1` (kural yok). Kargo bedeli sipariş (gönderi) başına
+alındığından, birim başına düşen gerçek kargo maliyeti bu adede bölünerek
+hesaplanır (`kargoIcin(satis) / zorunluSiparisAdedi(satis)`) ve
+`computeMaliyet()`'e bu şekilde verilir.
+
 - Komisyon = Satış × Komisyon%
 - Hizmet Bedeli = tüm satışlarda sabit **8,39₺** (`HIZMET_BEDELI_SABIT`)
 - ...Oluşan KDV = ilgili tutar × `r`
