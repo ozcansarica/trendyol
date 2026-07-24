@@ -60,8 +60,12 @@
   .aralik-kom { font-size: 20px; font-weight: 800; color: var(--orange); }
   .aralik-kom span { font-size: 11px; font-weight: 600; color: #94a3b8; }
   .aralik-kar { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #d8dee8; font-size: 11px; }
+  .aralik-kar .kv-line { margin-bottom: 2px; }
+  .aralik-kar .kv-line.small { font-size: 10.5px; color: var(--muted); }
   .aralik-kar .kv { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
   .aralik-kar .kv.pos { color: var(--green); } .aralik-kar .kv.neg { color: var(--red); }
+  .aralik-kar .kv-line.small .pos { color: var(--green); font-weight: 700; }
+  .aralik-kar .kv-line.small .neg { color: var(--red); font-weight: 700; }
   .aralik-cell.best { background: var(--green-bg); outline: 2px solid var(--green); outline-offset: -2px; }
   .trophy { font-size: 11px; }
 
@@ -162,7 +166,7 @@ function tierInfo(u) {
     else sellPrice = t.maxPrice;
     const kargo = kargoIcin(sellPrice);
     const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
-    return { ...t, sellPrice, karOrani: c.karOrani };
+    return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani };
   });
 
   const bestKarOrani = Math.max(...results.map(r => r.karOrani));
@@ -202,7 +206,10 @@ function render() {
         <div class="${cls}">
           <div class="aralik-range"><b>${t.rangeText}</b></div>
           <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
-          <div class="aralik-kar">Kâr Oranı: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${pc(t.karOrani)}</span></div>
+          <div class="aralik-kar">
+            <div class="kv-line">Kâr: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
+            <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(t.karOrani)}</span></div>
+          </div>
         </div>
       </td>`;
     }).join('');
