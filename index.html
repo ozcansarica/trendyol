@@ -181,17 +181,36 @@ function updateStatusUI() {
   }
 }
 
-// Tarife butonlarının yanında gösterilecek tarih aralığını, o tarifede
-// gerçekten komisyon oranı olan (0 olmayan) ilk üründen alır. Komisyon oranı
-// tüm ürünlerde 0 ise (o tarife bu hafta aktif değilse) tarih gösterilmez.
+const K3_FIELDS = ['k3_1', 'k3_2', 'k3_3', 'k3_4'];
+const K4_FIELDS = ['k4_1', 'k4_2', 'k4_3', 'k4_4'];
+
+// Bir tarifenin en az bir üründe gerçekten komisyon oranı (0'dan büyük) olup
+// olmadığını kontrol eder. Tüm ürünlerde 0 ise o tarife bu hafta aktif değildir.
+function tarifeVeriVarMi(komFields) {
+  return activeUrunler.some(u => komFields.some(f => u[f] > 0));
+}
+
+// Tarife butonunun yanında gösterilecek tarih aralığını, o tarifede gerçekten
+// komisyon oranı olan ilk üründen alır.
 function findTarifeDate(tarihField, komFields) {
   const u = activeUrunler.find(u => u[tarihField] && komFields.some(f => u[f] > 0));
   return u ? u[tarihField] : '';
 }
 
-function updateTarifeDates() {
-  document.getElementById('tarih3gun').textContent = findTarifeDate('tarih_3gun', ['k3_1', 'k3_2', 'k3_3', 'k3_4']);
-  document.getElementById('tarih4gun').textContent = findTarifeDate('tarih_4gun', ['k4_1', 'k4_2', 'k4_3', 'k4_4']);
+// Veri olmayan tarife sekmesini tamamen gizler; geçerli seçili sekmede veri
+// yoksa veri olan sekmeye otomatik geçer.
+function updateTarifeAvailability() {
+  const has3 = tarifeVeriVarMi(K3_FIELDS);
+  const has4 = tarifeVeriVarMi(K4_FIELDS);
+
+  document.getElementById('btn-3gun').style.display = has3 ? '' : 'none';
+  document.getElementById('btn-4gun').style.display = has4 ? '' : 'none';
+
+  document.getElementById('tarih3gun').textContent = has3 ? findTarifeDate('tarih_3gun', K3_FIELDS) : '';
+  document.getElementById('tarih4gun').textContent = has4 ? findTarifeDate('tarih_4gun', K4_FIELDS) : '';
+
+  if (tarife === '3gun' && !has3 && has4) tarife = '4gun';
+  else if (tarife === '4gun' && !has4 && has3) tarife = '3gun';
 }
 
 function showMsg(elId, msg) {
@@ -213,8 +232,8 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ urunler, fileName: file.name, uploadedAt: activeMeta.uploadedAt }));
     if (warnings.length > 0) showMsg('uploadWarn', `${warnings.length} satır eksik fiyat verisi nedeniyle atlandı.`);
     updateStatusUI();
-    updateTarifeDates();
-    render();
+    updateTarifeAvailability();
+    setTarife(tarife);
   } catch (err) {
     showMsg('uploadError', `Excel okunamadı: ${err.message}`);
   } finally {
@@ -307,8 +326,8 @@ function render() {
 
 loadFromStorage();
 updateStatusUI();
-updateTarifeDates();
-setTarife('3gun');
+updateTarifeAvailability();
+setTarife(tarife);
 </script>
 </body>
 </html>
