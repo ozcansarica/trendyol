@@ -1,25 +1,23 @@
-# Trendyol Maliyet & Kâr Hesaplama
+# Trendyol Ürün Fiyat Aralığı & Maliyet Tablosu
 
-Trendyol satıcıları için maliyet ve kâr hesaplama aracı. Satış/alış fiyatı,
-komisyon, KDV ve kargo bilgisinden **kâr**, **kâr oranı**, **ROI**, **stopaj**,
-**hizmet bedeli** ve tüm **KDV dağılımını** hesaplar.
+Trendyol satıcıları için ürün bazlı maliyet ve kâr tablosu. Excel'den içe
+aktarılan her ürün için 4 fiyat aralığının tamamını, her aralığın komisyon
+oranını ve maliyete göre **kâr** ile **kâr oranını** tek tabloda gösterir.
 
 **Canlı:** https://ozcansarica.github.io/trendyol/
 
-## Girdiler
-- Ürün Satış Fiyatı (₺, KDV dahil)
-- Ürün Alış Fiyatı (₺, KDV dahil)
-- Komisyon %
-- KDV %
-- Kargo Ücreti (₺, KDV dahil)
-- Kargo Tipi: Satıcıya Ait / İhracat / Aynı Gün
+## Girdiler (ürün başına)
+- Maliyet (Alış fiyatı)
+- 4 fiyat aralığının sınırları ve her aralığın komisyon oranı (3 Günlük / 4 Günlük tarife)
+- Güncel satış fiyatı ve komisyonu
 
-## Çıktılar
-- Komisyon, Hizmet Bedeli, Stopaj Bedeli
-- Kâr, Kâr Oranı, Yatırım Geri Dönüş Oranı (ROI), Ödenecek KDV
-- KDV dağılımı: Satıştan / Alıştan / Kargodan / Komisyondan / Hizmet Bedelinden
-  Oluşan KDV ve Ödenecek KDV
-- Satış dağılımı grafiği
+KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:
+`<200₺ → 42₺`, `200–350₺ → 78₺`, `>350₺ → 98₺`.
+
+## Çıktılar (aralık başına)
+- Fiyat aralığı ve komisyon oranı
+- Kâr (₺) ve Kâr Oranı (%)
+- En yüksek kâr oranını veren aralık 🏆 ile vurgulanır
 
 ## Geliştirme
 
@@ -39,7 +37,7 @@ python3 -m http.server 8000   # sonra http://localhost:8000
 Her iş ayrı bir dalda yapılır, `main`'e PR ile merge edilir. Bkz. `CONTRIBUTING.md`.
 
 ## İçerik
-- `index.html` — maliyet & kâr hesaplama arayüzü
+- `index.html` — ürün fiyat aralığı & maliyet tablosu (tek sayfa)
 - `assets/calc.js` — hesaplama çekirdeği
-- `trendyol_komisyon_hesaplayici.html` — ürün bazlı komisyon/tarife karşılaştırma
+- `assets/urunler-data.js` — Excel'den içe aktarılan ürün verisi
 - `tests/` — testler
