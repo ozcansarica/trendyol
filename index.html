@@ -32,11 +32,36 @@
   .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .upload-btn:hover { background: #2b3a52; }
+  .maliyet-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .maliyet-btn:hover { border-color: var(--orange); color: var(--orange); }
   .databar .status { font-size: 12px; color: var(--navy); font-weight: 600; }
   .databar .status b { color: var(--orange); }
   .upload-msg { font-size: 12px; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.5; }
   .upload-msg.error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
   .upload-msg.warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a5b13; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+  .modal-overlay.hidden { display: none; }
+  .modal-panel { background: #fff; border-radius: 14px; width: 100%; max-width: 900px; max-height: 86vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { font-size: 16px; font-weight: 800; color: var(--navy); }
+  .modal-head p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .modal-close { margin-left: auto; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 16px; cursor: pointer; color: var(--muted); }
+  .modal-close:hover { background: #f1f3f6; }
+  .modal-search { padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  .modal-search input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .modal-search input:focus { outline: none; border-color: var(--orange); }
+  .modal-body { overflow: auto; flex: 1; }
+  .modal-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .modal-table thead th { position: sticky; top: 0; background: #f8f9fb; color: var(--muted); font-weight: 700; text-align: left; padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+  .modal-table tbody td { padding: 8px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+  .modal-table .m-urun { font-weight: 600; color: var(--navy); }
+  .modal-table .m-barkod { color: var(--muted); font-size: 11px; }
+  .modal-table input.m-maliyet { width: 100px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 7px; font-size: 13px; font-weight: 700; text-align: right; }
+  .modal-table input.m-maliyet:focus { outline: none; border-color: var(--orange); }
+  .modal-table input.m-maliyet.kayitli { border-color: var(--green); background: var(--green-bg); }
+  .modal-foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+  .kayit-badge { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--green); background: var(--green-bg); padding: 1px 6px; border-radius: 20px; margin-left: 5px; vertical-align: middle; }
 
   .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 74vh; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
@@ -91,6 +116,7 @@
   <div class="databar">
     <label class="upload-btn" for="fileInput">📤 Excel Yükle (.xlsx)</label>
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+    <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
     <span class="status" id="dataStatus"></span>
   </div>
   <div class="upload-msg error" id="uploadError" style="display:none"></div>
@@ -125,8 +151,37 @@
     Ürünler her hafta değişebiliyorsa üstteki <b>Excel Yükle</b> ile yeni dosyayı seçin —
     veriler bu tarayıcıda saklanır ve sayfa yenilense de kalıcı kalır. Yüklemezseniz
     <code>assets/urunler-data.js</code> içindeki varsayılan veri kullanılır.
+    <b>Maliyet Girişi</b> ile girdiğiniz maliyetler barkoda göre kaydedilir ve
+    yeni bir Excel yüklediğinizde otomatik olarak eşleşip uygulanır.
     Kâr hesaplaması <code>assets/calc.js</code>'den gelir.
   </footer>
+</div>
+
+<div class="modal-overlay hidden" id="maliyetModal">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <div>
+        <h2>💰 Maliyet Girişi</h2>
+        <p>Her ürünün maliyetini bir kere girin; barkoda göre kaydedilir ve yeni Excel yüklemelerinde otomatik eşleşir.</p>
+      </div>
+      <button class="modal-close" onclick="closeMaliyetModal()">✕</button>
+    </div>
+    <div class="modal-search">
+      <input type="text" id="maliyetSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderMaliyetModal()">
+    </div>
+    <div class="modal-body">
+      <table class="modal-table">
+        <thead>
+          <tr><th>Ürün</th><th>Barkod</th><th style="text-align:right">Maliyet (₺)</th></tr>
+        </thead>
+        <tbody id="maliyetModalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot">
+      <span class="kayit-badge">Kaydedildi</span> işaretli alanlar, bu tarayıcıda kayıtlı ve gelecekteki
+      Excel yüklemelerinde barkoda göre otomatik uygulanacak maliyetlerdir.
+    </div>
+  </div>
 </div>
 
 <script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
@@ -167,6 +222,42 @@ function loadFromStorage() {
   } catch {
     // bozuk veri varsa sessizce varsayılana düş
   }
+}
+
+// Maliyet kayıt defteri: barkoda göre bir kere girilen maliyetler burada
+// saklanır ve her veri yüklemesinde (varsayılan veya yeni Excel) otomatik
+// uygulanır — böylece haftalık Excel'ler fiyat/komisyon değiştirse de
+// maliyeti yeniden girmeye gerek kalmaz.
+const MALIYET_KEY = 'trendyol_maliyet_kayitlari_v1';
+
+function loadMaliyetKayitlari() {
+  try {
+    const raw = localStorage.getItem(MALIYET_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveMaliyetKaydi(anahtar, maliyet) {
+  const kayitlar = loadMaliyetKayitlari();
+  kayitlar[anahtar] = maliyet;
+  localStorage.setItem(MALIYET_KEY, JSON.stringify(kayitlar));
+}
+
+// Eşleştirme anahtarı: önce barkod, yoksa model kodu, o da yoksa ürün adı.
+function maliyetAnahtari(u) {
+  return String(u.barkod || u.model || u.urun || '').trim();
+}
+
+// Kayıtlı maliyetleri verilen ürün dizisine uygular (barkoda göre eşleştirir).
+function applyMaliyetKayitlari(urunler) {
+  const kayitlar = loadMaliyetKayitlari();
+  for (const u of urunler) {
+    const anahtar = maliyetAnahtari(u);
+    if (anahtar && kayitlar[anahtar] != null) u.maliyet = kayitlar[anahtar];
+  }
+  return urunler;
 }
 
 function updateStatusUI() {
@@ -227,6 +318,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
   try {
     const buf = await file.arrayBuffer();
     const { urunler, warnings } = await parseUrunlerXlsx(buf);
+    applyMaliyetKayitlari(urunler); // kayıtlı maliyetleri barkoda göre otomatik uygula
     activeUrunler = urunler;
     activeMeta = { fileName: file.name, uploadedAt: Date.now() };
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ urunler, fileName: file.name, uploadedAt: activeMeta.uploadedAt }));
@@ -324,7 +416,66 @@ function render() {
   document.getElementById('tbody').innerHTML = rowsHtml;
 }
 
+window.openMaliyetModal = function () {
+  document.getElementById('maliyetModal').classList.remove('hidden');
+  document.getElementById('maliyetSearch').value = '';
+  renderMaliyetModal();
+};
+
+window.closeMaliyetModal = function () {
+  document.getElementById('maliyetModal').classList.add('hidden');
+};
+
+window.renderMaliyetModal = function () {
+  const q = document.getElementById('maliyetSearch').value.trim().toLowerCase();
+  const kayitlar = loadMaliyetKayitlari();
+  const filtered = !q
+    ? activeUrunler
+    : activeUrunler.filter(u => u.urun.toLowerCase().includes(q) || String(u.barkod || '').toLowerCase().includes(q));
+
+  document.getElementById('maliyetModalBody').innerHTML = filtered.map(u => {
+    const anahtar = maliyetAnahtari(u);
+    const kayitliMi = anahtar && kayitlar[anahtar] != null;
+    return `<tr>
+      <td class="m-urun">${u.urun}</td>
+      <td class="m-barkod">${u.barkod || '-'}</td>
+      <td style="text-align:right">
+        <input type="number" class="m-maliyet ${kayitliMi ? 'kayitli' : ''}" min="0" step="0.01"
+          value="${u.maliyet || ''}" data-anahtar="${anahtar.replace(/"/g, '&quot;')}"
+          onchange="maliyetGuncelle(this)">
+        ${kayitliMi ? '<span class="kayit-badge">Kaydedildi</span>' : ''}
+      </td>
+    </tr>`;
+  }).join('');
+};
+
+window.maliyetGuncelle = function (input) {
+  const anahtar = input.dataset.anahtar;
+  const yeniMaliyet = parseFloat(input.value) || 0;
+  if (!anahtar) return;
+
+  saveMaliyetKaydi(anahtar, yeniMaliyet);
+  for (const u of activeUrunler) {
+    if (maliyetAnahtari(u) === anahtar) u.maliyet = yeniMaliyet;
+  }
+
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved.urunler)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, urunler: activeUrunler }));
+      }
+    } catch { /* yoksay */ }
+  }
+
+  input.classList.add('kayitli');
+  if (!input.nextElementSibling) input.insertAdjacentHTML('afterend', '<span class="kayit-badge">Kaydedildi</span>');
+  render();
+};
+
 loadFromStorage();
+applyMaliyetKayitlari(activeUrunler);
 updateStatusUI();
 updateTarifeAvailability();
 setTarife(tarife);

@@ -21,6 +21,13 @@ KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:
 yansır ve bu tarayıcıda kalıcı olarak saklanır (sayfa yenilense de kaybolmaz).
 En son yüklenen dosya geçerli veri kaynağıdır.
 
+## Maliyet Girişi (bir kere gir, otomatik eşleşsin)
+
+Maliyetler genelde haftalık değişmediği için **💰 Maliyet Girişi** panelinden
+her ürünün maliyeti bir kere girilebilir. Girilen maliyet barkoda göre
+kaydedilir ve her yeni Excel yüklemesinde otomatik olarak eşleşip uygulanır —
+o haftaki Excel'in kendi Maliyet kolonu farklı veya eksik olsa bile.
+
 ## Çıktılar (aralık başına)
 - Fiyat aralığı ve komisyon oranı
 - Kâr (₺) ve Kâr Oranı (%)
