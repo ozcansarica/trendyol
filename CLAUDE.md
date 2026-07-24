@@ -69,5 +69,5 @@ düzenlenebilir bir maliyet alanı gösterir. Girilen değer `localStorage`'da
 (`trendyol_maliyet_kayitlari_v1`, barkod → maliyet eşlemesi) saklanır ve hem
 anlık olarak hem de **her yeni Excel yüklemesinde** (`applyMaliyetKayitlari()`)
 barkoda göre otomatik uygulanır — bu sayede haftalık Excel'in kendi Maliyet
-kolonu farklı/eksik olsa bile kullanıcının bir kere girdiği maliyet geçerli
+kolonu farklı/eksik olsa bile (veya hiç yoksa) kullanıcının bir kere girdiği maliyet geçerli
 kalır. Eşleştirme anahtarı: barkod (yoksa model kodu, o da yoksa ürün adı).

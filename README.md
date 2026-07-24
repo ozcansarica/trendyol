@@ -25,8 +25,8 @@ En son yüklenen dosya geçerli veri kaynağıdır.
 
 Maliyetler genelde haftalık değişmediği için **💰 Maliyet Girişi** panelinden
 her ürünün maliyeti bir kere girilebilir. Girilen maliyet barkoda göre
-kaydedilir ve her yeni Excel yüklemesinde otomatik olarak eşleşip uygulanır —
-o haftaki Excel'in kendi Maliyet kolonu farklı veya eksik olsa bile.
+kaydedilir ve her yeni Excel yüklemesinde otomatik olarak eşleşip uygulanır.
+Haftalık Excel'de artık ayrı bir Maliyet kolonu bulunması gerekmez.
 
 ## Çıktılar (aralık başına)
 - Fiyat aralığı ve komisyon oranı
