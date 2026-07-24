@@ -8,7 +8,9 @@ oranını ve maliyete göre **kâr** ile **kâr oranını** tek tabloda gösteri
 
 ## Girdiler (ürün başına)
 - Maliyet (Alış fiyatı)
-- 4 fiyat aralığının sınırları ve her aralığın komisyon oranı (3 Günlük / 4 Günlük tarife)
+- 4 fiyat aralığının sınırları ve her aralığın komisyon oranı (tarife grupları
+  Excel'den dinamik algılanır: 3 Günlük / 4 Günlük, ya da bazı haftalarda
+  yalnızca 7 Günlük gibi tek bir grup)
 - Güncel satış fiyatı ve komisyonu
 
 KDV sabit **%20**, kargo satış fiyatına göre otomatik kademeli hesaplanır:

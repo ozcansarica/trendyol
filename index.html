@@ -121,10 +121,7 @@
 
   <div class="settings">
     <span class="lbl">Tarife:</span>
-    <div class="tarife-toggle">
-      <button id="btn-3gun" onclick="setTarife('3gun')">3 Günlük<span class="tarih" id="tarih3gun"></span></button>
-      <button id="btn-4gun" onclick="setTarife('4gun')">4 Günlük<span class="tarih" id="tarih4gun"></span></button>
-    </div>
+    <div class="tarife-toggle" id="tarifeToggle"></div>
     <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
 
@@ -260,36 +257,44 @@ function updateStatusUI() {
   }
 }
 
-const K3_FIELDS = ['k3_1', 'k3_2', 'k3_3', 'k3_4'];
-const K4_FIELDS = ['k4_1', 'k4_2', 'k4_3', 'k4_4'];
+// Aktif ürün verisinde görülen tüm tarife (gün) anahtarlarını, gün sayısına
+// göre artan sırada döner. Dosyaya göre {"3","4"}, {"7"} ya da başka bir
+// kombinasyon olabilir — sabit kodlanmış değildir.
+function tarifeGunleri() {
+  const set = new Set();
+  activeUrunler.forEach(u => {
+    if (u.tarifeler) Object.keys(u.tarifeler).forEach(g => set.add(g));
+  });
+  return Array.from(set).sort((a, b) => Number(a) - Number(b));
+}
 
 // Bir tarifenin en az bir üründe gerçekten komisyon oranı (0'dan büyük) olup
 // olmadığını kontrol eder. Tüm ürünlerde 0 ise o tarife bu hafta aktif değildir.
-function tarifeVeriVarMi(komFields) {
-  return activeUrunler.some(u => komFields.some(f => u[f] > 0));
+function tarifeVeriVarMi(gun) {
+  return activeUrunler.some(u => u.tarifeler && u.tarifeler[gun] && u.tarifeler[gun].k.some(k => k > 0));
 }
 
 // Tarife butonunun yanında gösterilecek tarih aralığını, o tarifede gerçekten
 // komisyon oranı olan ilk üründen alır.
-function findTarifeDate(tarihField, komFields) {
-  const u = activeUrunler.find(u => u[tarihField] && komFields.some(f => u[f] > 0));
-  return u ? u[tarihField] : '';
+function findTarifeDate(gun) {
+  const u = activeUrunler.find(u => u.tarifeler && u.tarifeler[gun] && u.tarifeler[gun].k.some(k => k > 0));
+  return u ? u.tarifeler[gun].tarih : '';
 }
 
-// Veri olmayan tarife sekmesini tamamen gizler; geçerli seçili sekmede veri
-// yoksa veri olan sekmeye otomatik geçer.
+// Tarife butonlarını mevcut veriye göre yeniden oluşturur; veri olmayan
+// sekmeyi tamamen gizler, geçerli seçili sekmede veri yoksa veri olan
+// sekmeye otomatik geçer.
 function updateTarifeAvailability() {
-  const has3 = tarifeVeriVarMi(K3_FIELDS);
-  const has4 = tarifeVeriVarMi(K4_FIELDS);
+  const gunler = tarifeGunleri();
+  const mevcutGunler = gunler.filter(g => tarifeVeriVarMi(g));
 
-  document.getElementById('btn-3gun').style.display = has3 ? '' : 'none';
-  document.getElementById('btn-4gun').style.display = has4 ? '' : 'none';
+  document.getElementById('tarifeToggle').innerHTML = gunler.map(g => {
+    const has = mevcutGunler.includes(g);
+    const tarih = has ? findTarifeDate(g) : '';
+    return `<button id="btn-tarife-${g}" style="display:${has ? '' : 'none'}" onclick="setTarife('${g}')">${g} Günlük<span class="tarih" id="tarih-tarife-${g}">${tarih}</span></button>`;
+  }).join('');
 
-  document.getElementById('tarih3gun').textContent = has3 ? findTarifeDate('tarih_3gun', K3_FIELDS) : '';
-  document.getElementById('tarih4gun').textContent = has4 ? findTarifeDate('tarih_4gun', K4_FIELDS) : '';
-
-  if (tarife === '3gun' && !has3 && has4) tarife = '4gun';
-  else if (tarife === '4gun' && !has4 && has3) tarife = '3gun';
+  if (!mevcutGunler.includes(tarife)) tarife = mevcutGunler[0] || gunler[0] || null;
 }
 
 function showMsg(elId, msg) {
@@ -321,19 +326,19 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
   }
 });
 
-let tarife = '3gun';
+let tarife = null;
 
 window.setTarife = function (t) {
   tarife = t;
-  document.getElementById('btn-3gun').classList.toggle('active', t === '3gun');
-  document.getElementById('btn-4gun').classList.toggle('active', t === '4gun');
+  document.querySelectorAll('#tarifeToggle button').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `btn-tarife-${t}`);
+  });
   render();
 };
 
 function tierInfo(u) {
-  const k = tarife === '3gun'
-    ? [u.k3_1, u.k3_2, u.k3_3, u.k3_4]
-    : [u.k4_1, u.k4_2, u.k4_3, u.k4_4];
+  const grup = u.tarifeler && u.tarifeler[tarife];
+  const k = grup ? grup.k : [0, 0, 0, 0];
 
   const tiers = [
     { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },

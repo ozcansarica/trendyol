@@ -58,8 +58,16 @@ içindeki `REQUIRED_COLUMNS`'da listelidir; sıra önemli değildir, isimle eşl
 
 **Depodaki varsayılan veriyi güncellemek (kalıcı, kod değişikliği):**
 `assets/urunler-data.js` içindeki `URUNLER` dizisini düzenleyin (alanlar:
-`maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`, `k3_1..4`, `k4_1..4`,
+`maliyet`, `f1_alt/f2_ust/f2_alt/f3_ust/f3_alt/f4_ust`, `tarifeler`,
 `komisyon_fiyat`, `guncel_komisyon`, `guncel_tsf`).
+
+**Tarife grupları (3 Gün / 4 Gün / 7 Gün…):** Excel'deki "Tarih aralığı (N Gün)"
+kolonları sabit değil, dinamik olarak algılanır (`assets/xlsx-reader.js`,
+`TARIH_ARALIGI_REGEX`). Bazı haftalarda 3 Gün + 4 Gün, bazılarında yalnızca
+7 Gün gibi tek bir grup gelebilir; hepsi otomatik desteklenir. Her ürünün
+tarife verisi `u.tarifeler["<gün>"] = { tarih, k: [k1,k2,k3,k4] }` şeklinde
+saklanır; arayüzdeki tarife sekmeleri (`index.html`, `updateTarifeAvailability()`)
+bu anahtarlardan dinamik olarak üretilir.
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 

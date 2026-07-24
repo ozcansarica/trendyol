@@ -9,11 +9,18 @@
 // Not: "Maliyet" kolonu artık zorunlu değil — maliyetler sayfadaki Maliyet Girişi
 // panelinden barkoda göre giriliyor (bkz. index.html applyMaliyetKayitlari()).
 // Eski format dosyalarda "Maliyet" kolonu varsa yine okunur (aşağıya bakın).
+//
+// Tarife grupları ("Tarih aralığı (N Gün)" + ardından gelen 4 komisyon kolonu)
+// dosyaya göre değişebilir: bazı haftalarda 3 Gün + 4 Gün, bazılarında yalnızca
+// 7 Gün gibi tek bir grup olabilir. Bu yüzden sabit kolon adı aramak yerine
+// başlık satırındaki tüm "Tarih aralığı (N Gün)" kalıpları dinamik olarak
+// bulunur (bkz. TARIH_ARALIGI_REGEX).
+const TARIH_ARALIGI_REGEX = /^Tarih aralığı \((\d+) Gün\)$/;
+
 const REQUIRED_COLUMNS = [
   'ÜRÜN İSMİ',
   '1.Fiyat Alt Limit', '2.Fiyat Üst Limiti', '2.Fiyat Alt Limit',
   '3.Fiyat Üst Limiti', '3.Fiyat Alt Limit', '4.Fiyat Üst Limiti',
-  'Tarih aralığı (3 Gün)', 'Tarih aralığı (4 Gün)',
   'KOMİSYONA ESAS FİYAT', 'GÜNCEL KOMİSYON', 'GÜNCEL TSF',
 ];
 
@@ -96,6 +103,19 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Başlık satırındaki "Tarih aralığı (N Gün)" kolonlarını bulur. Her biri için
+// gün sayısı ve o kolonu takip eden 4 komisyon kolonunun konumu döner.
+// Dosyada 3 Gün + 4 Gün gibi birden fazla grup, ya da yalnızca 7 Gün gibi
+// tek bir grup olabilir — hepsi otomatik tanınır.
+function bulTarifeGruplari(header) {
+  const gruplar = [];
+  header.forEach((h, idx) => {
+    const m = h.match(TARIH_ARALIGI_REGEX);
+    if (m) gruplar.push({ gun: m[1], tarihIdx: idx });
+  });
+  return gruplar;
+}
+
 /**
  * Excel dosyasını (ArrayBuffer) URUNLER dizisi formatına dönüştürür.
  * @param {ArrayBuffer} arrayBuffer
@@ -117,6 +137,11 @@ export async function parseUrunlerXlsx(arrayBuffer) {
     throw new Error(`Beklenen kolonlar bulunamadı: ${missing.join(', ')}. Dosyanın "KomisyonTarifeleriÜrünleri" formatında olduğundan emin olun.`);
   }
 
+  const tarifeGruplari = bulTarifeGruplari(header);
+  if (tarifeGruplari.length === 0) {
+    throw new Error('Hiçbir tarife grubu bulunamadı (ör. "Tarih aralığı (3 Gün)" gibi bir kolon bekleniyor).');
+  }
+
   const iUrun = colIdx('ÜRÜN İSMİ');
   const iBarkod = colIdx('BARKOD');
   const iModel = colIdx('MODEL KODU');
@@ -130,8 +155,6 @@ export async function parseUrunlerXlsx(arrayBuffer) {
   const iF3Ust = colIdx('3.Fiyat Üst Limiti');
   const iF3Alt = colIdx('3.Fiyat Alt Limit');
   const iF4Ust = colIdx('4.Fiyat Üst Limiti');
-  const i3Gun = colIdx('Tarih aralığı (3 Gün)');
-  const i4Gun = colIdx('Tarih aralığı (4 Gün)');
   const iKomisyonFiyat = colIdx('KOMİSYONA ESAS FİYAT');
   const iGuncelKomisyon = colIdx('GÜNCEL KOMİSYON');
   const iGuncelTsf = colIdx('GÜNCEL TSF');
@@ -155,6 +178,14 @@ export async function parseUrunlerXlsx(arrayBuffer) {
       continue;
     }
 
+    const tarifeler = {};
+    for (const g of tarifeGruplari) {
+      tarifeler[g.gun] = {
+        tarih: row[g.tarihIdx] != null ? String(row[g.tarihIdx]) : '',
+        k: [num(row[g.tarihIdx + 1]), num(row[g.tarihIdx + 2]), num(row[g.tarihIdx + 3]), num(row[g.tarihIdx + 4])],
+      };
+    }
+
     urunler.push({
       urun: String(urunAdi).trim(),
       barkod: row[iBarkod] != null ? String(row[iBarkod]) : '',
@@ -169,10 +200,7 @@ export async function parseUrunlerXlsx(arrayBuffer) {
       f3_ust: num(row[iF3Ust]),
       f3_alt: num(row[iF3Alt]),
       f4_ust: num(row[iF4Ust]),
-      tarih_3gun: row[i3Gun] != null ? String(row[i3Gun]) : '',
-      tarih_4gun: row[i4Gun] != null ? String(row[i4Gun]) : '',
-      k3_1: num(row[i3Gun + 1]), k3_2: num(row[i3Gun + 2]), k3_3: num(row[i3Gun + 3]), k3_4: num(row[i3Gun + 4]),
-      k4_1: num(row[i4Gun + 1]), k4_2: num(row[i4Gun + 2]), k4_3: num(row[i4Gun + 3]), k4_4: num(row[i4Gun + 4]),
+      tarifeler,
       komisyon_fiyat: num(row[iKomisyonFiyat]),
       guncel_komisyon: num(row[iGuncelKomisyon]),
       guncel_tsf: guncelTsf,
