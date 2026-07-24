@@ -32,7 +32,7 @@ Girdiler KDV **dahil** verilir. KDV sabit **%20**: `r = 20 / 120`.
 Kargo, satış fiyatına göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`, `>350₺→98₺`.
 
 - Komisyon = Satış × Komisyon%
-- Hizmet Bedeli = satış tutarı aralığına göre sabit tablo (`HIZMET_BEDELI_TABLOSU`)
+- Hizmet Bedeli = tüm satışlarda sabit **8,39₺** (`HIZMET_BEDELI_SABIT`)
 - ...Oluşan KDV = ilgili tutar × `r`
 - Ödenecek KDV = Satıştan KDV − (Alış + Kargo + Komisyon + Hizmet Bedeli KDV'leri); negatifse 0 (devreden)
 - Stopaj = (Satış / (1 + kdv/100)) × %1
