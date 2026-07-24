@@ -28,10 +28,7 @@
   .tarife-toggle { display: flex; gap: 6px; }
   .tarife-toggle button { padding: 7px 14px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
   .tarife-toggle button.active { border-color: var(--orange); background: #fff3e8; color: var(--orange); }
-  .settings label { font-size: 12px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
-  .settings input { width: 70px; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--navy); }
-  .settings input:focus { outline: none; border-color: var(--orange); }
-  .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 420px; }
+  .settings .hint { font-size: 12px; color: #8a5a1a; background: #fff6ec; border: 1px solid #ffe1c2; padding: 8px 12px; border-radius: 8px; margin-left: auto; max-width: 480px; }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
@@ -58,18 +55,14 @@
   .fiyat-cell .v.komisyon { color: var(--orange); }
 
   .aralik-cell { text-align: center; padding: 8px 10px; border-radius: 10px; }
-  .aralik-cell.valid { background: var(--green-bg); }
   .aralik-range { font-size: 11px; color: var(--muted); line-height: 1.4; margin-bottom: 4px; }
   .aralik-range b { color: var(--navy); }
   .aralik-kom { font-size: 20px; font-weight: 800; color: var(--orange); }
   .aralik-kom span { font-size: 11px; font-weight: 600; color: #94a3b8; }
-  .aralik-badge { margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 20px; }
-  .aralik-badge.valid { background: var(--green); color: #fff; }
-  .aralik-badge.sec { background: #f1f3f6; color: var(--muted); }
   .aralik-kar { margin-top: 7px; padding-top: 7px; border-top: 1px dashed #d8dee8; font-size: 11px; }
-  .aralik-kar .kv { font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .aralik-kar .kv { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
   .aralik-kar .kv.pos { color: var(--green); } .aralik-kar .kv.neg { color: var(--red); }
-  .aralik-cell.best { outline: 2px solid var(--green); outline-offset: -2px; }
+  .aralik-cell.best { background: var(--green-bg); outline: 2px solid var(--green); outline-offset: -2px; }
   .trophy { font-size: 11px; }
 
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
@@ -94,9 +87,7 @@
       <button id="btn-3gun" onclick="setTarife('3gun')">3 Günlük</button>
       <button id="btn-4gun" onclick="setTarife('4gun')">4 Günlük</button>
     </div>
-    <label>KDV % <input type="number" id="kdv" value="20" step="0.01" min="0" oninput="render()"></label>
-    <label>Kargo (₺) <input type="number" id="kargo" value="0" step="0.01" min="0" oninput="render()"></label>
-    <span class="hint">Yeşil çerçeve = o aralıktaki maliyete göre en yüksek kâr. "Geçerli aralık" = ürünün güncel satış fiyatının düştüğü aralık.</span>
+    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
 
   <div class="cards" id="cards"></div>
@@ -135,6 +126,15 @@ const CAT_EMOJI = {
   'Askılık':'🧥','Karakter Figür Oyuncak':'🎭','Bijuteri Kolye':'📿','Oyun Hamuru':'🎨','Temizlik Bezi':'🧹','Pasta Cila':'✨',
 };
 
+const KDV_PCT = 20; // Trendyol satışlarında sabit %20 KDV
+
+// Kargo: satış fiyatına göre otomatik kademe
+function kargoIcin(satisFiyati) {
+  if (satisFiyati < 200) return 42;
+  if (satisFiyati <= 350) return 78;
+  return 98;
+}
+
 let tarife = '3gun';
 
 window.setTarife = function (t) {
@@ -156,39 +156,27 @@ function tierInfo(u) {
     { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
   ];
 
-  const tsf = u.guncel_tsf;
-  let currentTier = -1;
-  if (tsf >= u.f1_alt) currentTier = 0;
-  else if (tsf >= u.f2_alt && tsf <= u.f2_ust) currentTier = 1;
-  else if (tsf >= u.f3_alt && tsf <= u.f3_ust) currentTier = 2;
-  else if (tsf <= u.f4_ust) currentTier = 3;
-
-  const kdvPct = parseFloat(document.getElementById('kdv').value) || 0;
-  const kargo = parseFloat(document.getElementById('kargo').value) || 0;
-
   const results = tiers.map((t, i) => {
     let sellPrice;
-    if (i === 0) sellPrice = Math.max(t.minPrice, tsf);
+    if (i === 0) sellPrice = Math.max(t.minPrice, u.guncel_tsf);
     else sellPrice = t.maxPrice;
-    const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct, kargo });
-    return { ...t, sellPrice, isCurrent: i === currentTier, kar: c.kar };
+    const kargo = kargoIcin(sellPrice);
+    const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+    return { ...t, sellPrice, karOrani: c.karOrani };
   });
 
-  const bestKar = Math.max(...results.map(r => r.kar));
-  results.forEach(r => { r.isBest = r.kar === bestKar; });
+  const bestKarOrani = Math.max(...results.map(r => r.karOrani));
+  results.forEach(r => { r.isBest = r.karOrani === bestKarOrani; });
   return results;
 }
 
 function render() {
-  const kdvPct = parseFloat(document.getElementById('kdv').value) || 0;
-  const kargo = parseFloat(document.getElementById('kargo').value) || 0;
-
-  let totKar = 0, karli = 0, zarar = 0;
+  let toplamEnIyiOran = 0, karli = 0, zarar = 0;
   const rowsHtml = URUNLER.map(u => {
     const tiers = tierInfo(u);
-    const activeKar = tiers.find(t => t.isCurrent)?.kar ?? tiers[0].kar;
-    totKar += activeKar;
-    if (activeKar > 0) karli++; else if (activeKar < 0) zarar++;
+    const enIyi = tiers.find(t => t.isBest);
+    toplamEnIyiOran += enIyi.karOrani;
+    if (enIyi.karOrani > 0) karli++; else zarar++;
 
     const emoji = CAT_EMOJI[u.kategori] || '📦';
     const urunCell = `
@@ -208,19 +196,13 @@ function render() {
       </div>`;
 
     const aralikCells = tiers.map(t => {
-      let cls = 'aralik-cell';
-      if (t.isCurrent) cls += ' valid';
-      if (t.isBest) cls += ' best';
-      const badge = t.isCurrent
-        ? '<div class="aralik-badge valid">✓ Geçerli aralık</div>'
-        : '<div class="aralik-badge sec">○ Seçilmedi</div>';
-      const karCls = t.kar >= 0 ? 'pos' : 'neg';
+      const cls = 'aralik-cell' + (t.isBest ? ' best' : '');
+      const karCls = t.karOrani >= 0 ? 'pos' : 'neg';
       return `<td>
         <div class="${cls}">
           <div class="aralik-range"><b>${t.rangeText}</b></div>
           <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
-          ${badge}
-          <div class="aralik-kar">Kâr (maliyete göre): <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
+          <div class="aralik-kar">Kâr Oranı: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${pc(t.karOrani)}</span></div>
         </div>
       </td>`;
     }).join('');
@@ -230,11 +212,12 @@ function render() {
 
   document.getElementById('tbody').innerHTML = rowsHtml;
 
+  const ortalamaOran = URUNLER.length ? toplamEnIyiOran / URUNLER.length : 0;
   document.getElementById('cards').innerHTML = [
     ['Ürün', URUNLER.length, ''],
-    ['Geçerli Aralıkta Toplam Kâr', tl(totKar), 'g'],
-    ['Kârlı Ürün (güncel fiyatta)', karli, 'g'],
-    ['Zararlı Ürün (güncel fiyatta)', zarar, ''],
+    ['Ort. En İyi Kâr Oranı', pc(ortalamaOran), 'o'],
+    ['Kârlı Ürün (en iyi aralıkta)', karli, 'g'],
+    ['Zararlı Ürün (en iyi aralıkta)', zarar, ''],
   ].map(c => `<div class="card"><div class="l">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('');
 }
 
