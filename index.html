@@ -126,7 +126,7 @@
   <div class="settings">
     <span class="lbl">Tarife:</span>
     <div class="tarife-toggle" id="tarifeToggle"></div>
-    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi kadar kargo paylaştırılır: 0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
+    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
 
   <div class="tablewrap">
@@ -430,8 +430,10 @@ function tierInfo(u) {
     if (i === 0) sellPrice = Math.max(t.minPrice, u.guncel_tsf);
     else sellPrice = t.maxPrice;
     const zorunluAdet = zorunluSiparisAdedi(sellPrice);
-    const kargo = kargoIcin(sellPrice) / zorunluAdet; // kargo gönderi başına; zorunlu adede paylaştırılır
-    const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+    const kargo = kargoIcin(sellPrice); // kargo gönderi başına sabit, adede bölünmez
+    // Zorunlu sipariş adedi kadar ürün aynı siparişte satıldığından, maliyet
+    // ve satış tutarı bu adetle çarpılarak siparişin gerçek kârı hesaplanır.
+    const c = computeMaliyet({ satis: sellPrice * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
     return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
   });
 
@@ -475,7 +477,7 @@ function render() {
           <div class="aralik-kar">
             <div class="kv-line small">Satış Fiyatı: <span>${tl(t.sellPrice)}</span></div>
             ${t.zorunluAdet > 1 ? `<div class="kv-line small">Zorunlu Sipariş: <span>${t.zorunluAdet} adet</span></div>` : ''}
-            <div class="kv-line">Kâr: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
+            <div class="kv-line">${t.zorunluAdet > 1 ? `Kâr (${t.zorunluAdet} adet):` : 'Kâr:'} <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
             <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(t.karOrani)}</span></div>
           </div>
         </div>
