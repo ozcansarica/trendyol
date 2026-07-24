@@ -126,7 +126,7 @@
   <div class="settings">
     <span class="lbl">Tarife:</span>
     <div class="tarife-toggle" id="tarifeToggle"></div>
-    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
+    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi kadar kargo paylaştırılır: 0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
   </div>
 
   <div class="tablewrap">
@@ -199,6 +199,18 @@ function kargoIcin(satisFiyati) {
   if (satisFiyati < 200) return 42;
   if (satisFiyati <= 350) return 78;
   return 98;
+}
+
+// Zorunlu sipariş adedi: düşük fiyatlı ürünlerde Trendyol tek adet siparişe
+// izin vermiyor, müşteri en az bu adedi almak zorunda. Kargo bedeli sipariş
+// (gönderi) başına alındığından, birim başına düşen gerçek kargo maliyeti bu
+// adede bölünerek hesaplanmalı (bkz. tierInfo()).
+function zorunluSiparisAdedi(satisFiyati) {
+  if (satisFiyati <= 25) return 6;
+  if (satisFiyati <= 35) return 4;
+  if (satisFiyati <= 50) return 3;
+  if (satisFiyati <= 75) return 2;
+  return 1;
 }
 
 const STORAGE_KEY = 'trendyol_urunler_data_v1';
@@ -417,9 +429,10 @@ function tierInfo(u) {
     let sellPrice;
     if (i === 0) sellPrice = Math.max(t.minPrice, u.guncel_tsf);
     else sellPrice = t.maxPrice;
-    const kargo = kargoIcin(sellPrice);
+    const zorunluAdet = zorunluSiparisAdedi(sellPrice);
+    const kargo = kargoIcin(sellPrice) / zorunluAdet; // kargo gönderi başına; zorunlu adede paylaştırılır
     const c = computeMaliyet({ satis: sellPrice, alis: u.maliyet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
-    return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani };
+    return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
   });
 
   const gecerli = results.filter(r => r.karOrani !== null);
@@ -461,6 +474,7 @@ function render() {
           <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
           <div class="aralik-kar">
             <div class="kv-line small">Satış Fiyatı: <span>${tl(t.sellPrice)}</span></div>
+            ${t.zorunluAdet > 1 ? `<div class="kv-line small">Zorunlu Sipariş: <span>${t.zorunluAdet} adet</span></div>` : ''}
             <div class="kv-line">Kâr: <span class="kv ${karCls}">${t.isBest ? '<span class="trophy">🏆</span> ' : ''}${tl(t.kar)}</span></div>
             <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(t.karOrani)}</span></div>
           </div>
