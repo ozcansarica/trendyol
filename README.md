@@ -30,6 +30,10 @@ her ürünün maliyeti bir kere girilebilir. Girilen maliyet barkoda göre
 kaydedilir ve her yeni Excel yüklemesinde otomatik olarak eşleşip uygulanır.
 Haftalık Excel'de artık ayrı bir Maliyet kolonu bulunması gerekmez.
 
+Tek tek girmek yerine panelin **📤 Excel ile Toplu Yükle** butonuyla "Barkod No"
++ "Alış Tutarı (KDV)" kolonlu bir .xlsx dosyası da yüklenebilir; tüm satırlar
+barkoda göre tek seferde kaydedilir.
+
 ## Çıktılar (aralık başına)
 - Fiyat aralığı ve komisyon oranı
 - Kâr (₺) ve Kâr Oranı (%)
@@ -56,6 +60,7 @@ Her iş ayrı bir dalda yapılır, `main`'e PR ile merge edilir. Bkz. `CONTRIBUT
 - `index.html` — ürün fiyat aralığı & maliyet tablosu (tek sayfa)
 - `assets/calc.js` — hesaplama çekirdeği
 - `assets/urunler-data.js` — varsayılan ürün verisi (Excel'den içe aktarıldı)
-- `assets/xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı
+- `assets/xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı (ürün verisi)
+- `assets/maliyet-xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı (toplu maliyet yükleme)
 - `assets/vendor/jszip.min.js` — Excel yükleme için vendorlanmış JSZip
 - `tests/` — testler
