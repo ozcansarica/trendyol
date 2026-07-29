@@ -652,15 +652,23 @@ function loadYildizFromStorage() {
   }
 }
 
+// Şu an tabloda hangi ürün verisinin (varsayılan mı, yüklenen bir Excel mi)
+// aktif olduğunu okunabilir bir metne çevirir — hem alt bilgide hem eşleşme
+// bulunamadığında kullanıcıya "neden eşleşmedi" sorusunun cevabını verir.
+function aktifUrunKaynagi() {
+  return activeMeta ? `"${activeMeta.fileName}" (${activeUrunler.length} ürün)` : `varsayılan veri (${activeUrunler.length} ürün)`;
+}
+
 function updateYildizFoot() {
   const el = document.getElementById('yildizModalFoot');
+  const kaynak = aktifUrunKaynagi();
   if (yildizVeri) {
     const tarih = new Date(yildizVeri.uploadedAt).toLocaleString('tr-TR', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
-    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${Object.keys(yildizVeri.veriler).length} ürün · ${tarih}. Komisyon oranı, fiyatın düştüğü mevcut fiyat aralığından otomatik bulunur.`;
+    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${Object.keys(yildizVeri.veriler).length} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak}. Komisyon oranı, fiyatın düştüğü mevcut fiyat aralığından otomatik bulunur.`;
   } else {
-    el.textContent = 'Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur.';
+    el.innerHTML = `Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur. Şu an yüklü ürün verisi: ${kaynak}.`;
   }
 }
 
@@ -731,18 +739,32 @@ window.renderYildizModal = function () {
     return;
   }
 
-  const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
-  const eslesenler = [];
+  const tumEslesenler = [];
   for (const u of activeUrunler) {
     const barkod = String(u.barkod || '').trim();
     const veri = barkod && yildizVeri.veriler[barkod];
-    if (!veri) continue;
-    if (q && !u.urun.toLowerCase().includes(q) && !barkod.toLowerCase().includes(q)) continue;
-    eslesenler.push({ u, veri });
+    if (veri) tumEslesenler.push({ u, veri });
   }
 
+  // Hiç barkod eşleşmesi yoksa, aramadan bağımsız olarak nedenini açıkla:
+  // yıldız dosyası şu an yüklü ürün verisiyle (farklı bir Excel/dönem olabilir)
+  // örtüşmüyor demektir — komisyon oranı olmadan bu ürünler için hesap yapılamaz.
+  if (tumEslesenler.length === 0) {
+    const toplamYildiz = Object.keys(yildizVeri.veriler).length;
+    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:28px 20px;text-align:center;color:var(--muted);line-height:1.6">
+      Şu an yüklü ürün verisiyle (${aktifUrunKaynagi()}) eşleşen barkod bulunamadı — yıldız dosyasındaki ${toplamYildiz} üründen hiçbiri bu listede yok.<br>
+      Bu ürünlerin bulunduğu ana ürün Excel'ini (sayfanın üstündeki <b>📤 Excel Yükle</b>) önce yükleyip bu paneli tekrar açın.
+    </td></tr>`;
+    return;
+  }
+
+  const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
+  const eslesenler = !q
+    ? tumEslesenler
+    : tumEslesenler.filter(({ u }) => u.urun.toLowerCase().includes(q) || String(u.barkod || '').toLowerCase().includes(q));
+
   if (eslesenler.length === 0) {
-    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Eşleşen ürün bulunamadı (barkoda göre mevcut ürün listesiyle eşleşmesi gerekir).</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Aramanızla eşleşen ürün bulunamadı.</td></tr>`;
     return;
   }
 
