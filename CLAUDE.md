@@ -109,14 +109,27 @@ saklı kalır ve o barkoda sahip bir ürün ileride yüklenirse otomatik uygulan
 
 ## Yıldızlı Ürün Fiyatları (ayrı panel, mevcut sistemi etkilemez)
 
-Trendyol'un "Yıldızlı Ürün Etiketleri" export'u (komisyon oranı **içermez**,
-yalnızca 1/2/3 yıldız için önerilen fiyat noktalarını içerir) **💰 Maliyet
-Girişi**'nin yanındaki **⭐ Yıldızlı Ürün Fiyatları** panelinden yüklenir
+Trendyol'un "Yıldızlı Ürün Etiketleri" export'u **💰 Maliyet Girişi**'nin
+yanındaki **⭐ Yıldızlı Ürün Fiyatları** panelinden yüklenir
 (`assets/yildizli-urun-xlsx-reader.js`, `parseYildizliUrunXlsx()`). Her
 yıldız seviyesi için "Üst Fiyat" (o seviyeyi en az indirimle karşılayan fiyat)
-kullanılır; kâr hesaplanırken bu fiyatın ürünün zaten yüklü 4 fiyat aralığından
-hangisine düştüğü `tierForPrice()` ile bulunup o aralığın komisyonu kullanılır
-(özel fiyat sorgulama ile aynı mantık). Veri `trendyol_yildizli_urun_v1`'de
-barkoda göre saklanır ve panelde **canlı olarak** `activeUrunler` ile
-eşleştirilir — ürün nesnelerine yazılmadığından ana tabloyu, Maliyet
-Girişi'ni veya diğer hesaplamaları hiçbir şekilde etkilemez.
+kullanılır. İki şablon desteklenir:
+- **Yeni şablon** (`Komisyon Oranı` kolonu var): komisyon doğrudan bu
+  kolondan alınır — ürünün ana ürün listesinde olması gerekmez.
+- **Eski şablon** (`Komisyon Oranı` kolonu yok): komisyon, fiyatın ürünün
+  zaten yüklü 4 fiyat aralığından hangisine düştüğü `tierForPrice()` ile
+  bulunup oradan alınır (özel fiyat sorgulama ile aynı mantık) — bunun için
+  ürünün barkodu ana ürün listesinde (`activeUrunler`) olmalıdır.
+
+Maliyet, önce ürün ana listede varsa oradan, yoksa kalıcı Maliyet Girişi
+kayıt defterinden (`trendyol_maliyet_kayitlari_v1`, barkoda göre —
+`yildizMaliyetBul()`) aranır; böylece ürün şu an ana tabloda olmasa bile,
+daha önce girilmiş/toplu yüklenmiş bir maliyeti varsa yine kâr hesaplanabilir.
+Maliyet ya da komisyon hiçbir yerde bulunamazsa (barkod hem ana listede hem
+maliyet kayıtlarında yoksa, ve dosyada da komisyon oranı yoksa) o satır için
+yalnızca fiyat noktası gösterilir, kâr hesaplanmaz.
+
+Veri `trendyol_yildizli_urun_v1`'de barkoda göre saklanır ve panelde
+**canlı olarak** `activeUrunler` ile eşleştirilir — ürün nesnelerine
+yazılmadığından ana tabloyu, Maliyet Girişi'ni veya diğer hesaplamaları
+hiçbir şekilde etkilemez.
