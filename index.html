@@ -118,6 +118,9 @@
   td.yildiz-sec.selected { outline: 2px solid var(--orange); outline-offset: -2px; background: #fff7ee; }
   .indir-btn { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .indir-btn:hover { opacity: .88; }
+  .ozel-sec-btn { margin-top: 5px; width: 100%; background: #aaa; color: #fff; border: none; border-radius: 6px; padding: 3px 0; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .ozel-sec-btn.selected { background: var(--orange); }
+  .ozel-sec-btn:hover { opacity: .85; }
 </style>
 </head>
 <body>
@@ -867,11 +870,23 @@ function yildizFiyatCell(barkod, u, veri) {
         data-barkod="${bEsc}" oninput="ozelFiyatHesaplaYildizModal(this)">
       <div class="ozel-fiyat-sonuc" id="yildizOzelSonuc-${bEsc}"></div>
     </div>`;
+
+  function karSatiri(price, komisyon) {
+    if (!price || !komisyon) return '';
+    const mal = yildizMaliyetBul(barkod, u);
+    if (mal == null) return '';
+    const adet = zorunluSiparisAdedi(price);
+    const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price) });
+    const cls = c.karOrani >= 0 ? 'pos' : 'neg';
+    return `<div class="row"><span class="k">Kâr Oranı</span><span class="v ${cls}">${pc(c.karOrani)}</span></div>`;
+  }
+
   if (u) {
     return `<div class="fiyat-cell">
     <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
     <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
     <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+    ${karSatiri(u.guncel_tsf, u.guncel_komisyon)}
     ${inputHtml}
   </div>`;
   }
@@ -881,6 +896,7 @@ function yildizFiyatCell(barkod, u, veri) {
     return `<div class="fiyat-cell">
     ${guncelFiyat ? `<div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(guncelFiyat)}</span></div>` : ''}
     ${guncelKomisyon ? `<div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${guncelKomisyon}</span></div>` : ''}
+    ${karSatiri(guncelFiyat, guncelKomisyon)}
     ${inputHtml}
   </div>`;
   }
@@ -893,7 +909,11 @@ window.ozelFiyatHesaplaYildizModal = function (input) {
   const resultEl = document.getElementById(`yildizOzelSonuc-${barkod}`);
   if (!resultEl) return;
   const price = parseFloat(input.value);
-  if (!price || price <= 0) { resultEl.innerHTML = ''; return; }
+  if (!price || price <= 0) {
+    resultEl.innerHTML = '';
+    if (selectedCustom.has(barkod)) { selectedCustom.delete(barkod); updateYildizSecimBar(); }
+    return;
+  }
 
   let komisyon = 0;
   let komisyonLabel = '';
@@ -924,17 +944,27 @@ window.ozelFiyatHesaplaYildizModal = function (input) {
   const kargo = kargoIcin(price);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
+  const bEsc = String(barkod).replace(/"/g, '&quot;');
+  const veriObj = yildizVeri?.veriler?.[barkod];
+  const urunAdi = (veriObj?.urun) || u?.urun || barkod;
+  const isSel = selectedCustom.has(barkod) && selectedCustom.get(barkod).price === price;
   resultEl.innerHTML = `
     <div class="kv-line small">${komisyonLabel}${zorunluAdet > 1 ? ` · ${zorunluAdet} adet` : ''}</div>
     <div class="kv-line">Kâr: <span class="kv ${karCls}">${tl(c.kar)}</span></div>
-    <div class="kv-line small">Oran: <span class="${karCls}">${pc(c.karOrani)}</span></div>`;
+    <div class="kv-line small">Oran: <span class="${karCls}">${pc(c.karOrani)}</span></div>
+    <button id="yildizOzelSecBtn-${bEsc}" class="ozel-sec-btn${isSel ? ' selected' : ''}"
+      data-barkod="${bEsc}" data-price="${price}" data-komisyon="${komisyon}"
+      data-kar="${c.kar}" data-karorani="${c.karOrani}" data-adet="${zorunluAdet}"
+      data-urunadi="${urunAdi.replace(/"/g,'&quot;')}" data-maliyet="${maliyet}"
+      onclick="toggleCustomSec(this)">${isSel ? '✓ Seçildi' : '📌 Seç'}</button>`;
 };
 
 // Yıldız paneli: hücre seçimi & Excel indirme
 const selectedYildiz = new Set(); // anahtar: "barkod|yıldızNum"
+const selectedCustom = new Map(); // barkod → {price, komisyon, kar, karOrani, zorunluAdet, urunAdi, maliyet}
 
 function updateYildizSecimBar() {
-  const n = selectedYildiz.size;
+  const n = selectedYildiz.size + selectedCustom.size;
   const btn = document.getElementById('yildizSecimIndir');
   if (btn) btn.style.display = n > 0 ? '' : 'none';
   const span = document.getElementById('yildizSecimSayisi');
@@ -950,34 +980,72 @@ window.toggleYildizSec = function (td) {
   updateYildizSecimBar();
 };
 
+window.toggleCustomSec = function (btn) {
+  const barkod = btn.dataset.barkod;
+  const price = parseFloat(btn.dataset.price);
+  const isSel = selectedCustom.has(barkod) && selectedCustom.get(barkod).price === price;
+  if (isSel) {
+    selectedCustom.delete(barkod);
+  } else {
+    selectedCustom.set(barkod, {
+      price,
+      komisyon: parseFloat(btn.dataset.komisyon),
+      kar: parseFloat(btn.dataset.kar),
+      karOrani: parseFloat(btn.dataset.karorani),
+      zorunluAdet: parseInt(btn.dataset.adet),
+      urunAdi: btn.dataset.urunadi,
+      maliyet: parseFloat(btn.dataset.maliyet),
+    });
+  }
+  const nowSel = selectedCustom.has(barkod);
+  btn.classList.toggle('selected', nowSel);
+  btn.textContent = nowSel ? '✓ Seçildi' : '📌 Seç';
+  updateYildizSecimBar();
+};
+
 window.exportYildizSecilenlerXlsx = async function () {
-  if (!selectedYildiz.size || !yildizVeri) return;
+  if (!selectedYildiz.size && !selectedCustom.size) return;
   const urunByBarkod = urunByBarkodHaritasi();
   const headers = [
-    'Ürün', 'Barkod', 'Yıldız Seviyesi', 'Fiyat (₺)', 'Komisyon (%)',
+    'Ürün', 'Barkod', 'Fiyat Türü', 'Fiyat (₺)', 'Komisyon (%)',
     'Zorunlu Adet', 'Kâr (₺)', 'Kâr Oranı (%)', 'Maliyet (₺)',
   ];
   const rows = [headers];
-  const keys = [...selectedYildiz].sort();
-  for (const key of keys) {
-    const [barkod, yNumStr] = key.split('|');
-    const yNum = parseInt(yNumStr);
-    const veri = yildizVeri.veriler[barkod];
-    if (!veri) continue;
-    const u = urunByBarkod[barkod] || null;
-    const price = yNum === 1 ? veri.yildiz1 : yNum === 2 ? veri.yildiz2 : veri.yildiz3;
-    const sonuc = yildizKarHesapla(barkod, u, veri, price);
-    const urunAdi = veri.urun || u?.urun || barkod;
-    const maliyet = yildizMaliyetBul(barkod, u) || '';
+
+  // Yıldız seviyesi seçimleri
+  if (selectedYildiz.size && yildizVeri) {
+    const keys = [...selectedYildiz].sort();
+    for (const key of keys) {
+      const [barkod, yNumStr] = key.split('|');
+      const yNum = parseInt(yNumStr);
+      const veri = yildizVeri.veriler[barkod];
+      if (!veri) continue;
+      const u = urunByBarkod[barkod] || null;
+      const price = yNum === 1 ? veri.yildiz1 : yNum === 2 ? veri.yildiz2 : veri.yildiz3;
+      const sonuc = yildizKarHesapla(barkod, u, veri, price);
+      const urunAdi = veri.urun || u?.urun || barkod;
+      const maliyet = yildizMaliyetBul(barkod, u) || '';
+      rows.push([
+        urunAdi, barkod, yNum + ' Yıldız', price || '',
+        sonuc.durum === 'ok' ? sonuc.komisyon : '',
+        sonuc.durum === 'ok' ? sonuc.zorunluAdet : '',
+        sonuc.durum === 'ok' ? Math.round(sonuc.kar * 100) / 100 : '',
+        sonuc.durum === 'ok' ? Math.round(sonuc.karOrani * 10) / 10 : '',
+        maliyet,
+      ]);
+    }
+  }
+
+  // Manuel fiyat seçimleri
+  for (const [barkod, d] of [...selectedCustom].sort((a, b) => a[0].localeCompare(b[0]))) {
     rows.push([
-      urunAdi, barkod, yNum + ' Yıldız', price || '',
-      sonuc.durum === 'ok' ? sonuc.komisyon : '',
-      sonuc.durum === 'ok' ? sonuc.zorunluAdet : '',
-      sonuc.durum === 'ok' ? Math.round(sonuc.kar * 100) / 100 : '',
-      sonuc.durum === 'ok' ? Math.round(sonuc.karOrani * 10) / 10 : '',
-      maliyet,
+      d.urunAdi, barkod, 'Manuel Fiyat', d.price, d.komisyon,
+      d.zorunluAdet, Math.round(d.kar * 100) / 100,
+      Math.round(d.karOrani * 10) / 10, d.maliyet,
     ]);
   }
+
+  if (rows.length === 1) return;
   const blob = await buildXlsxBlob(rows);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
