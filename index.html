@@ -194,7 +194,7 @@
     <div class="modal-head">
       <div>
         <h2>⭐ Yıldızlı Ürün Fiyatları</h2>
-        <p>Trendyol'un "Yıldızlı Ürün Etiketleri" export'unu yükleyin; her ürünün 1/2/3 yıldız fiyat noktası, zaten yüklü fiyat aralığından bulunan komisyonla anlık hesaplanır. Bu dosyada komisyon oranı yoktur.</p>
+        <p>Trendyol'un "Yıldızlı Ürün Etiketleri" export'unu yükleyin; her ürünün 1/2/3 yıldız fiyat noktası, dosyadaki komisyon oranıyla (varsa) ya da zaten yüklü fiyat aralığından bulunan komisyonla anlık hesaplanır. Maliyet, ana ürün listesinden ya da Maliyet Girişi kayıtlarından bulunur.</p>
       </div>
       <button class="modal-close" onclick="closeYildizModal()">✕</button>
     </div>
@@ -665,11 +665,38 @@ function aktifUrunKaynagi() {
   return activeMeta ? `"${activeMeta.fileName}" (${activeUrunler.length} ürün)` : `varsayılan veri (${activeUrunler.length} ürün)`;
 }
 
-// Yıldız dosyasındaki barkodlardan kaçının, komisyon aralığı bulmak için
-// şu an yüklü ürün verisiyle eşleştiğini sayar.
+// Şu an yüklü ürün listesini barkoda göre erişilebilir hale getirir.
+function urunByBarkodHaritasi() {
+  const map = {};
+  for (const u of activeUrunler) {
+    const b = String(u.barkod || '').trim();
+    if (b) map[b] = u;
+  }
+  return map;
+}
+
+// Bir barkodun maliyetini bulur: önce şu an yüklü ürün listesinde (u), yoksa
+// kalıcı Maliyet Girişi kayıt defterinde arar — böylece ürün şu an ana
+// tabloda olmasa bile, daha önce girilmiş/toplu yüklenmiş bir maliyeti varsa
+// yine de kâr hesaplanabilir.
+function yildizMaliyetBul(barkod, u) {
+  if (u && u.maliyet) return u.maliyet;
+  const kayitlar = loadMaliyetKayitlari();
+  return kayitlar[barkod] != null ? kayitlar[barkod] : null;
+}
+
+// Yıldız dosyasındaki ürünlerden kaçı için kâr hesaplanabildiğini (en az bir
+// yıldız fiyatında maliyet + komisyon ikisi de bulunabiliyor) sayar.
 function yildizEslesmeSayisi() {
   if (!yildizVeri) return 0;
-  return Object.keys(yildizVeri.veriler).filter(b => activeUrunler.some(u => String(u.barkod || '').trim() === b)).length;
+  const urunByBarkod = urunByBarkodHaritasi();
+  let sayac = 0;
+  for (const [barkod, veri] of Object.entries(yildizVeri.veriler)) {
+    const u = urunByBarkod[barkod] || null;
+    const fiyatlar = [veri.yildiz1, veri.yildiz2, veri.yildiz3];
+    if (fiyatlar.some(p => p && yildizKarHesapla(barkod, u, veri, p).durum === 'ok')) sayac++;
+  }
+  return sayac;
 }
 
 function updateYildizFoot() {
@@ -681,40 +708,45 @@ function updateYildizFoot() {
     });
     const toplam = Object.keys(yildizVeri.veriler).length;
     const eslesen = yildizEslesmeSayisi();
-    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${toplam} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak} — <b>${eslesen}/${toplam}</b> ürün eşleşip komisyon bulunabiliyor; kalanlar için yalnızca fiyat noktası gösterilir, kâr hesaplanamaz.`;
+    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${toplam} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak} — <b>${eslesen}/${toplam}</b> ürün için kâr hesaplanabiliyor; kalanlar için maliyet ve/veya komisyon bilgisi eksik olduğundan yalnızca fiyat noktası gösterilir.`;
   } else {
-    el.innerHTML = `Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur. Şu an yüklü ürün verisi: ${kaynak}.`;
+    el.innerHTML = `Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı dosyadaki "Komisyon Oranı" kolonundan (varsa), yoksa ürünün zaten yüklü fiyat aralığından otomatik bulunur. Şu an yüklü ürün verisi: ${kaynak}.`;
   }
 }
 
-// Bir yıldız fiyat noktası için, o fiyatın düştüğü mevcut fiyat aralığının
-// komisyonuyla (özel fiyat sorgulama ile aynı mantık) kâr hesaplar.
-function yildizKarHesapla(u, price) {
-  if (!price) return null;
-  const t = tierForPrice(u, price);
-  if (!t.komisyon) return null;
+// Bir yıldız fiyat noktası için kâr hesaplar. Komisyon oranı önce yıldız
+// dosyasının kendi "Komisyon Oranı" kolonundan (yeni şablon) alınır; yoksa
+// ürünün zaten yüklü fiyat aralığından bulunur (tierForPrice, eski şablon —
+// özel fiyat sorgulama ile aynı mantık, bunun için ürünün ana listede olması
+// gerekir). Maliyet, yildizMaliyetBul() ile bulunur.
+function yildizKarHesapla(barkod, u, veri, price) {
+  if (!price) return { durum: 'yok' };
+
+  const maliyet = yildizMaliyetBul(barkod, u);
+  if (maliyet == null) return { durum: 'maliyet-yok' };
+
+  let komisyon = veri.komisyonOrani;
+  if (!komisyon) {
+    if (!u) return { durum: 'komisyon-yok' };
+    komisyon = tierForPrice(u, price).komisyon;
+    if (!komisyon) return { durum: 'komisyon-yok' };
+  }
+
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
-  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
-  return { price, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
+  return { durum: 'ok', price, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
 }
 
-// u null olabilir (barkod şu an yüklü ürün listesinde yok) — bu durumda
-// komisyon aralığı bulunamadığından yalnızca fiyat noktası gösterilir.
-function yildizHucre(u, price) {
+function yildizHucre(barkod, u, veri, price) {
   if (!price) return `<div class="ozel-fiyat-sonuc"><span class="ozel-uyari">-</span></div>`;
-  if (!u) {
-    return `<div class="ozel-fiyat-sonuc">
-      <div class="kv-line small">${tl(price)}</div>
-      <div class="ozel-uyari">Ürün listede yok</div>
-    </div>`;
+
+  const sonuc = yildizKarHesapla(barkod, u, veri, price);
+  if (sonuc.durum === 'maliyet-yok') {
+    return `<div class="ozel-fiyat-sonuc"><div class="kv-line small">${tl(price)}</div><div class="ozel-uyari">Maliyet bilgisi yok</div></div>`;
   }
-  const sonuc = yildizKarHesapla(u, price);
-  if (!sonuc) {
-    return `<div class="ozel-fiyat-sonuc">
-      <div class="kv-line small">${tl(price)}</div>
-      <div class="ozel-uyari">Komisyon bilgisi yok</div>
-    </div>`;
+  if (sonuc.durum === 'komisyon-yok') {
+    return `<div class="ozel-fiyat-sonuc"><div class="kv-line small">${tl(price)}</div><div class="ozel-uyari">Komisyon bilgisi yok</div></div>`;
   }
   const karCls = sonuc.karOrani >= 0 ? 'pos' : 'neg';
   return `<div class="ozel-fiyat-sonuc">
@@ -768,14 +800,9 @@ window.renderYildizModal = function () {
     return;
   }
 
-  // Barkoda göre hızlı arama için şu an yüklü ürün listesinden bir harita
-  // kurulur; eşleşme bulunamayan satırlar da (yalnızca fiyat noktasıyla,
-  // komisyon/kâr hesaplanmadan) listeden çıkarılmaz — dosyadaki her ürün gösterilir.
-  const urunByBarkod = {};
-  for (const u of activeUrunler) {
-    const b = String(u.barkod || '').trim();
-    if (b) urunByBarkod[b] = u;
-  }
+  // Eşleşme bulunamayan satırlar da (yalnızca fiyat noktasıyla, maliyet/
+  // komisyon eksikse hesaplanmadan) listeden çıkarılmaz — dosyadaki her ürün gösterilir.
+  const urunByBarkod = urunByBarkodHaritasi();
 
   const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
   const satirlar = [];
@@ -794,9 +821,9 @@ window.renderYildizModal = function () {
     <tr>
       <td class="m-urun">${urunAdi || '-'}</td>
       <td class="m-barkod">${barkod}</td>
-      <td>${yildizHucre(u, veri.yildiz1)}</td>
-      <td>${yildizHucre(u, veri.yildiz2)}</td>
-      <td>${yildizHucre(u, veri.yildiz3)}</td>
+      <td>${yildizHucre(barkod, u, veri, veri.yildiz1)}</td>
+      <td>${yildizHucre(barkod, u, veri, veri.yildiz2)}</td>
+      <td>${yildizHucre(barkod, u, veri, veri.yildiz3)}</td>
     </tr>`).join('');
 };
 

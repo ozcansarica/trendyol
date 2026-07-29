@@ -53,10 +53,13 @@ bulunur ve o aralığın komisyonuyla anlık kâr hesaplanır.
 ## Yıldızlı Ürün Fiyatları
 
 **⭐ Yıldızlı Ürün Fiyatları** panelinden Trendyol'un "Yıldızlı Ürün
-Etiketleri" export'u yüklenebilir. Bu dosyada komisyon oranı yoktur; her
-1/2/3 yıldız fiyat noktası için kâr, o fiyatın düştüğü mevcut fiyat
-aralığının komisyonuyla otomatik hesaplanır. Ana tabloyu, Maliyet Girişi'ni
-veya diğer hiçbir hesaplamayı etkilemez — tamamen ayrı, salt-okunur bir görünümdür.
+Etiketleri" export'u yüklenebilir. Dosyada "Komisyon Oranı" kolonu varsa
+doğrudan kullanılır; yoksa her 1/2/3 yıldız fiyat noktası için kâr, o fiyatın
+düştüğü mevcut fiyat aralığının komisyonuyla otomatik hesaplanır. Maliyet,
+ana ürün listesinden ya da Maliyet Girişi'ne daha önce kaydedilmiş
+maliyetlerden bulunur — ürün şu an ana tabloda olmasa bile çalışabilir. Ana
+tabloyu, Maliyet Girişi'ni veya diğer hiçbir hesaplamayı etkilemez —
+tamamen ayrı, salt-okunur bir görünümdür.
 
 ## Geliştirme
 

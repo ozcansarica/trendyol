@@ -1,15 +1,17 @@
 // Trendyol "YıldızlıÜrünEtiketleri" formatındaki .xlsx dosyalarını tarayıcıda okur.
 // "Yıldızlı Ürün" kampanyası için önerilen 1/2/3 yıldız fiyat noktalarını
-// barkoda göre çıkarır. Bu dosyada komisyon oranı YOK — sadece fiyat
-// noktaları var; kâr hesaplanırken bu fiyatın zaten yüklü ürün verisindeki
-// hangi fiyat aralığına düştüğü bulunup o aralığın komisyonu kullanılır
-// (bkz. index.html tierForPrice()).
+// barkoda göre çıkarır. Yeni şablonda "Komisyon Oranı" kolonu bulunur ve
+// doğrudan kullanılır; bu kolon yoksa (eski şablon dosyaları) kâr hesaplanırken
+// bu fiyatın zaten yüklü ürün verisindeki hangi fiyat aralığına düştüğü
+// bulunup o aralığın komisyonu kullanılır (bkz. index.html tierForPrice()) —
+// her iki şablon da desteklenir.
 // assets/xlsx-reader.js ile aynı JSZip + native DOMParser/TextDecoder yöntemini
 // kullanır, bilinçli olarak bağımsız (leaf) modül — bkz. maliyet-xlsx-reader.js
 // başındaki not (deploy.yml'nin cache-busting'i yalnızca index.html'i hedefler).
 // JSZip global olarak yüklenmiş olmalı (bkz. index.html <script src="assets/vendor/jszip.min.js">).
 
 const REQUIRED_COLUMNS = ['ÜRÜN İSMİ', 'BARKOD', '1 YILDIZ ÜST FİYAT', '2 YILDIZ ÜST FİYAT', '3 YILDIZ ÜST FİYAT'];
+// "Komisyon Oranı" zorunlu değil — eski şablon dosyalarda bulunmayabilir.
 
 function colIndexFromRef(ref) {
   const m = ref.match(/^([A-Z]+)/);
@@ -96,11 +98,12 @@ function turkceSayi(v) {
 }
 
 /**
- * Yıldızlı Ürün Excel dosyasını (ArrayBuffer) barkod → {urun, yildiz1, yildiz2, yildiz3} eşlemesine çevirir.
+ * Yıldızlı Ürün Excel dosyasını (ArrayBuffer) barkod → {urun, yildiz1, yildiz2, yildiz3, komisyonOrani} eşlemesine çevirir.
  * yildiz1/2/3, ilgili yıldız seviyesinin "Üst Fiyat" sınırıdır (o seviyeyi
  * en az indirimle karşılayan, satıcı için en avantajlı fiyat noktası).
+ * komisyonOrani, "Komisyon Oranı" kolonu yoksa 0 döner (eski şablon).
  * @param {ArrayBuffer} arrayBuffer
- * @returns {Promise<{yildizVeriler: Object<string, {urun: string, yildiz1: number, yildiz2: number, yildiz3: number}>, warnings: string[]}>}
+ * @returns {Promise<{yildizVeriler: Object<string, {urun: string, yildiz1: number, yildiz2: number, yildiz3: number, komisyonOrani: number}>, warnings: string[]}>}
  */
 export async function parseYildizliUrunXlsx(arrayBuffer) {
   if (typeof JSZip === 'undefined') {
@@ -123,6 +126,7 @@ export async function parseYildizliUrunXlsx(arrayBuffer) {
   const iY1Ust = colIdx('1 YILDIZ ÜST FİYAT');
   const iY2Ust = colIdx('2 YILDIZ ÜST FİYAT');
   const iY3Ust = colIdx('3 YILDIZ ÜST FİYAT');
+  const iKomisyon = colIdx('Komisyon Oranı'); // -1 ise eski şablon, yoksayılır
 
   const yildizVeriler = {};
   const warnings = [];
@@ -146,6 +150,7 @@ export async function parseYildizliUrunXlsx(arrayBuffer) {
       yildiz1,
       yildiz2,
       yildiz3,
+      komisyonOrani: iKomisyon !== -1 ? turkceSayi(row[iKomisyon]) : 0,
     };
   }
 
