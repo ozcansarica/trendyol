@@ -50,6 +50,14 @@ barkoda göre tek seferde kaydedilir.
 girebilirsiniz; hangi fiyat aralığına (komisyon dilimine) düştüğü otomatik
 bulunur ve o aralığın komisyonuyla anlık kâr hesaplanır.
 
+## Yıldızlı Ürün Fiyatları
+
+**⭐ Yıldızlı Ürün Fiyatları** panelinden Trendyol'un "Yıldızlı Ürün
+Etiketleri" export'u yüklenebilir. Bu dosyada komisyon oranı yoktur; her
+1/2/3 yıldız fiyat noktası için kâr, o fiyatın düştüğü mevcut fiyat
+aralığının komisyonuyla otomatik hesaplanır. Ana tabloyu, Maliyet Girişi'ni
+veya diğer hiçbir hesaplamayı etkilemez — tamamen ayrı, salt-okunur bir görünümdür.
+
 ## Geliştirme
 
 ```bash
@@ -73,5 +81,6 @@ Her iş ayrı bir dalda yapılır, `main`'e PR ile merge edilir. Bkz. `CONTRIBUT
 - `assets/urunler-data.js` — varsayılan ürün verisi (Excel'den içe aktarıldı)
 - `assets/xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı (ürün verisi)
 - `assets/maliyet-xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı (toplu maliyet yükleme)
+- `assets/yildizli-urun-xlsx-reader.js` — tarayıcıda .xlsx okuyan ayrıştırıcı (Yıldızlı Ürün Fiyatları)
 - `assets/vendor/jszip.min.js` — Excel yükleme için vendorlanmış JSZip
 - `tests/` — testler

@@ -24,6 +24,7 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 | `assets/urunler-data.js` | Varsayılan ürün verisi (Excel'den içe aktarıldı; kullanıcı yeni dosya yüklemezse bu kullanılır) |
 | `assets/xlsx-reader.js` | Tarayıcıda .xlsx dosyası okuyup `URUNLER` formatına çeviren ayrıştırıcı (JSZip + native DOMParser/TextDecoder) |
 | `assets/maliyet-xlsx-reader.js` | Maliyet Girişi için "Barkod No" + "Alış Tutarı (KDV)" kolonlu .xlsx dosyalarını barkod → maliyet eşlemesine çeviren ayrıştırıcı (xlsx-reader.js ile aynı yöntem, bilinçli olarak bağımsız modül — bkz. dosya başındaki not) |
+| `assets/yildizli-urun-xlsx-reader.js` | Trendyol "YıldızlıÜrünEtiketleri" export'unu (komisyon oranı içermez, sadece 1/2/3 yıldız fiyat noktaları) barkod → yıldız fiyatları eşlemesine çeviren ayrıştırıcı (aynı yöntem, bağımsız modül) |
 | `assets/vendor/jszip.min.js` | Vendorlanmış JSZip (ZIP açma) — SheetJS gibi hazır kütüphaneler bazı Türkçe karakterleri (Ç, Ğ) yanlış çözdüğü için bilinçli olarak kullanılmıyor |
 | `tests/calc.test.js` | Referans senaryo ve kenar durum testleri |
 | `.github/workflows/ci.yml` | PR/branch testleri |
@@ -105,3 +106,17 @@ barkod → maliyet eşlemesi tek seferde `trendyol_maliyet_kayitlari_v1`'e
 kaydedilir (`saveMaliyetKayitlariBulk()`) ve barkodu eşleşen ürünlerin
 maliyeti anında güncellenir; eşleşmeyen barkodlar da kayıt defterinde
 saklı kalır ve o barkoda sahip bir ürün ileride yüklenirse otomatik uygulanır.
+
+## Yıldızlı Ürün Fiyatları (ayrı panel, mevcut sistemi etkilemez)
+
+Trendyol'un "Yıldızlı Ürün Etiketleri" export'u (komisyon oranı **içermez**,
+yalnızca 1/2/3 yıldız için önerilen fiyat noktalarını içerir) **💰 Maliyet
+Girişi**'nin yanındaki **⭐ Yıldızlı Ürün Fiyatları** panelinden yüklenir
+(`assets/yildizli-urun-xlsx-reader.js`, `parseYildizliUrunXlsx()`). Her
+yıldız seviyesi için "Üst Fiyat" (o seviyeyi en az indirimle karşılayan fiyat)
+kullanılır; kâr hesaplanırken bu fiyatın ürünün zaten yüklü 4 fiyat aralığından
+hangisine düştüğü `tierForPrice()` ile bulunup o aralığın komisyonu kullanılır
+(özel fiyat sorgulama ile aynı mantık). Veri `trendyol_yildizli_urun_v1`'de
+barkoda göre saklanır ve panelde **canlı olarak** `activeUrunler` ile
+eşleştirilir — ürün nesnelerine yazılmadığından ana tabloyu, Maliyet
+Girişi'ni veya diğer hesaplamaları hiçbir şekilde etkilemez.
