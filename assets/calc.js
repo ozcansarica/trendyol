@@ -2,7 +2,7 @@
 // Hem tarayıcıda (index.html) hem de Node testlerinde (tests/) kullanılır.
 
 // Trendyol sabit hizmet bedeli (KDV dahil) - tüm satışlarda sabit tutar.
-export const HIZMET_BEDELI_SABIT = 8.39;
+export const HIZMET_BEDELI_SABIT = 13.19;
 
 export function hizmetBedeli(satis) {
   return HIZMET_BEDELI_SABIT;

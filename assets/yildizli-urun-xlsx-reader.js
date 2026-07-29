@@ -151,6 +151,9 @@ export async function parseYildizliUrunXlsx(arrayBuffer) {
       yildiz2,
       yildiz3,
       komisyonOrani: iKomisyon !== -1 ? turkceSayi(row[iKomisyon]) : 0,
+      // N sütunu (indeks 13) → güncel komisyon oranı, P sütunu (indeks 15) → güncel satış fiyatı
+      guncelKomisyon: turkceSayi(row[13]),
+      guncelFiyat: turkceSayi(row[15]),
     };
   }
 
