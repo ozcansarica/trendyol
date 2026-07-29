@@ -735,7 +735,7 @@ function yildizKarHesapla(barkod, u, veri, price) {
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
-  return { durum: 'ok', price, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
+  return { durum: 'ok', price, kar: c.kar, karOrani: c.karOrani, zorunluAdet, komisyon };
 }
 
 function yildizHucre(barkod, u, veri, price) {
@@ -751,6 +751,7 @@ function yildizHucre(barkod, u, veri, price) {
   const karCls = sonuc.karOrani >= 0 ? 'pos' : 'neg';
   return `<div class="ozel-fiyat-sonuc">
     <div class="kv-line small">${tl(sonuc.price)}${sonuc.zorunluAdet > 1 ? ` · ${sonuc.zorunluAdet} adet` : ''}</div>
+    <div class="kv-line small">%${sonuc.komisyon} komisyon</div>
     <div class="kv-line">Kâr: <span class="kv ${karCls}">${tl(sonuc.kar)}</span></div>
     <div class="kv-line small">Oran: <span class="${karCls}">${pc(sonuc.karOrani)}</span></div>
   </div>`;
