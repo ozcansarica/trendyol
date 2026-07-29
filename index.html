@@ -112,6 +112,11 @@
   .aralik-cell.na { background: #f8f9fb; opacity: .65; }
   .aralik-cell.na .na-text { font-size: 11px; color: #b0b7c3; margin-top: 8px; font-style: italic; }
   .trophy { font-size: 11px; }
+  thead th.sec-col { width: 36px; text-align: center; }
+  tbody td.sec-col { text-align: center; vertical-align: middle; padding: 0 4px; }
+  input.urun-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--orange); }
+  .indir-btn { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .indir-btn:hover { opacity: .88; }
 </style>
 </head>
 <body>
@@ -130,6 +135,7 @@
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
     <button class="maliyet-btn" onclick="openYildizModal()">⭐ Yıldızlı Ürün Fiyatları</button>
+    <button id="secimIndir" class="indir-btn" onclick="exportSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="secimSayisi">0</span>)</button>
     <span class="status" id="dataStatus"></span>
   </div>
   <div class="upload-msg error" id="uploadError" style="display:none"></div>
@@ -145,6 +151,7 @@
     <table>
       <thead>
         <tr>
+          <th class="sec-col"><input type="checkbox" id="tumunuSec" onchange="toggleTumunuSec(this)" title="Tümünü seç/kaldır"></th>
           <th>Ürün Bilgileri</th>
           <th>Güncel Fiyat ve Komisyon</th>
           <th class="aralik">1. Fiyat Aralığı</th>
@@ -553,10 +560,113 @@ function render() {
       </td>`;
     }).join('');
 
-    return `<tr><td>${urunCell}</td><td>${fiyatCell}</td>${aralikCells}</tr>`;
+    const checked = selectedIndices.has(idx) ? 'checked' : '';
+    return `<tr><td class="sec-col"><input type="checkbox" class="urun-checkbox" data-idx="${idx}" onchange="toggleUrunSec(this)" ${checked}></td><td>${urunCell}</td><td>${fiyatCell}</td>${aralikCells}</tr>`;
   }).join('');
 
   document.getElementById('tbody').innerHTML = rowsHtml;
+}
+
+// — Ürün seçimi & Excel indirme —
+
+const selectedIndices = new Set();
+
+function updateSecimBar() {
+  const n = selectedIndices.size;
+  const btn = document.getElementById('secimIndir');
+  btn.style.display = n > 0 ? '' : 'none';
+  document.getElementById('secimSayisi').textContent = n;
+  const all = document.getElementById('tumunuSec');
+  if (all) all.checked = n > 0 && n === activeUrunler.length;
+}
+
+window.toggleUrunSec = function (cb) {
+  const idx = parseInt(cb.dataset.idx);
+  if (cb.checked) selectedIndices.add(idx); else selectedIndices.delete(idx);
+  updateSecimBar();
+};
+
+window.toggleTumunuSec = function (cb) {
+  document.querySelectorAll('.urun-checkbox').forEach(c => {
+    c.checked = cb.checked;
+    const i = parseInt(c.dataset.idx);
+    if (cb.checked) selectedIndices.add(i); else selectedIndices.delete(i);
+  });
+  updateSecimBar();
+};
+
+window.exportSecilenlerXlsx = async function () {
+  const idxler = [...selectedIndices].sort((a, b) => a - b);
+  if (!idxler.length) return;
+
+  const headers = [
+    'Ürün', 'Model', 'Barkod', 'Stok', 'Maliyet (₺)',
+    'Güncel Satış Fiyatı (₺)', 'Güncel Komisyon (%)',
+    '1. Aralık', '1. Komisyon (%)', '1. Satış Fiyatı (₺)', '1. Zorunlu Adet', '1. Kâr (₺)', '1. Kâr Oranı (%)',
+    '2. Aralık', '2. Komisyon (%)', '2. Satış Fiyatı (₺)', '2. Zorunlu Adet', '2. Kâr (₺)', '2. Kâr Oranı (%)',
+    '3. Aralık', '3. Komisyon (%)', '3. Satış Fiyatı (₺)', '3. Zorunlu Adet', '3. Kâr (₺)', '3. Kâr Oranı (%)',
+    '4. Aralık', '4. Komisyon (%)', '4. Satış Fiyatı (₺)', '4. Zorunlu Adet', '4. Kâr (₺)', '4. Kâr Oranı (%)',
+  ];
+
+  const rows = [headers];
+  for (const i of idxler) {
+    const u = activeUrunler[i];
+    const tiers = tierInfo(u);
+    const row = [u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet, u.guncel_tsf, u.guncel_komisyon];
+    for (const t of tiers) {
+      if (t.karOrani === null) {
+        row.push(t.rangeText, '', '', '', '', '');
+      } else {
+        row.push(t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
+          Math.round(t.kar * 100) / 100,
+          Math.round(t.karOrani * 10) / 10);
+      }
+    }
+    rows.push(row);
+  }
+
+  const blob = await buildXlsxBlob(rows);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'secilen-urunler.xlsx';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+
+async function buildXlsxBlob(rows) {
+  function colLetter(n) {
+    let s = '';
+    while (n > 0) { s = String.fromCharCode(64 + (n % 26 || 26)) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  const sst = [], sstMap = {};
+  function strIdx(val) {
+    const s = String(val);
+    if (sstMap[s] == null) { sstMap[s] = sst.length; sst.push(s); }
+    return sstMap[s];
+  }
+
+  const sheetRows = rows.map((row, ri) =>
+    `<row r="${ri + 1}">${row.map((val, ci) => {
+      const ref = colLetter(ci + 1) + (ri + 1);
+      if (val == null || val === '') return `<c r="${ref}"/>`;
+      if (typeof val === 'number') return `<c r="${ref}"><v>${val}</v></c>`;
+      return `<c r="${ref}" t="s"><v>${strIdx(val)}</v></c>`;
+    }).join('')}</row>`
+  ).join('');
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Seçilen Ürünler" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
+  zip.file('xl/sharedStrings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map(s => `<si><t>${esc(s)}</t></si>`).join('')}</sst>`);
+  zip.file('xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts><font><sz val="11"/><name val="Calibri"/></font></fonts><fills><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`);
+
+  return await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 // Kullanıcının kendi girdiği bir satış fiyatının hangi komisyon aralığına
