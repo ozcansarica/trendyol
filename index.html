@@ -827,7 +827,7 @@ function yildizKarHesapla(barkod, u, veri, price) {
   const maliyet = yildizMaliyetBul(barkod, u);
   if (maliyet == null) return { durum: 'maliyet-yok' };
 
-  let komisyon = veri.komisyonOrani;
+  let komisyon = veri.komisyonOrani || veri.guncelKomisyon;
   if (!komisyon) {
     if (!u) return { durum: 'komisyon-yok' };
     komisyon = tierForPrice(u, price).komisyon;
@@ -859,40 +859,73 @@ function yildizHucre(barkod, u, veri, price) {
   </div>`;
 }
 
-// Yıldız paneli: Güncel Fiyat ve Komisyon sütunu (ana tablodaki ürünler için)
-function yildizFiyatCell(barkod, u) {
-  if (!u) return `<div class="fiyat-cell" style="font-size:11px;color:var(--muted)">Ana tabloda yok</div>`;
+// Yıldız paneli: Güncel Fiyat ve Komisyon sütunu
+function yildizFiyatCell(barkod, u, veri) {
   const bEsc = String(barkod).replace(/"/g, '&quot;');
-  return `<div class="fiyat-cell">
-    <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
-    <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
-    <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
-    <div class="ozel-fiyat">
+  const inputHtml = `<div class="ozel-fiyat">
       <input type="number" class="ozel-fiyat-input" placeholder="Satış fiyatı gir (₺)" min="0" step="0.01"
         data-barkod="${bEsc}" oninput="ozelFiyatHesaplaYildizModal(this)">
       <div class="ozel-fiyat-sonuc" id="yildizOzelSonuc-${bEsc}"></div>
-    </div>
+    </div>`;
+  if (u) {
+    return `<div class="fiyat-cell">
+    <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
+    <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
+    <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+    ${inputHtml}
   </div>`;
+  }
+  const guncelFiyat = veri && veri.guncelFiyat;
+  const guncelKomisyon = veri && (veri.komisyonOrani || veri.guncelKomisyon);
+  if (guncelFiyat || guncelKomisyon) {
+    return `<div class="fiyat-cell">
+    ${guncelFiyat ? `<div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(guncelFiyat)}</span></div>` : ''}
+    ${guncelKomisyon ? `<div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${guncelKomisyon}</span></div>` : ''}
+    ${inputHtml}
+  </div>`;
+  }
+  return `<div class="fiyat-cell" style="font-size:11px;color:var(--muted)">Ana tabloda yok</div>`;
 }
 
 window.ozelFiyatHesaplaYildizModal = function (input) {
   const barkod = input.dataset.barkod;
   const u = urunByBarkodHaritasi()[barkod];
   const resultEl = document.getElementById(`yildizOzelSonuc-${barkod}`);
-  if (!u || !resultEl) return;
+  if (!resultEl) return;
   const price = parseFloat(input.value);
   if (!price || price <= 0) { resultEl.innerHTML = ''; return; }
-  const t = tierForPrice(u, price);
-  if (!t.komisyon) {
-    resultEl.innerHTML = `<div class="ozel-uyari">${t.num}. Fiyat Aralığı — komisyon bilgisi yok.</div>`;
+
+  let komisyon = 0;
+  let komisyonLabel = '';
+  if (u) {
+    const t = tierForPrice(u, price);
+    komisyon = t.komisyon;
+    if (!komisyon) {
+      resultEl.innerHTML = `<div class="ozel-uyari">${t.num}. Fiyat Aralığı — komisyon bilgisi yok.</div>`;
+      return;
+    }
+    komisyonLabel = `${t.num}. Aralık · %${komisyon}`;
+  } else {
+    const veri = yildizVeri && yildizVeri.veriler && yildizVeri.veriler[barkod];
+    komisyon = (veri && (veri.komisyonOrani || veri.guncelKomisyon)) || 0;
+    if (!komisyon) {
+      resultEl.innerHTML = `<div class="ozel-uyari">Komisyon bilgisi yok.</div>`;
+      return;
+    }
+    komisyonLabel = `%${komisyon}`;
+  }
+
+  const maliyet = yildizMaliyetBul(barkod, u);
+  if (maliyet == null) {
+    resultEl.innerHTML = `<div class="ozel-uyari">Maliyet bilgisi yok.</div>`;
     return;
   }
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
-  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
   resultEl.innerHTML = `
-    <div class="kv-line small">${t.num}. Aralık · %${t.komisyon}${zorunluAdet > 1 ? ` · ${zorunluAdet} adet` : ''}</div>
+    <div class="kv-line small">${komisyonLabel}${zorunluAdet > 1 ? ` · ${zorunluAdet} adet` : ''}</div>
     <div class="kv-line">Kâr: <span class="kv ${karCls}">${tl(c.kar)}</span></div>
     <div class="kv-line small">Oran: <span class="${karCls}">${pc(c.karOrani)}</span></div>`;
 };
@@ -1022,7 +1055,7 @@ window.renderYildizModal = function () {
     return `<tr>
       <td class="m-urun">${urunAdi || '-'}</td>
       <td class="m-barkod">${barkod}</td>
-      <td>${yildizFiyatCell(barkod, u)}</td>
+      <td>${yildizFiyatCell(barkod, u, veri)}</td>
       ${yTd(1, veri.yildiz1)}${yTd(2, veri.yildiz2)}${yTd(3, veri.yildiz3)}
     </tr>`;
   }).join('');
