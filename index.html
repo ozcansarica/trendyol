@@ -129,6 +129,7 @@
     <label class="upload-btn" for="fileInput">📤 Excel Yükle (.xlsx)</label>
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
+    <button class="maliyet-btn" onclick="openYildizModal()">⭐ Yıldızlı Ürün Fiyatları</button>
     <span class="status" id="dataStatus"></span>
   </div>
   <div class="upload-msg error" id="uploadError" style="display:none"></div>
@@ -188,12 +189,43 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="yildizModal">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <div>
+        <h2>⭐ Yıldızlı Ürün Fiyatları</h2>
+        <p>Trendyol'un "Yıldızlı Ürün Etiketleri" export'unu yükleyin; her ürünün 1/2/3 yıldız fiyat noktası, zaten yüklü fiyat aralığından bulunan komisyonla anlık hesaplanır. Bu dosyada komisyon oranı yoktur.</p>
+      </div>
+      <button class="modal-close" onclick="closeYildizModal()">✕</button>
+    </div>
+    <div class="modal-search">
+      <input type="text" id="yildizSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderYildizModal()">
+      <label class="modal-upload-btn" for="yildizFileInput">📤 Excel Yükle</label>
+      <input type="file" id="yildizFileInput" accept=".xlsx" style="display:none">
+    </div>
+    <div class="upload-msg error" id="yildizUploadError" style="display:none"></div>
+    <div class="upload-msg info" id="yildizUploadInfo" style="display:none"></div>
+    <div class="modal-body">
+      <table class="modal-table">
+        <thead>
+          <tr><th>Ürün</th><th>Barkod</th><th>⭐ 1 Yıldız</th><th>⭐⭐ 2 Yıldız</th><th>⭐⭐⭐ 3 Yıldız</th></tr>
+        </thead>
+        <tbody id="yildizModalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot" id="yildizModalFoot">
+      Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur.
+    </div>
+  </div>
+</div>
+
 <script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
 import { computeMaliyet } from './assets/calc.js?v=__BUILD_VERSION__';
 import { URUNLER } from './assets/urunler-data.js?v=__BUILD_VERSION__';
 import { parseUrunlerXlsx } from './assets/xlsx-reader.js?v=__BUILD_VERSION__';
 import { parseMaliyetXlsx } from './assets/maliyet-xlsx-reader.js?v=__BUILD_VERSION__';
+import { parseYildizliUrunXlsx } from './assets/yildizli-urun-xlsx-reader.js?v=__BUILD_VERSION__';
 
 const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
 const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
@@ -601,7 +633,131 @@ window.maliyetGuncelle = function (input) {
   render();
 };
 
+// Yıldızlı Ürün Fiyatları: barkod → {urun, yildiz1, yildiz2, yildiz3} eşlemesi.
+// Ürün nesnelerine yazılmaz — panelde activeUrunler ile canlı barkod eşleşmesi
+// yapılır, bu yüzden yeni bir ürün Excel'i yüklendiğinde ayrıca güncellenmesi
+// gerekmez (mevcut sistemi etkilemez).
+const YILDIZ_KEY = 'trendyol_yildizli_urun_v1';
+let yildizVeri = null; // { veriler: {barkod: {...}}, fileName, uploadedAt }
+
+function loadYildizFromStorage() {
+  try {
+    const raw = localStorage.getItem(YILDIZ_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || !saved.veriler) return;
+    yildizVeri = saved;
+  } catch {
+    // bozuk veri varsa sessizce yoksay
+  }
+}
+
+function updateYildizFoot() {
+  const el = document.getElementById('yildizModalFoot');
+  if (yildizVeri) {
+    const tarih = new Date(yildizVeri.uploadedAt).toLocaleString('tr-TR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${Object.keys(yildizVeri.veriler).length} ürün · ${tarih}. Komisyon oranı, fiyatın düştüğü mevcut fiyat aralığından otomatik bulunur.`;
+  } else {
+    el.textContent = 'Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur.';
+  }
+}
+
+// Bir yıldız fiyat noktası için, o fiyatın düştüğü mevcut fiyat aralığının
+// komisyonuyla (özel fiyat sorgulama ile aynı mantık) kâr hesaplar.
+function yildizKarHesapla(u, price) {
+  if (!price) return null;
+  const t = tierForPrice(u, price);
+  if (!t.komisyon) return null;
+  const zorunluAdet = zorunluSiparisAdedi(price);
+  const kargo = kargoIcin(price);
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+  return { price, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
+}
+
+function yildizHucre(u, price) {
+  const sonuc = yildizKarHesapla(u, price);
+  if (!sonuc) return `<div class="ozel-fiyat-sonuc"><span class="ozel-uyari">-</span></div>`;
+  const karCls = sonuc.karOrani >= 0 ? 'pos' : 'neg';
+  return `<div class="ozel-fiyat-sonuc">
+    <div class="kv-line small">${tl(sonuc.price)}${sonuc.zorunluAdet > 1 ? ` · ${sonuc.zorunluAdet} adet` : ''}</div>
+    <div class="kv-line">Kâr: <span class="kv ${karCls}">${tl(sonuc.kar)}</span></div>
+    <div class="kv-line small">Oran: <span class="${karCls}">${pc(sonuc.karOrani)}</span></div>
+  </div>`;
+}
+
+window.openYildizModal = function () {
+  document.getElementById('yildizModal').classList.remove('hidden');
+  document.getElementById('yildizSearch').value = '';
+  showMsg('yildizUploadError', '');
+  showMsg('yildizUploadInfo', '');
+  updateYildizFoot();
+  renderYildizModal();
+};
+
+window.closeYildizModal = function () {
+  document.getElementById('yildizModal').classList.add('hidden');
+};
+
+document.getElementById('yildizFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showMsg('yildizUploadError', '');
+  showMsg('yildizUploadInfo', '');
+  try {
+    const buf = await file.arrayBuffer();
+    const { yildizVeriler, warnings } = await parseYildizliUrunXlsx(buf);
+    yildizVeri = { veriler: yildizVeriler, fileName: file.name, uploadedAt: Date.now() };
+    localStorage.setItem(YILDIZ_KEY, JSON.stringify(yildizVeri));
+
+    let msg = `${Object.keys(yildizVeriler).length} ürün için yıldız fiyatı yüklendi.`;
+    if (warnings.length > 0) msg += ` ${warnings.length} satır atlandı.`;
+    showMsg('yildizUploadInfo', msg);
+
+    updateYildizFoot();
+    renderYildizModal();
+  } catch (err) {
+    showMsg('yildizUploadError', `Excel okunamadı: ${err.message}`);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+window.renderYildizModal = function () {
+  const bodyEl = document.getElementById('yildizModalBody');
+  if (!yildizVeri || !yildizVeri.veriler) {
+    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Henüz bir "Yıldızlı Ürün Etiketleri" Excel dosyası yüklenmedi.</td></tr>`;
+    return;
+  }
+
+  const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
+  const eslesenler = [];
+  for (const u of activeUrunler) {
+    const barkod = String(u.barkod || '').trim();
+    const veri = barkod && yildizVeri.veriler[barkod];
+    if (!veri) continue;
+    if (q && !u.urun.toLowerCase().includes(q) && !barkod.toLowerCase().includes(q)) continue;
+    eslesenler.push({ u, veri });
+  }
+
+  if (eslesenler.length === 0) {
+    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Eşleşen ürün bulunamadı (barkoda göre mevcut ürün listesiyle eşleşmesi gerekir).</td></tr>`;
+    return;
+  }
+
+  bodyEl.innerHTML = eslesenler.map(({ u, veri }) => `
+    <tr>
+      <td class="m-urun">${u.urun}</td>
+      <td class="m-barkod">${u.barkod || '-'}</td>
+      <td>${yildizHucre(u, veri.yildiz1)}</td>
+      <td>${yildizHucre(u, veri.yildiz2)}</td>
+      <td>${yildizHucre(u, veri.yildiz3)}</td>
+    </tr>`).join('');
+};
+
 loadFromStorage();
+loadYildizFromStorage();
 applyMaliyetKayitlari(activeUrunler);
 updateStatusUI();
 updateTarifeAvailability();
