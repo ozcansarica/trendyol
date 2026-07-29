@@ -659,6 +659,13 @@ function aktifUrunKaynagi() {
   return activeMeta ? `"${activeMeta.fileName}" (${activeUrunler.length} ürün)` : `varsayılan veri (${activeUrunler.length} ürün)`;
 }
 
+// Yıldız dosyasındaki barkodlardan kaçının, komisyon aralığı bulmak için
+// şu an yüklü ürün verisiyle eşleştiğini sayar.
+function yildizEslesmeSayisi() {
+  if (!yildizVeri) return 0;
+  return Object.keys(yildizVeri.veriler).filter(b => activeUrunler.some(u => String(u.barkod || '').trim() === b)).length;
+}
+
 function updateYildizFoot() {
   const el = document.getElementById('yildizModalFoot');
   const kaynak = aktifUrunKaynagi();
@@ -666,7 +673,9 @@ function updateYildizFoot() {
     const tarih = new Date(yildizVeri.uploadedAt).toLocaleString('tr-TR', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
-    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${Object.keys(yildizVeri.veriler).length} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak}. Komisyon oranı, fiyatın düştüğü mevcut fiyat aralığından otomatik bulunur.`;
+    const toplam = Object.keys(yildizVeri.veriler).length;
+    const eslesen = yildizEslesmeSayisi();
+    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${toplam} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak} — <b>${eslesen}/${toplam}</b> ürün eşleşip komisyon bulunabiliyor; kalanlar için yalnızca fiyat noktası gösterilir, kâr hesaplanamaz.`;
   } else {
     el.innerHTML = `Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur. Şu an yüklü ürün verisi: ${kaynak}.`;
   }
@@ -684,9 +693,23 @@ function yildizKarHesapla(u, price) {
   return { price, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
 }
 
+// u null olabilir (barkod şu an yüklü ürün listesinde yok) — bu durumda
+// komisyon aralığı bulunamadığından yalnızca fiyat noktası gösterilir.
 function yildizHucre(u, price) {
+  if (!price) return `<div class="ozel-fiyat-sonuc"><span class="ozel-uyari">-</span></div>`;
+  if (!u) {
+    return `<div class="ozel-fiyat-sonuc">
+      <div class="kv-line small">${tl(price)}</div>
+      <div class="ozel-uyari">Ürün listede yok</div>
+    </div>`;
+  }
   const sonuc = yildizKarHesapla(u, price);
-  if (!sonuc) return `<div class="ozel-fiyat-sonuc"><span class="ozel-uyari">-</span></div>`;
+  if (!sonuc) {
+    return `<div class="ozel-fiyat-sonuc">
+      <div class="kv-line small">${tl(price)}</div>
+      <div class="ozel-uyari">Komisyon bilgisi yok</div>
+    </div>`;
+  }
   const karCls = sonuc.karOrani >= 0 ? 'pos' : 'neg';
   return `<div class="ozel-fiyat-sonuc">
     <div class="kv-line small">${tl(sonuc.price)}${sonuc.zorunluAdet > 1 ? ` · ${sonuc.zorunluAdet} adet` : ''}</div>
@@ -739,39 +762,32 @@ window.renderYildizModal = function () {
     return;
   }
 
-  const tumEslesenler = [];
+  // Barkoda göre hızlı arama için şu an yüklü ürün listesinden bir harita
+  // kurulur; eşleşme bulunamayan satırlar da (yalnızca fiyat noktasıyla,
+  // komisyon/kâr hesaplanmadan) listeden çıkarılmaz — dosyadaki her ürün gösterilir.
+  const urunByBarkod = {};
   for (const u of activeUrunler) {
-    const barkod = String(u.barkod || '').trim();
-    const veri = barkod && yildizVeri.veriler[barkod];
-    if (veri) tumEslesenler.push({ u, veri });
-  }
-
-  // Hiç barkod eşleşmesi yoksa, aramadan bağımsız olarak nedenini açıkla:
-  // yıldız dosyası şu an yüklü ürün verisiyle (farklı bir Excel/dönem olabilir)
-  // örtüşmüyor demektir — komisyon oranı olmadan bu ürünler için hesap yapılamaz.
-  if (tumEslesenler.length === 0) {
-    const toplamYildiz = Object.keys(yildizVeri.veriler).length;
-    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:28px 20px;text-align:center;color:var(--muted);line-height:1.6">
-      Şu an yüklü ürün verisiyle (${aktifUrunKaynagi()}) eşleşen barkod bulunamadı — yıldız dosyasındaki ${toplamYildiz} üründen hiçbiri bu listede yok.<br>
-      Bu ürünlerin bulunduğu ana ürün Excel'ini (sayfanın üstündeki <b>📤 Excel Yükle</b>) önce yükleyip bu paneli tekrar açın.
-    </td></tr>`;
-    return;
+    const b = String(u.barkod || '').trim();
+    if (b) urunByBarkod[b] = u;
   }
 
   const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
-  const eslesenler = !q
-    ? tumEslesenler
-    : tumEslesenler.filter(({ u }) => u.urun.toLowerCase().includes(q) || String(u.barkod || '').toLowerCase().includes(q));
+  const satirlar = [];
+  for (const [barkod, veri] of Object.entries(yildizVeri.veriler)) {
+    const urunAdi = veri.urun || urunByBarkod[barkod]?.urun || '';
+    if (q && !urunAdi.toLowerCase().includes(q) && !barkod.toLowerCase().includes(q)) continue;
+    satirlar.push({ barkod, veri, u: urunByBarkod[barkod] || null, urunAdi });
+  }
 
-  if (eslesenler.length === 0) {
+  if (satirlar.length === 0) {
     bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Aramanızla eşleşen ürün bulunamadı.</td></tr>`;
     return;
   }
 
-  bodyEl.innerHTML = eslesenler.map(({ u, veri }) => `
+  bodyEl.innerHTML = satirlar.map(({ barkod, veri, u, urunAdi }) => `
     <tr>
-      <td class="m-urun">${u.urun}</td>
-      <td class="m-barkod">${u.barkod || '-'}</td>
+      <td class="m-urun">${urunAdi || '-'}</td>
+      <td class="m-barkod">${barkod}</td>
       <td>${yildizHucre(u, veri.yildiz1)}</td>
       <td>${yildizHucre(u, veri.yildiz2)}</td>
       <td>${yildizHucre(u, veri.yildiz3)}</td>
