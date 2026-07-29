@@ -114,6 +114,8 @@
   .trophy { font-size: 11px; }
   .aralik-cell:not(.na) { cursor: pointer; }
   .aralik-cell.selected { outline: 2px solid var(--orange) !important; outline-offset: -2px; background: #fff7ee; }
+  td.yildiz-sec:not(.na-td) { cursor: pointer; }
+  td.yildiz-sec.selected { outline: 2px solid var(--orange); outline-offset: -2px; background: #fff7ee; }
   .indir-btn { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .indir-btn:hover { opacity: .88; }
 </style>
@@ -207,13 +209,14 @@
       <input type="text" id="yildizSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderYildizModal()">
       <label class="modal-upload-btn" for="yildizFileInput">📤 Excel Yükle</label>
       <input type="file" id="yildizFileInput" accept=".xlsx" style="display:none">
+      <button id="yildizSecimIndir" class="indir-btn" onclick="exportYildizSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="yildizSecimSayisi">0</span>)</button>
     </div>
     <div class="upload-msg error" id="yildizUploadError" style="display:none"></div>
     <div class="upload-msg info" id="yildizUploadInfo" style="display:none"></div>
     <div class="modal-body">
       <table class="modal-table">
         <thead>
-          <tr><th>Ürün</th><th>Barkod</th><th>⭐ 1 Yıldız</th><th>⭐⭐ 2 Yıldız</th><th>⭐⭐⭐ 3 Yıldız</th></tr>
+          <tr><th>Ürün</th><th>Barkod</th><th>Güncel Fiyat ve Komisyon</th><th>⭐ 1 Yıldız</th><th>⭐⭐ 2 Yıldız</th><th>⭐⭐⭐ 3 Yıldız</th></tr>
         </thead>
         <tbody id="yildizModalBody"></tbody>
       </table>
@@ -856,6 +859,100 @@ function yildizHucre(barkod, u, veri, price) {
   </div>`;
 }
 
+// Yıldız paneli: Güncel Fiyat ve Komisyon sütunu (ana tablodaki ürünler için)
+function yildizFiyatCell(barkod, u) {
+  if (!u) return `<div class="fiyat-cell" style="font-size:11px;color:var(--muted)">Ana tabloda yok</div>`;
+  const bEsc = String(barkod).replace(/"/g, '&quot;');
+  return `<div class="fiyat-cell">
+    <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
+    <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
+    <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+    <div class="ozel-fiyat">
+      <input type="number" class="ozel-fiyat-input" placeholder="Satış fiyatı gir (₺)" min="0" step="0.01"
+        data-barkod="${bEsc}" oninput="ozelFiyatHesaplaYildizModal(this)">
+      <div class="ozel-fiyat-sonuc" id="yildizOzelSonuc-${bEsc}"></div>
+    </div>
+  </div>`;
+}
+
+window.ozelFiyatHesaplaYildizModal = function (input) {
+  const barkod = input.dataset.barkod;
+  const u = urunByBarkodHaritasi()[barkod];
+  const resultEl = document.getElementById(`yildizOzelSonuc-${barkod}`);
+  if (!u || !resultEl) return;
+  const price = parseFloat(input.value);
+  if (!price || price <= 0) { resultEl.innerHTML = ''; return; }
+  const t = tierForPrice(u, price);
+  if (!t.komisyon) {
+    resultEl.innerHTML = `<div class="ozel-uyari">${t.num}. Fiyat Aralığı — komisyon bilgisi yok.</div>`;
+    return;
+  }
+  const zorunluAdet = zorunluSiparisAdedi(price);
+  const kargo = kargoIcin(price);
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+  const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
+  resultEl.innerHTML = `
+    <div class="kv-line small">${t.num}. Aralık · %${t.komisyon}${zorunluAdet > 1 ? ` · ${zorunluAdet} adet` : ''}</div>
+    <div class="kv-line">Kâr: <span class="kv ${karCls}">${tl(c.kar)}</span></div>
+    <div class="kv-line small">Oran: <span class="${karCls}">${pc(c.karOrani)}</span></div>`;
+};
+
+// Yıldız paneli: hücre seçimi & Excel indirme
+const selectedYildiz = new Set(); // anahtar: "barkod|yıldızNum"
+
+function updateYildizSecimBar() {
+  const n = selectedYildiz.size;
+  const btn = document.getElementById('yildizSecimIndir');
+  if (btn) btn.style.display = n > 0 ? '' : 'none';
+  const span = document.getElementById('yildizSecimSayisi');
+  if (span) span.textContent = n;
+}
+
+window.toggleYildizSec = function (td) {
+  const barkod = td.dataset.barkod;
+  const yNum = parseInt(td.dataset.ynum);
+  const key = barkod + '|' + yNum;
+  if (selectedYildiz.has(key)) selectedYildiz.delete(key); else selectedYildiz.add(key);
+  td.classList.toggle('selected', selectedYildiz.has(key));
+  updateYildizSecimBar();
+};
+
+window.exportYildizSecilenlerXlsx = async function () {
+  if (!selectedYildiz.size || !yildizVeri) return;
+  const urunByBarkod = urunByBarkodHaritasi();
+  const headers = [
+    'Ürün', 'Barkod', 'Yıldız Seviyesi', 'Fiyat (₺)', 'Komisyon (%)',
+    'Zorunlu Adet', 'Kâr (₺)', 'Kâr Oranı (%)', 'Maliyet (₺)',
+  ];
+  const rows = [headers];
+  const keys = [...selectedYildiz].sort();
+  for (const key of keys) {
+    const [barkod, yNumStr] = key.split('|');
+    const yNum = parseInt(yNumStr);
+    const veri = yildizVeri.veriler[barkod];
+    if (!veri) continue;
+    const u = urunByBarkod[barkod] || null;
+    const price = yNum === 1 ? veri.yildiz1 : yNum === 2 ? veri.yildiz2 : veri.yildiz3;
+    const sonuc = yildizKarHesapla(barkod, u, veri, price);
+    const urunAdi = veri.urun || u?.urun || barkod;
+    const maliyet = yildizMaliyetBul(barkod, u) || '';
+    rows.push([
+      urunAdi, barkod, yNum + ' Yıldız', price || '',
+      sonuc.durum === 'ok' ? sonuc.komisyon : '',
+      sonuc.durum === 'ok' ? sonuc.zorunluAdet : '',
+      sonuc.durum === 'ok' ? Math.round(sonuc.kar * 100) / 100 : '',
+      sonuc.durum === 'ok' ? Math.round(sonuc.karOrani * 10) / 10 : '',
+      maliyet,
+    ]);
+  }
+  const blob = await buildXlsxBlob(rows);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'yildiz-secilen-fiyatlar.xlsx';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+};
+
 window.openYildizModal = function () {
   document.getElementById('yildizModal').classList.remove('hidden');
   document.getElementById('yildizSearch').value = '';
@@ -894,12 +991,10 @@ document.getElementById('yildizFileInput').addEventListener('change', async (e) 
 window.renderYildizModal = function () {
   const bodyEl = document.getElementById('yildizModalBody');
   if (!yildizVeri || !yildizVeri.veriler) {
-    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Henüz bir "Yıldızlı Ürün Etiketleri" Excel dosyası yüklenmedi.</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="6" style="padding:24px 20px;text-align:center;color:var(--muted)">Henüz bir "Yıldızlı Ürün Etiketleri" Excel dosyası yüklenmedi.</td></tr>`;
     return;
   }
 
-  // Eşleşme bulunamayan satırlar da (yalnızca fiyat noktasıyla, maliyet/
-  // komisyon eksikse hesaplanmadan) listeden çıkarılmaz — dosyadaki her ürün gösterilir.
   const urunByBarkod = urunByBarkodHaritasi();
 
   const q = document.getElementById('yildizSearch').value.trim().toLowerCase();
@@ -911,18 +1006,26 @@ window.renderYildizModal = function () {
   }
 
   if (satirlar.length === 0) {
-    bodyEl.innerHTML = `<tr><td colspan="5" style="padding:24px 20px;text-align:center;color:var(--muted)">Aramanızla eşleşen ürün bulunamadı.</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="6" style="padding:24px 20px;text-align:center;color:var(--muted)">Aramanızla eşleşen ürün bulunamadı.</td></tr>`;
     return;
   }
 
-  bodyEl.innerHTML = satirlar.map(({ barkod, veri, u, urunAdi }) => `
-    <tr>
+  bodyEl.innerHTML = satirlar.map(({ barkod, veri, u, urunAdi }) => {
+    const bEsc = String(barkod).replace(/"/g, '&quot;');
+    const yTd = (yNum, price) => {
+      const key = barkod + '|' + yNum;
+      const sel = selectedYildiz.has(key) ? ' selected' : '';
+      const cls = price ? `yildiz-sec${sel}` : 'yildiz-sec na-td';
+      const click = price ? ` data-barkod="${bEsc}" data-ynum="${yNum}" onclick="toggleYildizSec(this)"` : '';
+      return `<td class="${cls}"${click}>${yildizHucre(barkod, u, veri, price)}</td>`;
+    };
+    return `<tr>
       <td class="m-urun">${urunAdi || '-'}</td>
       <td class="m-barkod">${barkod}</td>
-      <td>${yildizHucre(barkod, u, veri, veri.yildiz1)}</td>
-      <td>${yildizHucre(barkod, u, veri, veri.yildiz2)}</td>
-      <td>${yildizHucre(barkod, u, veri, veri.yildiz3)}</td>
-    </tr>`).join('');
+      <td>${yildizFiyatCell(barkod, u)}</td>
+      ${yTd(1, veri.yildiz1)}${yTd(2, veri.yildiz2)}${yTd(3, veri.yildiz3)}
+    </tr>`;
+  }).join('');
 };
 
 loadFromStorage();
