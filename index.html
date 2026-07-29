@@ -603,19 +603,39 @@ window.closeMaliyetModal = function () {
 window.renderMaliyetModal = function () {
   const q = document.getElementById('maliyetSearch').value.trim().toLowerCase();
   const kayitlar = loadMaliyetKayitlari();
+
+  // Aktif listedeki ürünlerin anahtarları (barkod/model/ad)
+  const activeKeys = new Set(activeUrunler.map(u => maliyetAnahtari(u)));
+
+  // Kayıt defterinde olup aktif listede olmayan barkodlar — yıldızlı veriden isim al
+  const yildizVeriler = (yildizVeri && yildizVeri.veriler) ? yildizVeri.veriler : {};
+  const extraRows = Object.entries(kayitlar)
+    .filter(([key]) => key && !activeKeys.has(key))
+    .map(([key, maliyet]) => {
+      const yData = yildizVeriler[key];
+      return { urun: yData ? yData.urun : key, barkod: key, maliyet, _kayitOnly: true };
+    })
+    .sort((a, b) => a.urun.localeCompare(b.urun, 'tr'));
+
+  const allRows = [
+    ...activeUrunler.map(u => ({ ...u, _kayitOnly: false })),
+    ...extraRows,
+  ];
+
   const filtered = !q
-    ? activeUrunler
-    : activeUrunler.filter(u => u.urun.toLowerCase().includes(q) || String(u.barkod || '').toLowerCase().includes(q));
+    ? allRows
+    : allRows.filter(u => u.urun.toLowerCase().includes(q) || String(u.barkod || '').toLowerCase().includes(q));
 
   document.getElementById('maliyetModalBody').innerHTML = filtered.map(u => {
-    const anahtar = maliyetAnahtari(u);
+    const anahtar = u._kayitOnly ? u.barkod : maliyetAnahtari(u);
     const kayitliMi = anahtar && kayitlar[anahtar] != null;
+    const currentVal = u._kayitOnly ? (kayitlar[anahtar] || '') : (u.maliyet || '');
     return `<tr>
       <td class="m-urun">${u.urun}</td>
       <td class="m-barkod">${u.barkod || '-'}</td>
       <td style="text-align:right">
         <input type="number" class="m-maliyet ${kayitliMi ? 'kayitli' : ''}" min="0" step="0.01"
-          value="${u.maliyet || ''}" data-anahtar="${anahtar.replace(/"/g, '&quot;')}"
+          value="${currentVal}" data-anahtar="${String(anahtar).replace(/"/g, '&quot;')}"
           onchange="maliyetGuncelle(this)">
         ${kayitliMi ? '<span class="kayit-badge">Kaydedildi</span>' : ''}
       </td>
