@@ -878,7 +878,8 @@ function yildizFiyatCell(barkod, u, veri) {
     const adet = zorunluSiparisAdedi(price);
     const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price) });
     const cls = c.karOrani >= 0 ? 'pos' : 'neg';
-    return `<div class="row"><span class="k">Kâr Oranı</span><span class="v ${cls}">${pc(c.karOrani)}</span></div>`;
+    return `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${cls}">${tl(c.kar)}</span></div>
+    <div class="row"><span class="k">Kâr Oranı</span><span class="v ${cls}">${pc(c.karOrani)}</span></div>`;
   }
 
   if (u) {
