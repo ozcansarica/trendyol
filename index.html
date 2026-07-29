@@ -112,9 +112,8 @@
   .aralik-cell.na { background: #f8f9fb; opacity: .65; }
   .aralik-cell.na .na-text { font-size: 11px; color: #b0b7c3; margin-top: 8px; font-style: italic; }
   .trophy { font-size: 11px; }
-  thead th.sec-col { width: 36px; text-align: center; }
-  tbody td.sec-col { text-align: center; vertical-align: middle; padding: 0 4px; }
-  input.urun-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--orange); }
+  .aralik-cell:not(.na) { cursor: pointer; }
+  .aralik-cell.selected { outline: 2px solid var(--orange) !important; outline-offset: -2px; background: #fff7ee; }
   .indir-btn { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .indir-btn:hover { opacity: .88; }
 </style>
@@ -151,7 +150,6 @@
     <table>
       <thead>
         <tr>
-          <th class="sec-col"><input type="checkbox" id="tumunuSec" onchange="toggleTumunuSec(this)" title="Tümünü seç/kaldır"></th>
           <th>Ürün Bilgileri</th>
           <th>Güncel Fiyat ve Komisyon</th>
           <th class="aralik">1. Fiyat Aralığı</th>
@@ -539,12 +537,13 @@ function render() {
 
     const aralikCells = tiers.map(t => {
       if (t.karOrani === null) {
-        return `<td><div class="aralik-cell na"><div class="aralik-range"><b>${t.rangeText}</b></div><div class="na-text">Bu üründe geçerli değil</div></div></td>`;
+        return `<td><div class="aralik-cell na" id="aralik-${idx}-${t.num}"><div class="aralik-range"><b>${t.rangeText}</b></div><div class="na-text">Bu üründe geçerli değil</div></div></td>`;
       }
-      const cls = 'aralik-cell' + (t.isBest ? ' best' : '');
+      const sel = selectedTiers.has(`${idx}-${t.num}`);
+      const cls = 'aralik-cell' + (t.isBest ? ' best' : '') + (sel ? ' selected' : '');
       const karCls = t.karOrani >= 0 ? 'pos' : 'neg';
-      return `<td>
-        <div class="${cls}">
+      return `<td onclick="toggleTierSec(${idx}, ${t.num})">
+        <div class="${cls}" id="aralik-${idx}-${t.num}">
           <div class="aralik-range"><b>${t.rangeText}</b></div>
           <div class="aralik-kom">%${t.komisyon} <span>komisyon</span></div>
           <div class="aralik-kar">
@@ -557,75 +556,63 @@ function render() {
       </td>`;
     }).join('');
 
-    const checked = selectedIndices.has(idx) ? 'checked' : '';
-    return `<tr><td class="sec-col"><input type="checkbox" class="urun-checkbox" data-idx="${idx}" onchange="toggleUrunSec(this)" ${checked}></td><td>${urunCell}</td><td>${fiyatCell}</td>${aralikCells}</tr>`;
+    return `<tr><td>${urunCell}</td><td>${fiyatCell}</td>${aralikCells}</tr>`;
   }).join('');
 
   document.getElementById('tbody').innerHTML = rowsHtml;
 }
 
-// — Ürün seçimi & Excel indirme —
+// — Fiyat aralığı seçimi & Excel indirme —
 
-const selectedIndices = new Set();
+const selectedTiers = new Set(); // anahtar: "urunIdx-tierNum"
 
 function updateSecimBar() {
-  const n = selectedIndices.size;
+  const n = selectedTiers.size;
   const btn = document.getElementById('secimIndir');
   btn.style.display = n > 0 ? '' : 'none';
   document.getElementById('secimSayisi').textContent = n;
-  const all = document.getElementById('tumunuSec');
-  if (all) all.checked = n > 0 && n === activeUrunler.length;
 }
 
-window.toggleUrunSec = function (cb) {
-  const idx = parseInt(cb.dataset.idx);
-  if (cb.checked) selectedIndices.add(idx); else selectedIndices.delete(idx);
-  updateSecimBar();
-};
-
-window.toggleTumunuSec = function (cb) {
-  document.querySelectorAll('.urun-checkbox').forEach(c => {
-    c.checked = cb.checked;
-    const i = parseInt(c.dataset.idx);
-    if (cb.checked) selectedIndices.add(i); else selectedIndices.delete(i);
-  });
+window.toggleTierSec = function (idx, tierNum) {
+  const key = `${idx}-${tierNum}`;
+  if (selectedTiers.has(key)) selectedTiers.delete(key); else selectedTiers.add(key);
+  const el = document.getElementById(`aralik-${idx}-${tierNum}`);
+  if (el) el.classList.toggle('selected', selectedTiers.has(key));
   updateSecimBar();
 };
 
 window.exportSecilenlerXlsx = async function () {
-  const idxler = [...selectedIndices].sort((a, b) => a - b);
-  if (!idxler.length) return;
+  if (!selectedTiers.size) return;
 
   const headers = [
     'Ürün', 'Model', 'Barkod', 'Stok', 'Maliyet (₺)',
-    'Güncel Satış Fiyatı (₺)', 'Güncel Komisyon (%)',
-    '1. Aralık', '1. Komisyon (%)', '1. Satış Fiyatı (₺)', '1. Zorunlu Adet', '1. Kâr (₺)', '1. Kâr Oranı (%)',
-    '2. Aralık', '2. Komisyon (%)', '2. Satış Fiyatı (₺)', '2. Zorunlu Adet', '2. Kâr (₺)', '2. Kâr Oranı (%)',
-    '3. Aralık', '3. Komisyon (%)', '3. Satış Fiyatı (₺)', '3. Zorunlu Adet', '3. Kâr (₺)', '3. Kâr Oranı (%)',
-    '4. Aralık', '4. Komisyon (%)', '4. Satış Fiyatı (₺)', '4. Zorunlu Adet', '4. Kâr (₺)', '4. Kâr Oranı (%)',
+    'Fiyat Aralığı', 'Komisyon (%)', 'Satış Fiyatı (₺)', 'Zorunlu Adet', 'Kâr (₺)', 'Kâr Oranı (%)',
   ];
 
   const rows = [headers];
-  for (const i of idxler) {
-    const u = activeUrunler[i];
-    const tiers = tierInfo(u);
-    const row = [u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet, u.guncel_tsf, u.guncel_komisyon];
-    for (const t of tiers) {
-      if (t.karOrani === null) {
-        row.push(t.rangeText, '', '', '', '', '');
-      } else {
-        row.push(t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
-          Math.round(t.kar * 100) / 100,
-          Math.round(t.karOrani * 10) / 10);
-      }
-    }
-    rows.push(row);
+  const keys = [...selectedTiers].sort((a, b) => {
+    const [ai, at] = a.split('-').map(Number);
+    const [bi, bt] = b.split('-').map(Number);
+    return ai !== bi ? ai - bi : at - bt;
+  });
+  for (const key of keys) {
+    const [idx, tierNum] = key.split('-').map(Number);
+    const u = activeUrunler[idx];
+    if (!u) continue;
+    const t = tierInfo(u).find(x => x.num === tierNum);
+    if (!t || t.karOrani === null) continue;
+    rows.push([
+      u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
+      t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
+      Math.round(t.kar * 100) / 100,
+      Math.round(t.karOrani * 10) / 10,
+    ]);
   }
 
   const blob = await buildXlsxBlob(rows);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'secilen-urunler.xlsx';
+  a.download = 'secilen-araliklar.xlsx';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
