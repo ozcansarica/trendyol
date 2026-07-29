@@ -213,9 +213,6 @@
         <tbody id="yildizModalBody"></tbody>
       </table>
     </div>
-    <div class="modal-foot" id="yildizModalFoot">
-      Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı ürünün zaten yüklü fiyat aralığından otomatik bulunur.
-    </div>
   </div>
 </div>
 
@@ -719,21 +716,6 @@ function yildizEslesmeSayisi() {
   return sayac;
 }
 
-function updateYildizFoot() {
-  const el = document.getElementById('yildizModalFoot');
-  const kaynak = aktifUrunKaynagi();
-  if (yildizVeri) {
-    const tarih = new Date(yildizVeri.uploadedAt).toLocaleString('tr-TR', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-    const toplam = Object.keys(yildizVeri.veriler).length;
-    const eslesen = yildizEslesmeSayisi();
-    el.innerHTML = `Yüklenen: <b>${yildizVeri.fileName}</b> · ${toplam} ürün · ${tarih}. Şu an yüklü ürün verisi: ${kaynak} — <b>${eslesen}/${toplam}</b> ürün için kâr hesaplanabiliyor; kalanlar için maliyet ve/veya komisyon bilgisi eksik olduğundan yalnızca fiyat noktası gösterilir.`;
-  } else {
-    el.innerHTML = `Fiyat noktaları en son yüklenen "Yıldızlı Ürün Etiketleri" Excel dosyasından alınır; komisyon oranı dosyadaki "Komisyon Oranı" kolonundan (varsa), yoksa ürünün zaten yüklü fiyat aralığından otomatik bulunur. Şu an yüklü ürün verisi: ${kaynak}.`;
-  }
-}
-
 // Bir yıldız fiyat noktası için kâr hesaplar. Komisyon oranı önce yıldız
 // dosyasının kendi "Komisyon Oranı" kolonundan (yeni şablon) alınır; yoksa
 // ürünün zaten yüklü fiyat aralığından bulunur (tierForPrice, eski şablon —
@@ -782,7 +764,6 @@ window.openYildizModal = function () {
   document.getElementById('yildizSearch').value = '';
   showMsg('yildizUploadError', '');
   showMsg('yildizUploadInfo', '');
-  updateYildizFoot();
   renderYildizModal();
 };
 
@@ -805,8 +786,7 @@ document.getElementById('yildizFileInput').addEventListener('change', async (e) 
     if (warnings.length > 0) msg += ` ${warnings.length} satır atlandı.`;
     showMsg('yildizUploadInfo', msg);
 
-    updateYildizFoot();
-    renderYildizModal();
+      renderYildizModal();
   } catch (err) {
     showMsg('yildizUploadError', `Excel okunamadı: ${err.message}`);
   } finally {
