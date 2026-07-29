@@ -434,7 +434,13 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
 
     const toplam = Object.keys(kayitlar).length;
     let msg = `${toplam} maliyet kaydedildi, ${eslesen} tanesi mevcut ürün listesinde eşleşip güncellendi.`;
+    if (eslesen === 0) {
+      msg += ` Şu an yüklü ürün verisi: ${aktifUrunKaynagi()} — bu barkodların hiçbiri bu listede olmadığından hiçbir ürün güncellenmedi/görünmedi. Maliyetler kayıt defterine kaydedildi; bu barkodlu ürünleri önce üstteki 📤 Excel Yükle ile yüklerseniz maliyetleri otomatik uygulanır.`;
+    }
     if (warnings.length > 0) msg += ` ${warnings.length} satır atlandı.`;
+    const infoEl = document.getElementById('maliyetUploadInfo');
+    infoEl.classList.remove('info', 'warn');
+    infoEl.classList.add(eslesen === 0 ? 'warn' : 'info');
     showMsg('maliyetUploadInfo', msg);
 
     render();
