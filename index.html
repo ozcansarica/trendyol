@@ -60,7 +60,14 @@
   .modal-table thead th { position: sticky; top: 0; background: #f8f9fb; color: var(--muted); font-weight: 700; text-align: left; padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
   .modal-table tbody td { padding: 8px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
   .modal-table .m-urun { font-weight: 600; color: var(--navy); display: flex; align-items: center; gap: 8px; }
-  .m-urun-resim { width: 38px; height: 38px; object-fit: contain; border-radius: 5px; border: 1px solid var(--line); flex-shrink: 0; background: #f8f9fb; }
+  .m-urun-resim { width: 38px; height: 38px; object-fit: contain; border-radius: 5px; border: 1px solid var(--line); flex-shrink: 0; background: #f8f9fb; cursor: zoom-in; transition: opacity .15s; }
+  .m-urun-resim:hover { opacity: .8; }
+  .urun-resim { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0; background: #f8f9fb; cursor: zoom-in; transition: opacity .15s; }
+  .urun-resim:hover { opacity: .8; }
+  /* Lightbox */
+  #resimLightbox { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.78); align-items: center; justify-content: center; cursor: zoom-out; }
+  #resimLightbox.open { display: flex; }
+  #resimLightbox img { max-width: min(92vw, 600px); max-height: 88vh; object-fit: contain; border-radius: 10px; box-shadow: 0 8px 48px #0008; pointer-events: none; }
   .modal-table .m-barkod { color: var(--muted); font-size: 11px; }
   .modal-table input.m-maliyet { width: 100px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 7px; font-size: 13px; font-weight: 700; text-align: right; }
   .modal-table input.m-maliyet:focus { outline: none; border-color: var(--orange); }
@@ -526,9 +533,13 @@ function render() {
     const tiers = tierInfo(u);
 
     const emoji = CAT_EMOJI[u.kategori] || '📦';
+    const uResimUrl = u.barkod && maliyetResimler[u.barkod];
+    const urunIcon = uResimUrl
+      ? `<img src="${uResimUrl}" class="urun-resim" alt="" onclick="acResimLightbox(this.src)">`
+      : `<div class="urun-icon">${emoji}</div>`;
     const urunCell = `
       <div class="urun-cell">
-        <div class="urun-icon">${emoji}</div>
+        ${urunIcon}
         <div>
           <div class="urun-name">${u.urun}</div>
           <div class="urun-meta">Model: ${u.model || '-'}<br>Barkod: ${u.barkod || '-'}<br>Stok: ${u.stok} · Maliyet: ${tl(u.maliyet)}</div>
@@ -736,7 +747,7 @@ window.renderMaliyetModal = function () {
     const kayitliMi = anahtar && kayitlar[anahtar] != null;
     const currentVal = u._kayitOnly ? (kayitlar[anahtar] || '') : (u.maliyet || '');
     const resim = anahtar && maliyetResimler[anahtar]
-      ? `<img src="${maliyetResimler[anahtar]}" class="m-urun-resim" alt="">`
+      ? `<img src="${maliyetResimler[anahtar]}" class="m-urun-resim" alt="" onclick="acResimLightbox(this.src)">`
       : '';
     return `<tr>
       <td class="m-urun">${resim}${u.urun}</td>
@@ -1153,8 +1164,10 @@ window.renderYildizModal = function () {
       const click = price ? ` data-barkod="${bEsc}" data-ynum="${yNum}" onclick="toggleYildizSec(this)"` : '';
       return `<td class="${cls}"${click}>${yildizHucre(barkod, u, veri, price)}</td>`;
     };
+    const yResimUrl = maliyetResimler[barkod];
+    const yResim = yResimUrl ? `<img src="${yResimUrl}" class="m-urun-resim" alt="" onclick="acResimLightbox(this.src)">` : '';
     return `<tr>
-      <td class="m-urun">${urunAdi || '-'}</td>
+      <td class="m-urun">${yResim}${urunAdi || '-'}</td>
       <td class="m-barkod">${barkod}</td>
       <td>${yildizFiyatCell(barkod, u, veri)}</td>
       ${yTd(1, veri.yildiz1)}${yTd(2, veri.yildiz2)}${yTd(3, veri.yildiz3)}
@@ -1168,6 +1181,21 @@ applyMaliyetKayitlari(activeUrunler);
 updateStatusUI();
 updateTarifeAvailability();
 setTarife(tarife);
+
+window.acResimLightbox = function (src) {
+  const lb = document.getElementById('resimLightbox');
+  lb.querySelector('img').src = src;
+  lb.classList.add('open');
+};
+document.addEventListener('click', e => {
+  if (e.target.id === 'resimLightbox' || e.target.closest('#resimLightbox')) {
+    document.getElementById('resimLightbox').classList.remove('open');
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('resimLightbox').classList.remove('open');
+});
 </script>
+<div id="resimLightbox" onclick="this.classList.remove('open')"><img src="" alt="Ürün resmi"></div>
 </body>
 </html>
