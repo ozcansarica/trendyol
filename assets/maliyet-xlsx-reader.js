@@ -11,10 +11,6 @@
 
 const REQUIRED_COLUMNS = ['Barkod No', 'Alış Tutarı (KDV)'];
 
-// Drawing XML ad alanları
-const XDR_NS = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing';
-const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 function colIndexFromRef(ref) {
   const m = ref.match(/^([A-Z]+)/);
@@ -127,23 +123,25 @@ async function findDrawingPath(zip, sheetPath) {
   return null;
 }
 
-// Drawing XML'den D sütunundaki (0-tabanlı sütun 3) resimleri çıkarır.
-// Dönen nesne: { [drawingRowIdx]: dataURL } (drawingRowIdx 0-tabanlı = Excel satır no − 1)
+// Drawing XML'den resimleri çıkarır: 0-tabanlı satır indeksi → data URL.
+// getElementsByTagNameNS yerine regex kullanır — namespace prefix'li XML'de
+// tarayıcılar arası tutarsızlıkları önler. Hem twoCellAnchor hem oneCellAnchor
+// desteklenir; sütun filtresi yoktur (satır başına ilk resim alınır).
 async function extractRowImages(zip, sheetPath) {
   const drawingPath = await findDrawingPath(zip, sheetPath);
   if (!drawingPath) return {};
 
-  const drawingDoc = await readXmlEntry(zip, drawingPath);
-  if (!drawingDoc) return {};
+  const drawingEntry = zip.file(drawingPath);
+  if (!drawingEntry) return {};
+  const drawingXml = new TextDecoder('utf-8').decode(await drawingEntry.async('uint8array'));
 
-  // Drawing rels yolu
+  // Drawing rels
   const dParts = drawingPath.split('/');
   const dFile = dParts.pop();
   const dRelsPath = `${dParts.join('/')}/_rels/${dFile}.rels`;
   const dRelsDoc = await readXmlEntry(zip, dRelsPath);
   if (!dRelsDoc) return {};
 
-  // rId → medya dosyası yolu
   const relMap = {};
   for (const rel of dRelsDoc.getElementsByTagName('Relationship')) {
     const id = rel.getAttribute('Id');
@@ -151,19 +149,21 @@ async function extractRowImages(zip, sheetPath) {
     if (id && target) relMap[id] = target;
   }
 
-  // Drawing anchors: D sütunu (col === 3), 0-tabanlı satır → rId
+  // Her anchor bloğundan <xdr:from> içindeki satır + r:embed değerini çıkar
   const rowToRId = {};
-  for (const anchor of drawingDoc.getElementsByTagNameNS(XDR_NS, 'twoCellAnchor')) {
-    const fromEl = anchor.getElementsByTagNameNS(XDR_NS, 'from')[0];
-    if (!fromEl) continue;
-    const colEl = fromEl.getElementsByTagNameNS(XDR_NS, 'col')[0];
-    const rowEl = fromEl.getElementsByTagNameNS(XDR_NS, 'row')[0];
-    if (!colEl || !rowEl) continue;
-    if (parseInt(colEl.textContent, 10) !== 3) continue; // yalnızca D sütunu
-    const blipEl = anchor.getElementsByTagNameNS(A_NS, 'blip')[0];
-    if (!blipEl) continue;
-    const rId = blipEl.getAttributeNS(R_NS, 'embed') || blipEl.getAttribute('r:embed');
-    if (rId) rowToRId[parseInt(rowEl.textContent, 10)] = rId;
+  const anchorRe = /<xdr:(?:two|one)CellAnchor[\s\S]*?<\/xdr:(?:two|one)CellAnchor>/g;
+  let m;
+  while ((m = anchorRe.exec(drawingXml)) !== null) {
+    const block = m[0];
+    // İlk <xdr:from> bloğundaki satır numarası (0-tabanlı)
+    const fromM = /<xdr:from>([\s\S]*?)<\/xdr:from>/.exec(block);
+    const rowM = fromM && /<xdr:row>(\d+)<\/xdr:row>/.exec(fromM[1]);
+    // r:embed="rIdX" veya r:embed='rIdX'
+    const rIdM = /r:embed=["']([^"']+)["']/.exec(block);
+    if (rowM && rIdM) {
+      const rowIdx = parseInt(rowM[1], 10);
+      if (!(rowIdx in rowToRId)) rowToRId[rowIdx] = rIdM[1]; // satır başına ilk resim
+    }
   }
 
   // rId → data URL
@@ -179,7 +179,7 @@ async function extractRowImages(zip, sheetPath) {
     const bytes = await entry.async('uint8array');
     result[parseInt(rowIdxStr, 10)] = `data:${mimeFromPath(mediaPath)};base64,${uint8ToBase64(bytes)}`;
   }
-  return result; // 0-tabanlı drawing satır indeksi → data URL
+  return result;
 }
 
 function num(v) {
