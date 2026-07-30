@@ -11,7 +11,6 @@
 
 const REQUIRED_COLUMNS = ['Barkod No', 'Alış Tutarı (KDV)'];
 
-
 function colIndexFromRef(ref) {
   const m = ref.match(/^([A-Z]+)/);
   let col = 0;
@@ -106,79 +105,120 @@ function mimeFromPath(path) {
   return map[ext] || 'image/png';
 }
 
-// Sayfanın drawing dosyası yolunu ilişki (rels) dosyasından bulur.
-async function findDrawingPath(zip, sheetPath) {
+// Sayfanın tüm drawing dosyası yollarını (hem OOXML hem VML) döner.
+async function findDrawingPaths(zip, sheetPath) {
   const parts = sheetPath.split('/');
   const sheetFile = parts.pop();
   const relsPath = `${parts.join('/')}/_rels/${sheetFile}.rels`;
   const relsDoc = await readXmlEntry(zip, relsPath);
-  if (!relsDoc) return null;
+  if (!relsDoc) return [];
+  const paths = [];
   for (const rel of relsDoc.getElementsByTagName('Relationship')) {
     const type = rel.getAttribute('Type') || '';
-    if (!type.includes('drawing')) continue;
-    const target = rel.getAttribute('Target').replace(/^\//, '');
-    if (target.startsWith('../')) return `xl/${target.slice(3)}`;
-    return target.startsWith('xl/') ? target : `xl/${target}`;
+    if (!type.toLowerCase().includes('drawing')) continue;
+    const target = (rel.getAttribute('Target') || '').replace(/^\//, '');
+    let resolved = target;
+    if (target.startsWith('../')) resolved = `xl/${target.slice(3)}`;
+    else if (!target.startsWith('xl/')) resolved = `xl/${target}`;
+    paths.push(resolved);
   }
-  return null;
+  return paths;
 }
 
-// Drawing XML'den resimleri çıkarır: 0-tabanlı satır indeksi → data URL.
-// getElementsByTagNameNS yerine regex kullanır — namespace prefix'li XML'de
-// tarayıcılar arası tutarsızlıkları önler. Hem twoCellAnchor hem oneCellAnchor
-// desteklenir; sütun filtresi yoktur (satır başına ilk resim alınır).
-async function extractRowImages(zip, sheetPath) {
-  const drawingPath = await findDrawingPath(zip, sheetPath);
-  if (!drawingPath) return {};
-
-  const drawingEntry = zip.file(drawingPath);
-  if (!drawingEntry) return {};
-  const drawingXml = new TextDecoder('utf-8').decode(await drawingEntry.async('uint8array'));
-
-  // Drawing rels
-  const dParts = drawingPath.split('/');
-  const dFile = dParts.pop();
-  const dRelsPath = `${dParts.join('/')}/_rels/${dFile}.rels`;
-  const dRelsDoc = await readXmlEntry(zip, dRelsPath);
-  if (!dRelsDoc) return {};
-
+// rId → medya dosyası yolunu çözer ve data URL olarak döner.
+async function rIdToDataUrl(zip, relsDoc, rId, drawingDir) {
   const relMap = {};
-  for (const rel of dRelsDoc.getElementsByTagName('Relationship')) {
+  for (const rel of relsDoc.getElementsByTagName('Relationship')) {
     const id = rel.getAttribute('Id');
     const target = rel.getAttribute('Target');
     if (id && target) relMap[id] = target;
   }
+  const target = relMap[rId];
+  if (!target) return null;
+  let mediaPath = target.replace(/^\//, '');
+  if (mediaPath.startsWith('../')) mediaPath = `xl/${mediaPath.slice(3)}`;
+  else if (!mediaPath.startsWith('xl/') && !mediaPath.startsWith('xl')) mediaPath = `${drawingDir}/${mediaPath}`;
+  const entry = zip.file(mediaPath);
+  if (!entry) return null;
+  const bytes = await entry.async('uint8array');
+  return `data:${mimeFromPath(mediaPath)};base64,${uint8ToBase64(bytes)}`;
+}
 
-  // Her anchor bloğundan <xdr:from> içindeki satır + r:embed değerini çıkar
+// OOXML drawing XML'den satır → rId çıkarır (regex tabanlı).
+function parseOoxmlDrawingAnchors(xml) {
   const rowToRId = {};
   const anchorRe = /<xdr:(?:two|one)CellAnchor[\s\S]*?<\/xdr:(?:two|one)CellAnchor>/g;
   let m;
-  while ((m = anchorRe.exec(drawingXml)) !== null) {
+  while ((m = anchorRe.exec(xml)) !== null) {
     const block = m[0];
-    // İlk <xdr:from> bloğundaki satır numarası (0-tabanlı)
     const fromM = /<xdr:from>([\s\S]*?)<\/xdr:from>/.exec(block);
     const rowM = fromM && /<xdr:row>(\d+)<\/xdr:row>/.exec(fromM[1]);
-    // r:embed="rIdX" veya r:embed='rIdX'
     const rIdM = /r:embed=["']([^"']+)["']/.exec(block);
     if (rowM && rIdM) {
       const rowIdx = parseInt(rowM[1], 10);
-      if (!(rowIdx in rowToRId)) rowToRId[rowIdx] = rIdM[1]; // satır başına ilk resim
+      if (!(rowIdx in rowToRId)) rowToRId[rowIdx] = rIdM[1];
+    }
+  }
+  return rowToRId;
+}
+
+// VML drawing XML'den satır → rId çıkarır (regex tabanlı).
+// VML: <v:shape ...><v:imagedata r:id="rId1"/><x:ClientData><x:Row>N</x:Row></x:ClientData></v:shape>
+// x:Row 0-tabanlıdır (Excel satır no − 1 ile aynı).
+function parseVmlDrawingAnchors(xml) {
+  const rowToRId = {};
+  const shapeRe = /<v:shape\b[\s\S]*?<\/v:shape>/g;
+  let m;
+  while ((m = shapeRe.exec(xml)) !== null) {
+    const block = m[0];
+    const rIdM = /r:id=["']([^"']+)["']/.exec(block);
+    if (!rIdM) continue;
+    const rowM = /<x:Row>(\d+)<\/x:Row>/.exec(block);
+    if (!rowM) continue;
+    const rowIdx = parseInt(rowM[1], 10);
+    if (!(rowIdx in rowToRId)) rowToRId[rowIdx] = rIdM[1];
+  }
+  return rowToRId;
+}
+
+// Tüm drawing dosyalarından 0-tabanlı satır indeksi → data URL eşlemesi çıkarır.
+async function extractRowImages(zip, sheetPath) {
+  const drawingPaths = await findDrawingPaths(zip, sheetPath);
+  console.log('[maliyet-resim] drawing dosyaları:', drawingPaths);
+
+  const result = {};
+
+  for (const drawingPath of drawingPaths) {
+    const entry = zip.file(drawingPath);
+    if (!entry) {
+      console.log('[maliyet-resim] dosya bulunamadı:', drawingPath);
+      continue;
+    }
+    const xml = new TextDecoder('utf-8').decode(await entry.async('uint8array'));
+
+    // Drawing rels
+    const dParts = drawingPath.split('/');
+    const dFile = dParts.pop();
+    const dDir = dParts.join('/');
+    const dRelsPath = `${dDir}/_rels/${dFile}.rels`;
+    const dRelsDoc = await readXmlEntry(zip, dRelsPath);
+    if (!dRelsDoc) {
+      console.log('[maliyet-resim] rels bulunamadı:', dRelsPath);
+      continue;
+    }
+
+    const isVml = drawingPath.endsWith('.vml');
+    const rowToRId = isVml ? parseVmlDrawingAnchors(xml) : parseOoxmlDrawingAnchors(xml);
+    console.log(`[maliyet-resim] ${isVml ? 'VML' : 'OOXML'} (${drawingPath}): ${Object.keys(rowToRId).length} resim bulundu`, rowToRId);
+
+    for (const [rowIdxStr, rId] of Object.entries(rowToRId)) {
+      if (parseInt(rowIdxStr, 10) in result) continue; // önceki drawing'den zaten var
+      const dataUrl = await rIdToDataUrl(zip, dRelsDoc, rId, dDir);
+      if (dataUrl) result[parseInt(rowIdxStr, 10)] = dataUrl;
     }
   }
 
-  // rId → data URL
-  const result = {};
-  for (const [rowIdxStr, rId] of Object.entries(rowToRId)) {
-    const target = relMap[rId];
-    if (!target) continue;
-    let mediaPath = target.replace(/^\//, '');
-    if (mediaPath.startsWith('../')) mediaPath = `xl/${mediaPath.slice(3)}`;
-    else if (!mediaPath.startsWith('xl/')) mediaPath = `xl/${mediaPath}`;
-    const entry = zip.file(mediaPath);
-    if (!entry) continue;
-    const bytes = await entry.async('uint8array');
-    result[parseInt(rowIdxStr, 10)] = `data:${mimeFromPath(mediaPath)};base64,${uint8ToBase64(bytes)}`;
-  }
+  console.log('[maliyet-resim] toplam resim:', Object.keys(result).length);
   return result;
 }
 
@@ -189,15 +229,20 @@ function num(v) {
 
 /**
  * Maliyet Excel dosyasını (ArrayBuffer) barkod → maliyet eşlemesine çevirir.
- * D sütunundaki gömülü resimleri de çıkarır (barkod → data URL).
+ * Gömülü resimleri de çıkarır (barkod → data URL).
  * @param {ArrayBuffer} arrayBuffer
- * @returns {Promise<{kayitlar: Object<string, number>, resimler: Object<string, string>, warnings: string[]}>}
+ * @returns {Promise<{kayitlar: Object<string, number>, resimler: Object<string, string>, resimSayisi: number, warnings: string[]}>}
  */
 export async function parseMaliyetXlsx(arrayBuffer) {
   if (typeof JSZip === 'undefined') {
     throw new Error('JSZip yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
   }
   const zip = await JSZip.loadAsync(arrayBuffer);
+
+  // ZIP içeriğini logla (tanı için)
+  const zipFiles = Object.keys(zip.files).filter(f => !zip.files[f].dir);
+  console.log('[maliyet-resim] ZIP dosyaları:', zipFiles.filter(f => f.includes('draw') || f.includes('media') || f.includes('_rels')));
+
   const { rows, rowNums, sheetPath } = await sheetToRowsWithNums(zip);
   if (rows.length < 2) throw new Error('Excel dosyasında veri satırı bulunamadı.');
 
@@ -214,7 +259,7 @@ export async function parseMaliyetXlsx(arrayBuffer) {
 
   const kayitlar = {};
   const warnings = [];
-  // rowNum (1-tabanlı Excel satır no) → barkod (veri satırları için)
+  // rowNum (1-tabanlı Excel satır no) → barkod — maliyet olsun olmasın tüm barkodlu satırlar
   const rowNumToBarkod = {};
 
   for (let r = 1; r < rows.length; r++) {
@@ -224,32 +269,33 @@ export async function parseMaliyetXlsx(arrayBuffer) {
     if (barkod == null || String(barkod).trim() === '') continue; // boş satır
 
     const barkodStr = String(barkod).trim();
+    rowNumToBarkod[rowNums[r]] = barkodStr; // resim eşleştirmesi için her barkodlu satırı izle
+
     const maliyet = num(row[iAlis]);
     if (!maliyet) {
       warnings.push(`Barkod "${barkodStr}" için geçerli maliyet bulunamadı, atlandı.`);
       continue;
     }
     kayitlar[barkodStr] = maliyet;
-    rowNumToBarkod[rowNums[r]] = barkodStr;
   }
 
   if (Object.keys(kayitlar).length === 0) {
     throw new Error('Excel dosyasından hiç geçerli maliyet satırı okunamadı.');
   }
 
-  // D sütunundaki gömülü resimleri çıkar (hata olursa sessizce atla)
+  // Gömülü resimleri çıkar (hata olursa sessizce atla)
   const resimler = {};
   try {
     const imagesByDrawingRow = await extractRowImages(zip, sheetPath);
-    // Drawing satır indeksi 0-tabanlı = Excel satır no − 1
     for (const [drawingRowStr, dataUrl] of Object.entries(imagesByDrawingRow)) {
-      const excelRowNum = parseInt(drawingRowStr, 10) + 1;
+      const excelRowNum = parseInt(drawingRowStr, 10) + 1; // 0-tabanlı → 1-tabanlı
       const barkod = rowNumToBarkod[excelRowNum];
       if (barkod) resimler[barkod] = dataUrl;
     }
-  } catch {
-    // Resim okuma hatası kritik değil — veri olmadan devam et
+    console.log('[maliyet-resim] barkoda eşlenen resim:', Object.keys(resimler).length);
+  } catch (e) {
+    console.warn('[maliyet-resim] resim okuma hatası:', e);
   }
 
-  return { kayitlar, resimler, warnings };
+  return { kayitlar, resimler, resimSayisi: Object.keys(resimler).length, warnings };
 }

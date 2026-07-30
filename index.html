@@ -428,7 +428,7 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
   showMsg('maliyetUploadInfo', '');
   try {
     const buf = await file.arrayBuffer();
-    const { kayitlar, resimler, warnings } = await parseMaliyetXlsx(buf);
+    const { kayitlar, resimler, resimSayisi, warnings } = await parseMaliyetXlsx(buf);
     saveMaliyetKayitlariBulk(kayitlar);
     Object.assign(maliyetResimler, resimler);
     saveResimlerToIDB(resimler);
@@ -445,6 +445,8 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
 
     const toplam = Object.keys(kayitlar).length;
     let msg = `${toplam} maliyet kaydedildi, ${eslesen} tanesi mevcut ürün listesinde eşleşip güncellendi.`;
+    if (resimSayisi > 0) msg += ` ${resimSayisi} ürün resmi yüklendi.`;
+    else msg += ` (Resim bulunamadı — bu Excel'de gömülü resim yok olabilir.)`;
     if (eslesen === 0) {
       msg += ` Şu an yüklü ürün verisi: ${aktifUrunKaynagi()} — bu barkodların hiçbiri bu listede olmadığından hiçbir ürün güncellenmedi/görünmedi. Maliyetler kayıt defterine kaydedildi; bu barkodlu ürünleri önce üstteki 📤 Excel Yükle ile yüklerseniz maliyetleri otomatik uygulanır.`;
     }
