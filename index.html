@@ -431,7 +431,7 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
     const { kayitlar, resimler, resimSayisi, warnings } = await parseMaliyetXlsx(buf);
     saveMaliyetKayitlariBulk(kayitlar);
     Object.assign(maliyetResimler, resimler);
-    saveResimlerToIDB(resimler);
+    saveResimlerToStorage(resimler);
 
     let eslesen = 0;
     for (const u of activeUrunler) {
@@ -774,60 +774,29 @@ window.maliyetGuncelle = function (input) {
 const YILDIZ_KEY = 'trendyol_yildizli_urun_v1';
 let yildizVeri = null; // { veriler: {barkod: {...}}, fileName, uploadedAt }
 
-// Maliyet Excel'inden okunan ürün resimleri — barkod → data URL.
-// IndexedDB'de kalıcı saklanır (localStorage boyut sınırını aşar).
+// Maliyet Excel'inden okunan ürün resim URL'leri — barkod → CDN URL.
+// URL'ler kısa metin olduğundan localStorage'da kalıcı saklanır.
+const RESIM_KEY = 'trendyol_maliyet_resimler_v1';
 let maliyetResimler = {};
 
-(function initResimDB() {
-  const DB = 'trendyol_resimler_v1';
-  const STORE = 'resimler';
-  function open() {
-    return new Promise((res, rej) => {
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
-      r.onsuccess = e => res(e.target.result);
-      r.onerror = e => rej(e.target.error);
-    });
-  }
-  window.saveResimlerToIDB = async function (resimler) {
-    if (!Object.keys(resimler).length) return;
-    try {
-      const db = await open();
-      const tx = db.transaction(STORE, 'readwrite');
-      const st = tx.objectStore(STORE);
-      for (const [k, v] of Object.entries(resimler)) st.put(v, k);
-      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
-      db.close();
-    } catch { /* resim kaydetme hatası kritik değil */ }
-  };
-  window.loadResimlerFromIDB = async function () {
-    try {
-      const db = await open();
-      const tx = db.transaction(STORE, 'readonly');
-      const st = tx.objectStore(STORE);
-      const result = {};
-      await new Promise((res, rej) => {
-        const req = st.openCursor();
-        req.onsuccess = e => {
-          const c = e.target.result;
-          if (c) { result[c.key] = c.value; c.continue(); } else res();
-        };
-        req.onerror = e => rej(e.target.error);
-      });
-      db.close();
-      return result;
-    } catch { return {}; }
-  };
-  // Sayfa yüklenince kalıcı resimleri belleğe yükle
-  loadResimlerFromIDB().then(r => {
-    if (Object.keys(r).length) {
-      Object.assign(maliyetResimler, r);
-      // Modal açıksa güncelle
-      const modal = document.getElementById('maliyetModal');
-      if (modal && !modal.classList.contains('hidden')) renderMaliyetModal();
-    }
-  });
-})();
+function loadResimlerFromStorage() {
+  try {
+    const raw = localStorage.getItem(RESIM_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveResimlerToStorage(resimler) {
+  if (!Object.keys(resimler).length) return;
+  try {
+    const mevcut = loadResimlerFromStorage();
+    Object.assign(mevcut, resimler);
+    localStorage.setItem(RESIM_KEY, JSON.stringify(mevcut));
+  } catch { /* kritik değil */ }
+}
+
+// Sayfa yüklenince kalıcı resimleri belleğe yükle
+Object.assign(maliyetResimler, loadResimlerFromStorage());
 
 function loadYildizFromStorage() {
   try {
