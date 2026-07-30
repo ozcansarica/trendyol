@@ -129,26 +129,6 @@
   .ozel-sec-btn { margin-top: 5px; width: 100%; background: #aaa; color: #fff; border: none; border-radius: 6px; padding: 3px 0; font-size: 11px; font-weight: 600; cursor: pointer; }
   .ozel-sec-btn.selected { background: var(--orange); }
   .ozel-sec-btn:hover { opacity: .85; }
-  /* Kampanya seçim butonu */
-  .kampanya-sec-btn { margin-top: 8px; width: 100%; padding: 5px 10px; background: transparent; border: 1.5px solid var(--line); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; transition: all .15s; display: block; text-align: center; }
-  .kampanya-sec-btn:hover { border-color: var(--orange); color: var(--orange); background: #fff7ee; }
-  .kampanya-sec-btn.selected { background: var(--orange); border-color: var(--orange); color: #fff; }
-  /* Kampanya sepeti sticky bar */
-  #kampanyaBar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--navy); color: #fff; z-index: 100; box-shadow: 0 -4px 24px rgba(0,0,0,.25); }
-  #kampanyaBar.hidden { display: none; }
-  .kp-inner { max-width: 1400px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .kp-title { font-size: 13px; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
-  .kp-urunler { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
-  .kp-urun-tag { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
-  .kp-tag-fiyat { color: #fbbf24; font-weight: 800; }
-  .kp-ozet { display: flex; gap: 20px; align-items: center; flex-shrink: 0; }
-  .kp-ozet-item { text-align: center; }
-  .kp-ozet-label { font-size: 10px; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .5px; }
-  .kp-ozet-val { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .kp-ozet-val.pos { color: #4ade80; }
-  .kp-ozet-val.neg { color: #f87171; }
-  .kp-temizle { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
-  .kp-temizle:hover { background: rgba(255,255,255,.25); }
 </style>
 </head>
 <body>
@@ -557,14 +537,12 @@ function render() {
     const urunIcon = uResimUrl
       ? `<img src="${uResimUrl}" class="urun-resim" alt="" onclick="acResimLightbox(this.src)">`
       : `<div class="urun-icon">${emoji}</div>`;
-    const kSel = kampanyaSecilen.has(idx);
     const urunCell = `
       <div class="urun-cell">
         ${urunIcon}
         <div>
           <div class="urun-name">${u.urun}</div>
           <div class="urun-meta">Model: ${u.model || '-'}<br>Barkod: ${u.barkod || '-'}<br>Stok: ${u.stok} · Maliyet: ${tl(u.maliyet)}</div>
-          <button class="kampanya-sec-btn${kSel ? ' selected' : ''}" data-kidx="${idx}" onclick="toggleKampanyaSec(${idx})">${kSel ? '✓ Kampanyada' : '🛒 Kampanyaya Ekle'}</button>
         </div>
       </div>`;
 
@@ -1204,61 +1182,6 @@ updateStatusUI();
 updateTarifeAvailability();
 setTarife(tarife);
 
-// — Kampanya Seçimi —
-const kampanyaSecilen = new Set(); // seçili ürün indeksleri
-
-// En yüksek kâr oranlı tier'a göre gerçek kâr tutarını döner
-function bestKarForUrun(u) {
-  const tiers = tierInfo(u).filter(t => t.karOrani !== null);
-  if (!tiers.length) return 0;
-  return tiers.reduce((best, t) => t.karOrani > best.karOrani ? t : best).kar;
-}
-
-window.toggleKampanyaSec = function (idx) {
-  if (kampanyaSecilen.has(idx)) {
-    kampanyaSecilen.delete(idx);
-  } else {
-    kampanyaSecilen.add(idx);
-  }
-  updateKampanyaBar();
-  const btn = document.querySelector(`.kampanya-sec-btn[data-kidx="${idx}"]`);
-  if (btn) {
-    const sel = kampanyaSecilen.has(idx);
-    btn.classList.toggle('selected', sel);
-    btn.textContent = sel ? '✓ Kampanyada' : '🛒 Kampanyaya Ekle';
-  }
-};
-
-function updateKampanyaBar() {
-  const bar = document.getElementById('kampanyaBar');
-  const n = kampanyaSecilen.size;
-  document.getElementById('kpSayi').textContent = n;
-  bar.classList.toggle('hidden', n === 0);
-  document.body.style.paddingBottom = n > 0 ? '90px' : '40px';
-  if (n === 0) return;
-
-  const secilen = [...kampanyaSecilen].sort((a, b) => a - b).map(i => activeUrunler[i]).filter(Boolean);
-  const toplamSatis = secilen.reduce((s, u) => s + (u.guncel_tsf || 0), 0);
-  const toplamMaliyet = secilen.reduce((s, u) => s + (u.maliyet || 0), 0);
-  const toplamKar = secilen.reduce((s, u) => s + bestKarForUrun(u), 0);
-
-  document.getElementById('kpUrunler').innerHTML = secilen.map(u =>
-    `<span class="kp-urun-tag">${u.urun}&nbsp;<span class="kp-tag-fiyat">${tl(u.guncel_tsf)}</span></span>`
-  ).join('');
-
-  document.getElementById('kpToplamSatis').textContent = tl(toplamSatis);
-  document.getElementById('kpToplamMaliyet').textContent = tl(toplamMaliyet);
-  const karEl = document.getElementById('kpToplamKar');
-  karEl.textContent = tl(toplamKar);
-  karEl.className = 'kp-ozet-val ' + (toplamKar >= 0 ? 'pos' : 'neg');
-}
-
-window.kampanyaTemizle = function () {
-  kampanyaSecilen.clear();
-  updateKampanyaBar();
-  render();
-};
-
 window.acResimLightbox = function (src) {
   const lb = document.getElementById('resimLightbox');
   lb.querySelector('img').src = src;
@@ -1274,27 +1197,5 @@ document.addEventListener('keydown', e => {
 });
 </script>
 <div id="resimLightbox" onclick="this.classList.remove('open')"><img src="" alt="Ürün resmi"></div>
-
-<div id="kampanyaBar" class="hidden">
-  <div class="kp-inner">
-    <div class="kp-title">🛒 Kampanya Sepeti (<span id="kpSayi">0</span> ürün)</div>
-    <div class="kp-urunler" id="kpUrunler"></div>
-    <div class="kp-ozet">
-      <div class="kp-ozet-item">
-        <div class="kp-ozet-label">Toplam Satış</div>
-        <div class="kp-ozet-val" id="kpToplamSatis">-</div>
-      </div>
-      <div class="kp-ozet-item">
-        <div class="kp-ozet-label">Toplam Maliyet</div>
-        <div class="kp-ozet-val" id="kpToplamMaliyet">-</div>
-      </div>
-      <div class="kp-ozet-item">
-        <div class="kp-ozet-label">Tahmini Kâr</div>
-        <div class="kp-ozet-val" id="kpToplamKar">-</div>
-      </div>
-    </div>
-    <button class="kp-temizle" onclick="kampanyaTemizle()">✕ Temizle</button>
-  </div>
-</div>
 </body>
 </html>
