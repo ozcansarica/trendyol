@@ -59,7 +59,8 @@
   .modal-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .modal-table thead th { position: sticky; top: 0; background: #f8f9fb; color: var(--muted); font-weight: 700; text-align: left; padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
   .modal-table tbody td { padding: 8px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
-  .modal-table .m-urun { font-weight: 600; color: var(--navy); }
+  .modal-table .m-urun { font-weight: 600; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .m-urun-resim { width: 38px; height: 38px; object-fit: contain; border-radius: 5px; border: 1px solid var(--line); flex-shrink: 0; background: #f8f9fb; }
   .modal-table .m-barkod { color: var(--muted); font-size: 11px; }
   .modal-table input.m-maliyet { width: 100px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 7px; font-size: 13px; font-weight: 700; text-align: right; }
   .modal-table input.m-maliyet:focus { outline: none; border-color: var(--orange); }
@@ -427,8 +428,9 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
   showMsg('maliyetUploadInfo', '');
   try {
     const buf = await file.arrayBuffer();
-    const { kayitlar, warnings } = await parseMaliyetXlsx(buf);
+    const { kayitlar, resimler, warnings } = await parseMaliyetXlsx(buf);
     saveMaliyetKayitlariBulk(kayitlar);
+    Object.assign(maliyetResimler, resimler);
 
     let eslesen = 0;
     for (const u of activeUrunler) {
@@ -730,8 +732,11 @@ window.renderMaliyetModal = function () {
     const anahtar = u._kayitOnly ? u.barkod : maliyetAnahtari(u);
     const kayitliMi = anahtar && kayitlar[anahtar] != null;
     const currentVal = u._kayitOnly ? (kayitlar[anahtar] || '') : (u.maliyet || '');
+    const resim = anahtar && maliyetResimler[anahtar]
+      ? `<img src="${maliyetResimler[anahtar]}" class="m-urun-resim" alt="">`
+      : '';
     return `<tr>
-      <td class="m-urun">${u.urun}</td>
+      <td class="m-urun">${resim}${u.urun}</td>
       <td class="m-barkod">${u.barkod || '-'}</td>
       <td style="text-align:right">
         <input type="number" class="m-maliyet ${kayitliMi ? 'kayitli' : ''}" min="0" step="0.01"
@@ -765,6 +770,10 @@ window.maliyetGuncelle = function (input) {
 // gerekmez (mevcut sistemi etkilemez).
 const YILDIZ_KEY = 'trendyol_yildizli_urun_v1';
 let yildizVeri = null; // { veriler: {barkod: {...}}, fileName, uploadedAt }
+
+// Maliyet Excel'inden okunan ürün resimleri — barkod → data URL.
+// localStorage'a yazılmaz (resimler çok büyük); sayfa yenilenirse kaybolur.
+let maliyetResimler = {};
 
 function loadYildizFromStorage() {
   try {
