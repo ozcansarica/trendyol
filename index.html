@@ -59,7 +59,8 @@
   .modal-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .modal-table thead th { position: sticky; top: 0; background: #f8f9fb; color: var(--muted); font-weight: 700; text-align: left; padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
   .modal-table tbody td { padding: 8px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
-  .modal-table .m-urun { font-weight: 600; color: var(--navy); }
+  .modal-table .m-urun { font-weight: 600; color: var(--navy); display: flex; align-items: center; gap: 8px; }
+  .m-urun-resim { width: 38px; height: 38px; object-fit: contain; border-radius: 5px; border: 1px solid var(--line); flex-shrink: 0; background: #f8f9fb; }
   .modal-table .m-barkod { color: var(--muted); font-size: 11px; }
   .modal-table input.m-maliyet { width: 100px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 7px; font-size: 13px; font-weight: 700; text-align: right; }
   .modal-table input.m-maliyet:focus { outline: none; border-color: var(--orange); }
@@ -427,8 +428,10 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
   showMsg('maliyetUploadInfo', '');
   try {
     const buf = await file.arrayBuffer();
-    const { kayitlar, warnings } = await parseMaliyetXlsx(buf);
+    const { kayitlar, resimler, warnings } = await parseMaliyetXlsx(buf);
     saveMaliyetKayitlariBulk(kayitlar);
+    Object.assign(maliyetResimler, resimler);
+    saveResimlerToIDB(resimler);
 
     let eslesen = 0;
     for (const u of activeUrunler) {
@@ -730,8 +733,11 @@ window.renderMaliyetModal = function () {
     const anahtar = u._kayitOnly ? u.barkod : maliyetAnahtari(u);
     const kayitliMi = anahtar && kayitlar[anahtar] != null;
     const currentVal = u._kayitOnly ? (kayitlar[anahtar] || '') : (u.maliyet || '');
+    const resim = anahtar && maliyetResimler[anahtar]
+      ? `<img src="${maliyetResimler[anahtar]}" class="m-urun-resim" alt="">`
+      : '';
     return `<tr>
-      <td class="m-urun">${u.urun}</td>
+      <td class="m-urun">${resim}${u.urun}</td>
       <td class="m-barkod">${u.barkod || '-'}</td>
       <td style="text-align:right">
         <input type="number" class="m-maliyet ${kayitliMi ? 'kayitli' : ''}" min="0" step="0.01"
@@ -765,6 +771,61 @@ window.maliyetGuncelle = function (input) {
 // gerekmez (mevcut sistemi etkilemez).
 const YILDIZ_KEY = 'trendyol_yildizli_urun_v1';
 let yildizVeri = null; // { veriler: {barkod: {...}}, fileName, uploadedAt }
+
+// Maliyet Excel'inden okunan ürün resimleri — barkod → data URL.
+// IndexedDB'de kalıcı saklanır (localStorage boyut sınırını aşar).
+let maliyetResimler = {};
+
+(function initResimDB() {
+  const DB = 'trendyol_resimler_v1';
+  const STORE = 'resimler';
+  function open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
+      r.onsuccess = e => res(e.target.result);
+      r.onerror = e => rej(e.target.error);
+    });
+  }
+  window.saveResimlerToIDB = async function (resimler) {
+    if (!Object.keys(resimler).length) return;
+    try {
+      const db = await open();
+      const tx = db.transaction(STORE, 'readwrite');
+      const st = tx.objectStore(STORE);
+      for (const [k, v] of Object.entries(resimler)) st.put(v, k);
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = e => rej(e.target.error); });
+      db.close();
+    } catch { /* resim kaydetme hatası kritik değil */ }
+  };
+  window.loadResimlerFromIDB = async function () {
+    try {
+      const db = await open();
+      const tx = db.transaction(STORE, 'readonly');
+      const st = tx.objectStore(STORE);
+      const result = {};
+      await new Promise((res, rej) => {
+        const req = st.openCursor();
+        req.onsuccess = e => {
+          const c = e.target.result;
+          if (c) { result[c.key] = c.value; c.continue(); } else res();
+        };
+        req.onerror = e => rej(e.target.error);
+      });
+      db.close();
+      return result;
+    } catch { return {}; }
+  };
+  // Sayfa yüklenince kalıcı resimleri belleğe yükle
+  loadResimlerFromIDB().then(r => {
+    if (Object.keys(r).length) {
+      Object.assign(maliyetResimler, r);
+      // Modal açıksa güncelle
+      const modal = document.getElementById('maliyetModal');
+      if (modal && !modal.classList.contains('hidden')) renderMaliyetModal();
+    }
+  });
+})();
 
 function loadYildizFromStorage() {
   try {
