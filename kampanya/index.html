@@ -532,6 +532,9 @@ function buildScCard(title, sc, badge, entries) {
       html += '<div class="sc-fi"><div class="sc-fl">Önerilen indirimle sepet</div><div class="sc-fv">' + tl(sc.discBasket) + '</div></div>'
         + '<div class="sc-fi"><div class="sc-fl">Ort. indirim / adet</div><div class="sc-fv">' + tl(discPerUnit) + '</div></div>';
     }
+    if (totalKom > 0) {
+      html += '<div class="sc-fi"><div class="sc-fl">Komisyon</div><div class="sc-fv" style="color:var(--red)">' + tl(totalKom) + '</div></div>';
+    }
     if (totalAlis > 0) {
       html += '<div class="sc-fi"><div class="sc-fl">Tahmini Kâr</div><div class="sc-fv" style="color:' + profitClr + '">' + tl(profit) + '</div></div>'
         + '<div class="sc-fi"><div class="sc-fl">Kâr Oranı</div><div class="sc-fv" style="color:' + profitClr + '">%' + profitRate.toFixed(1) + '</div></div>';
