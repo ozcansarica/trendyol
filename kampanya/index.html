@@ -308,7 +308,7 @@ function toggleEditMode() {
 
 // ========== CORE FUNCTIONS ==========
 
-function getPF() { return platMode === 'normal' ? 8.41 : 13.41; }
+function getPF() { return platMode === 'normal' ? 8.19 : 13.19; }
 
 function minQty(s) {
   s = +s;
@@ -417,8 +417,8 @@ function renderRight() {
 
   html += '<div class="pf-row">'
     + '<span class="pf-lbl">Platform Ücreti:</span>'
-    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,41 ₺ (00:00–14:59)</button>'
-    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,41 ₺ (15:00–23:59)</button>'
+    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,19 ₺ (00:00–14:59)</button>'
+    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,19 ₺ (15:00–23:59)</button>'
     + '</div>';
 
   html += '<div>'
@@ -504,8 +504,9 @@ function buildScCard(title, sc, badge, entries) {
   const savPos = sc.savings > 0;
   const kBracket = sc.combined < 200 ? '41 ₺ kargo dilimi' : sc.combined < 350 ? '79 ₺ kargo dilimi' : '93 ₺ kargo dilimi';
 
-  const totalAlis = entries.reduce(function(s,e){ return s + (+e.alis||0) * e.qty; }, 0);
-  const totalKom  = entries.reduce(function(s,e){ return s + e.satis * e.qty * (+e.kom||0) / 100; }, 0);
+  const totalAlis  = entries.reduce(function(s,e){ return s + (+e.alis||0) * e.qty; }, 0);
+  const discRatio  = sc.combined > 0 ? sc.discBasket / sc.combined : 1;
+  const totalKom   = entries.reduce(function(s,e){ return s + e.satis * e.qty * discRatio * (+e.kom||0) / 100; }, 0);
   const r = 20 / 120;
   const pf = getPF();
   const stopaj       = sc.discBasket / 1.20 * 0.01;
@@ -544,9 +545,7 @@ function buildScCard(title, sc, badge, entries) {
       html += '<div class="sc-fi"><div class="sc-fl">Komisyon</div><div class="sc-fv" style="color:var(--red)">' + tl(totalKom) + '</div></div>';
     }
     if (totalAlis > 0) {
-      html += '<div class="sc-fi"><div class="sc-fl">Stopaj</div><div class="sc-fv" style="color:var(--red)">' + tl(stopaj) + '</div></div>'
-        + '<div class="sc-fi"><div class="sc-fl">Ödenecek KDV</div><div class="sc-fv" style="color:var(--red)">' + tl(odenecekKdv) + '</div></div>'
-        + '<div class="sc-fi"><div class="sc-fl">Tahmini Kâr</div><div class="sc-fv" style="color:' + profitClr + '">' + tl(profit) + '</div></div>'
+      html += '<div class="sc-fi"><div class="sc-fl">Tahmini Kâr</div><div class="sc-fv" style="color:' + profitClr + '">' + tl(profit) + '</div></div>'
         + '<div class="sc-fi"><div class="sc-fl">Kâr Oranı</div><div class="sc-fv" style="color:' + profitClr + '">%' + profitRate.toFixed(1) + '</div></div>';
     }
     html += '</div>';
