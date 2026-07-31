@@ -17,6 +17,11 @@
 :root[data-theme=dark]{--bg:#07111e;--surf:#0d1e32;--card:#122840;--brd:#1d3553;--acc:#f59e0b;--grn:#22c55e;--red:#f87171;--blu:#60a5fa;--txt:#dce9f8;--sub:#7aadc8;--mut:#3f607e;--sel:rgba(245,158,11,.09);--ring:rgba(245,158,11,.4)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);height:100vh;overflow:hidden}
+/* Toast */
+.toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);
+  padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;
+  z-index:999;pointer-events:none;opacity:0;transition:opacity .25s;white-space:nowrap}
+.toast.show{opacity:1}
 /* Header */
 .hdr{height:50px;background:var(--surf);border-bottom:1px solid var(--brd);
   display:flex;align-items:center;gap:12px;padding:0 14px;flex-shrink:0}
@@ -118,9 +123,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 }
 </style>
 
+<div class="toast" id="toast"></div>
+
 <div class="hdr">
   <div class="logo">📦 Kampanya İndirim Hesaplayıcı</div>
   <div class="hdr-r">
+    <input type="file" id="urunXlsxIn" accept=".xlsx" style="display:none">
+    <input type="file" id="maliyetXlsxIn" accept=".xlsx" style="display:none">
+    <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Trendyol KomisyonTarifeleriÜrünleri Excel yükle">📂 Ürün Excel</button>
+    <button class="tbtn" onclick="document.getElementById('maliyetXlsxIn').click()" title="Barkod No + Alış Tutarı (KDV) kolonlu Excel yükle">💰 Maliyet Excel</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
     <button class="tbtn" onclick="toggleTheme()">◑</button>
   </div>
@@ -149,15 +160,165 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   </div>
 </div>
 
+<script src="../assets/vendor/jszip.min.js"></script>
 <script>
-const URUNLER = [{"b":"BLS1236","a":"1 Adet Plastik Maket Bıçağı Falçata","f":18.7},{"b":"rsihome115","a":"1 Paket 8 Yaprak Taşınabilir Çanta Boy Cep Tipi Mini Islak Mendil","f":13.9},{"b":"rsihome116","a":"1 Paket 8 Yaprak Taşınabilir Çanta Boy Cep Tipi Mini Islak Mendil - Turuncu","f":30.8},{"b":"srctech10lukstt","a":"10'lu Kadın Siyah Tel Toka","f":3.03},{"b":"srcstorestrolp","a":"100 Adet Renkli Saç Örgü Lastiği","f":1.65},{"b":"srcstore12nroblkhlt","a":"12'li Neon Renkler Orta Boy Lüx Kalite Havlu Lastik Toka - 5 cm","f":7.7},{"b":"renkliparty13","a":"15 Adet Metalik Fuşya Parlak Balon","f":44.0},{"b":"renkliparty22","a":"15 Adet Metalik Gri Parlak Balon","f":59.4},{"b":"renkliparty8","a":"15 Adet Metalik Gümüş Parlak Balon","f":3.85},{"b":"renkliparty7","a":"15 Adet Metalik İnci Beyazı Parlak Balon","f":13.2},{"b":"renkliparty1","a":"15 Adet Metalik Kahverengi Parlak Balon","f":65.47},{"b":"renkliparty12","a":"15 Adet Metalik Karışık Renk Parlak Balon","f":23.1},{"b":"renkliparty9","a":"15 Adet Metalik Kırmızı Parlak Balon","f":29.7},{"b":"renkliparty3","a":"15 Adet Metalik Lacivert Parlak Balon","f":17.6},{"b":"renkliparty23","a":"15 Adet Metalik Mor Parlak Balon","f":30.8},{"b":"renkliparty11","a":"15 Adet Metalik Pembe Parlak Balon","f":15.4},{"b":"renkliparty14","a":"15 Adet Metalik Rose Gold Parlak Balon","f":12.1},{"b":"renkliparty4","a":"15 Adet Metalik Sarı Parlak Balon","f":24.2},{"b":"renkliparty10","a":"15 Adet Metalik Siyah Parlak Balon","f":13.2},{"b":"renkliparty2","a":"15 Adet Metalik Turuncu Parlak Balon","f":14.85},{"b":"renkliparty5","a":"15 Adet Metalik Yeşil Parlak Balon","f":12.1},{"b":"rsihome55","a":"2 Adet 40x50 Mikro Lüks Mikrofiber Cam Temizlik Bezi","f":25.3},{"b":"ASA3832091P","a":"2 Adet Renkli Tüplü Saç Örgü Lastiği Perma Lastik","f":37.4},{"b":"Rsihome59","a":"2 Bölmeli Bambu Çerezlik Peynir Sunum Tabağı","f":19.25},{"b":"srctechrozet3","a":"2'li Ateş ve Su 44 mm Çanta Rozet","f":26.4},{"b":"srcstorebpedpa","a":"2'li Beyaz - Pembe Ekose Peluş Ayıcık Anahtarlık","f":40.7},{"b":"srcstore3bbbrdts","a":"2'li Büyük Boy Beyaz Renkli Turuncu Desenli Toka Seti","f":28.88},{"b":"srcstore2bblsksasso","a":"2'li Büyük Boy Lüx Sevimli Köpek ve Sincap Anahtarlıklı Squishy","f":28.88},{"b":"renklikids9865","a":"2'li Büyük Boy Mandal Toka 9 CM","f":41.25},{"b":"renklikids9866","a":"2'li Büyük Boy Mandal Toka 9 CM","f":1.65},{"b":"renklikids9864","a":"2'li Büyük Boy Mandal Toka 9 CM","f":10.5},{"b":"srcstorepelustoka10","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":58.86},{"b":"srcstorepelustoka11","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":29.7},{"b":"srcstorepelustoka7","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":12.1},{"b":"srcstorepelustoka8","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":30.8},{"b":"srcstorepelustoka5","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":7.15},{"b":"srctech2kmsq","a":"2'li Kimmy Miki Squishy Anahtarlık","f":28.6},{"b":"srcstorekakedpa","a":"2'li Koyu ve Açık Kahverengi Peluş Ayıcık Anahtarlık","f":13.9},{"b":"srcstore2ksfymsa","a":"2'li Kuromi Sukuşi Figürlü Yumuşak Mor Siyah Anahtarlık","f":12.1},{"b":"srcstore2ksbyts","a":"2'li Kıskançlı Siyah Beyaz Yan Toka Seti","f":44.0},{"b":"srcstorelabubu10cm","a":"2'li Labubu Sık Bırak Silikon Anahtarlık - 10 CM","f":99.0},{"b":"srctechld2ots2","a":"2'li Leopar Desenli Otomat Toka Seti","f":50.6},{"b":"renklikids2064","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2061","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2063","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2062","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":8.8},{"b":"srctech2pksfya","a":"2'li Pembe Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":30.8},{"b":"srctech2pmrcfyt","a":"2'li Pembe Ve Mor Renk Çiçek Figürlü Yan Toka","f":1.59},{"b":"srcstore2smcbkpts","a":"2'li Saç Makyaj Cilt Bakımı Klips Pens Toka Seti","f":99.0},{"b":"srctech2lsafsya","a":"2'li Sevimli Ayıcık Figürlü Sukuşi Yumuşak Anahtarlık","f":15.4},{"b":"srctech2lipanda","a":"2'li Sevimli Panda Anahtarlık","f":38.5},{"b":"srcstore2sgksacs","a":"2'li Siyah - Gri Kuromi Silikon Anahtarlık","f":15.4},{"b":"srctech2yts","a":"2'li Yan Toka Seti","f":55.0},{"b":"srctech7210","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Toka","f":1.32},{"b":"srctech728","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Romantik Set Toka","f":13.2},{"b":"srctech723","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Toka","f":7.15},{"b":"srctech729","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Zarif Set Toka","f":7.92},{"b":"srctech2cfptst","a":"2'li Çiçek Figürlü Taş Süslemeli Toka","f":18.15},{"b":"renkliparty15","a":"20 Adet Renkli Balon Karışık Renk Parti","f":28.6},{"b":"rsihome25","a":"21 Parça Tornavida Seti","f":6.6},{"b":"renklikidshobi","a":"24 Gözlü Kutulu Harf ve Renkli Boncuk Seti","f":40.15},{"b":"srctech2lisgpst1","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":14.3},{"b":"srctech2lisgpst3","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":41.8},{"b":"srctech2lisgpst2","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":49.5},{"b":"srctech2lisgpst6","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":40.7},{"b":"srctechkututoka98","a":"3 Farklı Model Karışık Renk Çocuk Havlu Toka Seti","f":22.0},{"b":"srctechkututoka99","a":"3 Farklı Model Kutulu Toka Seti","f":38.5},{"b":"srcstore3koyots","a":"3'lü Desenli Küçük Oval Yan Toka Seti","f":19.25},{"b":"srcstore3kyots","a":"3'lü Desenli Küçük Yan Toka Seti","f":1.65},{"b":"srctech3dmmts4cm","a":"3'lü Dikdörtgen Model Mandal Toka Seti - 4 CM","f":19.62},{"b":"srctech3frmts2","a":"3'lü Farklı Renkler Mandal Toka Seti","f":14.3},{"b":"srcstore3krkfmts","a":"3'lü Karışık Renk Kelebek Figürlü Mandal Toka Set","f":3.3},{"b":"srctechkrmt3lu2","a":"3'lü Kelebek Renkli Mandal Toka - 9 cm","f":14.3},{"b":"srcstore3kft","a":"3'lü Kurdele Fiyonk Toka","f":6.6},{"b":"srcstore3kmtkyts","a":"3'lü Kurdele Model Taşlı Klips Yan Toka Seti","f":1.65},{"b":"srcstore3kukmts","a":"3'lü Küçük Kahverengi Mandal Toka Seti","f":3.3},{"b":"srcstore3ksdyts","a":"3'lü Kırmızı Siyah Desenli Yan Toka Seti","f":6.6},{"b":"srctech3ldpt3fm1","a":"3'lü Leopar Desenli Pens Toka","f":27.5},{"b":"srctech3ldpt3fm2","a":"3'lü Leopar Desenli Pens Toka","f":6.88},{"b":"srctech3lulotuscmt2","a":"3'lü Lotus Çiçek Model Büyük Toka","f":38.5},{"b":"srctech3lulotuscmt1","a":"3'lü Lotus Çiçek Model Büyük Toka","f":13.2},{"b":"srcstore3psdyts","a":"3'lü Pembe Siyah Desenli Yan Toka Seti","f":8.53},{"b":"srctech33frmts3cm3","a":"3'lü Renkli Mandal Toka Seti 3 CM","f":14.85},{"b":"srctech33frmts3cm2","a":"3'lü Renkli Mandal Toka Seti 3 CM","f":20.9},{"b":"srctech3rsmt2","a":"3'lü Renkli Şeffaf Mandal Toka - 11 CM","f":3.58},{"b":"srcstore3smcbkpkldts","a":"3'lü Saç Makyaj Klips Pens Kahverengi Leopar Desenli Toka Seti","f":28.88},{"b":"srctech3SRPT","a":"3'lü Siyah Renk Pens Toka","f":55.0},{"b":"srctech3ympts","a":"3'lü Yeni Model Pens Toka Seti","f":12.1},{"b":"srctech3cdpt11cm4","a":"3'lü Çiçek Desenli Pens Toka - 11 Cm","f":3.59},{"b":"srctech3cdpt11cm3","a":"3'lü Çiçek Desenli Pens Toka - 11 Cm","f":7.7},{"b":"renklikids7001","a":"3'lü Çıtçıtlı Büyük Yan Saç Tokası - 7 CM","f":15.4},{"b":"srctechteltoka30","a":"30'lu Siyah Tel Toka Seti","f":91.3},{"b":"rsihome41","a":"4'lü Bulaşık Süngeri ve 1 Adet Bulaşık Teli Seti","f":22.0},{"b":"srctech4iobmyrm","a":"4'lü İnci Oval Boncuk Model Mandal Toka","f":9.35},{"b":"srcstoreksfs4acs","a":"4'lü Kuromi Silikon Anahtarlık Çanta Süsü","f":8.53},{"b":"srcstorekuromi4lu","a":"4'lü Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":15.4},{"b":"srctech4ptmt5cm","a":"4'lü Pastel Tonlarda Mandal Toka - 5 CM","f":30.8},{"b":"srcstore4ryts","a":"4'lü Renkli Yan Toka Seti","f":22.0},{"b":"srcstore4ydts","a":"4'lü Yan Düz Renk Toka Seti","f":1.65},{"b":"282737288347","a":"40w Ampul","f":3.3},{"b":"srctechmarenicka7","a":"5 Adet Marteniçka Hediye Dilek Bilekliği","f":19.25},{"b":"srctech5prmt3cm","a":"5'li Pastel Renkli Mandal Toka - 3 Cm","f":27.5},{"b":"srcstore5pkcvbts","a":"5'li Pembe Kız Çocuk ve Bebek Toka Seti","f":33.0},{"b":"srctech5rftmst","a":"5'li Rengarenk File Tasarımlı Mandal Saç Toka","f":27.5},{"b":"srctechr5mts5cm","a":"5'li Renkli KISKAÇ Mandal Toka - 5 CM","f":30.8},{"b":"srctech5rmts5cm","a":"5'li Renkli Mandal Toka Seti - 5 CM","f":41.8},{"b":"srcstore5skcvbts","a":"5'li Sarı Kız Çocuk ve Bebek Toka Seti","f":33.0},{"b":"srcstore6rfksmmts","a":"6'lı Renkli Fare Kulağı Şekilli Mini Mandal Toka Seti","f":8.53},{"b":"srcstore6lırmmts","a":"6'lı Renkli Mini Mandal Toka Seti","f":15.4},{"b":"srctech6iobmyrm3","a":"6'lı İnci Oval Boncuk Model Mandal Toka","f":14.3},{"b":"srctech6iobmyrm2","a":"6'lı İnci Oval Boncuk Model Mandal Toka","f":117.72},{"b":"renklikids6kprkfyts","a":"6'lı Karışık Pembe Renk Kelebek Figürlü Yan Toka Set","f":30.8},{"b":"srctech6rftmst","a":"6'lı Rengarenk File Tasarımlı Mandal Saç Toka","f":41.8},{"b":"srctechr66frmts3cm","a":"6'lı Renkli Mandal Toka Seti - 3 CM","f":30.8},{"b":"srctech9iobmyrm","a":"9'lu İnci Oval Boncuk Model Mandal Toka","f":20.9},{"b":"srcstoretütsü85","a":"Amber Aromalı Çubuk Tütsü 20 çubuk","f":12.1},{"b":"srcstoretütsü82","a":"Ananas & Yasemin Çiçekleri Aromalı Çubuk Tütsü","f":3.85},{"b":"RNA11743507BIJ","a":"Ateş Su 2'Li Vinlex Deri Kolye","f":38.5},{"b":"TYB5NV33NJ42W71K49","a":"Ateş Su 2'Li Vinlex Deri Kolye","f":9.35},{"b":"TYB9TGN2P0S8Q9DZ88","a":"Ateş ve Su 2'li Vinlex Deri Kolye","f":28.6},{"b":"TYBLLC1SCVVAZNUJ25","a":"Ateş ve Su 2'li Vinlex Deri Kolye","f":35.75},{"b":"srctechrozet2","a":"Ateş ve Su Çanta Rozet 44 mm 2'li","f":3.3},{"b":"srctechatesvesuanahtarlık","a":"Ateş ve Su Çift Metal Anahtarlık","f":3.3},{"b":"srctechatessukolye","a":"Ateş Ve Su Çift Sevgili Kolye","f":8.53},{"b":"srctechkututoka96","a":"Açık Kahve Kelebek Figürlü Leopar Desenli Toka Set","f":13.75},{"b":"srctechpelusapembe","a":"Açık Pembe Peluş Ayıcık Anahtarlık","f":5.45},{"b":"Rsihome45","a":"Bambu Kesim Tahtası - 18*28 Cm","f":38.5},{"b":"srcstoretütsü71","a":"Bebek Pudrası Aromalı Çubuk Tütsü","f":10.08},{"b":"srcstoretütsü2","a":"Beyaz Adaçayı & Hindistan Cevizi Aromalı Tütsü","f":3.3},{"b":"srcstoretütsü81","a":"Beyaz Adaçayı & Vanilya Aromalı Çubuk Tütsü","f":30.8},{"b":"srcstorebedpaa","a":"Beyaz Ekose Desenli Peluş Ayıcık Anahtarlık","f":28.6},{"b":"srcstorebkft","a":"Beyaz Kurdele Fiyonk Toka","f":3.3},{"b":"srctechpelusbeyaz","a":"Beyaz Peluş Ayıcık Anahtarlık","f":5.45},{"b":"srcstoretütsü97","a":"Biberiye Aromalı Premium Çubuk Tütsü","f":29.7},{"b":"srcstoretütsü93","a":"Blue Champa Çubuk Tütsü","f":55.0},{"b":"TYB2SURKDKHU039327","a":"Büyük Boy Tüp Saç Örgü Lastiği Renkli Perma Lastik","f":24.2},{"b":"8699721111038","a":"Cansın Yara Bandı 10'lu 1 Kutu","f":30.8},{"b":"srcstore8002","a":"Capybara Büyük Boy Sık Bırak Anahtarlık - 9 CM","f":18.15},{"b":"srcstoretütsü17","a":"Cleaning Power Çubuk Tütsü","f":6.6},{"b":"srcstoretütsü96","a":"Cool Water Çubuk Tütsü","f":110.0},{"b":"srcstoredladtcd2s2","a":"Desenli Lüks Asetat Dikdörtgen Toka 2'li Set","f":55.0},{"b":"renklikids3","a":"Desenli Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":30.8},{"b":"srctechddddfya","a":"Donald Duck, Daisy Duck Figürlü Yumuşak 2'li Anahtarlık","f":22.0},{"b":"srctech3d11","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":30.8},{"b":"srctech3d12","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":37.4},{"b":"srctech3d14","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":18.7},{"b":"rsihome65","a":"Ekonomik Beyaz Tahta Kalemi Mavi 1 Adet","f":25.3},{"b":"srcstoretütsü22","a":"Energie Positive Doğal Premium Çubuk Tütsü","f":33.0},{"b":"srcstoretütsü67","a":"Erotica Koku Aromalı Çubuk Tütsü","f":27.5},{"b":"srctechpelusgri","a":"Gri Peluş Ayıcık Anahtarlık","f":3.63},{"b":"srcstoretütsü21","a":"Güneş Aromalı Doğal Premium Çubuk Tütsü","f":33.0},{"b":"rsihome79","a":"Hamur, Pizza, Börek Kesme Bıçağı Paslanmaz Çelik","f":13.75},{"b":"srcstorehellokitymavi","a":"Hello Kity Anahtarlık Çanta Süsü Büyük Boy","f":3.3},{"b":"srctechhkksfy2a","a":"Hello Kity Kuromi Sukuşi Figürlü Yumuşak 2'li Anahtarlık","f":38.5},{"b":"renklikids9971","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":41.8},{"b":"renklikids9973","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":83.6},{"b":"renklikids9974","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":20.9},{"b":"renklikids9975","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":62.7},{"b":"renklikids9972","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":125.4},{"b":"srcstorebaloniyikidogdun","a":"Helyuma Uyumlu İyi Doğdun Baskılı Balon 10 Adet","f":33.0},{"b":"srcstorebalonipli","a":"Helyuma Uyumlu Zıpzıp Lastikli Balon Karışık Renk 5 Adet","f":30.8},{"b":"srcstoretütsü87","a":"Hindistan Cevizi Aromalı Çubuk Tütsü","f":19.8},{"b":"srcstoretütsü91","a":"Hindistan Cevizi ve Mango Aromalı Çubuk Tütsü","f":6.05},{"b":"src3d1","a":"Hogwarts Temalı Kale 3D Baskı Kalemlik","f":3.63},{"b":"6009684354880","a":"Hopel 40w Torch Led Ampul","f":3.85},{"b":"VT875113","a":"İnce Metal Gövdeli Maket Bıçağı / Falçata Küçük Boy","f":77.0},{"b":"srcstoreima2yts2","a":"İnci Modelli Akrilik Açık Pembe 2'li Yan Toka Seti","f":3.44},{"b":"srcstoreima2yts1","a":"İnci Modelli Akrilik Beyaz 2'li Yan Toka Seti","f":11.55},{"b":"srcstoretütsü12","a":"Juniper Berry Çubuk Tütsü","f":1.65},{"b":"TYBY6LIZVI1Y6ZH292","a":"Kablo Düzenleyici Kablo Tutucu Kablo Sabitleyici","f":41.2},{"b":"srcstoretütsü86","a":"Kahve (Coffee) Aromalı Çubuk Tütsü","f":9.9},{"b":"srctechk6mlts","a":"Kahverengi 6'lı Mandal, Lastik ve Taç Seti","f":30.8},{"b":"srcstorekedpaa","a":"Kahverengi Ekose Desenli Peluş Ayıcık Anahtarlık","f":25.3},{"b":"srctechkldmt","a":"Kahverengi Leopar Desenli Mandal Toka","f":1.81},{"b":"srcstorekldpft","a":"Kahverengi Leopar Desenli Pens Fiyonk Toka","f":13.2},{"b":"srctechpeluskrengi","a":"Kahverengi Peluş Ayıcık Anahtarlık","f":3.63},{"b":"renklikidsktfytlts","a":"Kahverengi Tavşan Figürlü Yan Toka Ve Lastik Toka Set","f":35.2},{"b":"srctechkutt","a":"Kahverengi Üçlü Topuz Tokası","f":8.8},{"b":"srctechkalpatan3","a":"Kalp Atan Anahtarlık Çanta Aksesuarı Trend Squishy","f":28.6},{"b":"srctechkalpatan1","a":"Kalp Atan Anahtarlık Çanta Aksesuarı Trend Squishy","f":28.6},{"b":"srcstoretütsü89","a":"Kamasutra Aromalı Premium Çubuk Tütsü","f":14.3},{"b":"srcstoretütsü78","a":"Karamel Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü70","a":"Karpuz Aromalı Çubuk Tütsü","f":19.8},{"b":"srcstorekrkf3mts","a":"Karışık Renk Kelebek Figürlü 3'lü Mandal Toka Set","f":1.65},{"b":"srctechkututoka91","a":"Karışık Renk Kutulu Lastik Toka Set","f":38.5},{"b":"srctechkututoka90","a":"Karışık Renk Kutulu Toka Seti","f":40.7},{"b":"srctechkututoka97","a":"Karışık Renk Çocuk Havlu Toka Yan Toka Set","f":11.0},{"b":"srctechkrmt3lu1","a":"Kelebek Renkli Mandal Toka 3'lü - 9 cm","f":21.45},{"b":"srcstoretütsü77","a":"Kiraz Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü14","a":"Kiraz ve Vanilya Aromalı Çubuk Tütsü","f":15.4},{"b":"renklikids1231","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":8.58},{"b":"renklikids1232","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":17.6},{"b":"renklikids1233","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":15.4},{"b":"renklikids1234","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":82.5},{"b":"renklikids1235","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":12.1},{"b":"renklikids1236","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":44.88},{"b":"srcstorekkedpaa","a":"Koyu Kahverengi Ekose Desenli Peluş Ayıcık Anahtarlık","f":28.6},{"b":"srcstorekdtks2kt","a":"Kurdele Fiyonk Toka Kırmızı Siyah 2'li","f":6.6},{"b":"5623541288923","a":"Kuromi Slime Hazır Slime Ele Yapışmaz Renkli","f":28.88},{"b":"srcstorekuromi1","a":"Kuromi Sukuşi Figürlü 2'li Yumuşak Siyah Mor Anahtarlık","f":7.7},{"b":"srcstorekuromi4","a":"Kuromi Sukuşi Figürlü Siyah Pembe 2'li Yumuşak Anahtarlık","f":1.65},{"b":"srctech2lips","a":"Kuromi Sukuşi Figürlü Yumuşak 2'li Anahtarlık","f":33.0},{"b":"srcstor49ekuromi3luV2","a":"Kuromi Sukuşi Figürlü Yumuşak 3'lü Anahtarlık","f":27.5},{"b":"srcstoreksfy4sacs","a":"Kuromi Sukuşi Figürlü Yumuşak 4'lü Siyah Anahtarlık","f":26.4},{"b":"srcstorekuromi2","a":"Kuromi Sukuşi Figürlü Yumuşak Siyah - Beyaz Anahtarlık 2'li","f":18.7},{"b":"renklikidskutu10","a":"Kutulu Kız Çocuk Genç Toka Seti","f":41.25},{"b":"renklikidskutu2","a":"Kutulu Tavşan Model Çantalı Renkli Toka Seti","f":45.1},{"b":"renklikidskutu1","a":"Kutulu Tavşan Model Çantalı Toka Seti","f":45.1},{"b":"renklikidskutu5","a":"Kutulu Çantalı Kız Çocuk Genç Renkli Toka Seti","f":45.1},{"b":"srcstorekb2kft","a":"Kırmızı Beyaz 2'li Kurdele Fiyonk Toka","f":28.88},{"b":"srcstoretütsü75","a":"Kırmızı Elma Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstorekkft","a":"Kırmızı Kurdele Fiyonk Toka","f":3.3},{"b":"srcstorekk3yts","a":"Kıskançlı Kahverengi 3'lü Yan Toka Seti","f":7.7},{"b":"srcstorekkp2yts","a":"Kıskançlı Kırmızı Pembe 2'li Yan Toka Seti","f":15.4},{"b":"srcstoreksb2yts","a":"Kıskançlı Siyah Beyaz 2'li Yan Toka Seti","f":8.53},{"b":"renklikids9852","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":55.0},{"b":"renklikids9855","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":82.5},{"b":"renklikids9853","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":110.0},{"b":"renklikids9851","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":137.5},{"b":"renklikids9854","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":27.5},{"b":"renklikidskutu9","a":"Kız Çocuk Genç Kutulu Keman Model Çantalı Renkli Toka Seti","f":28.6},{"b":"renklikidskutu8","a":"Kız Çocuk Genç Kutulu Keman Model Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu14","a":"Kız Çocuk Genç Kutulu Toka Seti","f":30.8},{"b":"renklikidskutu11","a":"Kız Çocuk Genç Kutulu Toka Seti","f":41.25},{"b":"renklikidskutu6","a":"Kız Çocuk Genç Kutulu Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu7","a":"Kız Çocuk Genç Renkli Kutulu Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu12","a":"Kız Çocuk Genç Toka Seti Kalp Model Kutulu","f":41.25},{"b":"renklikidskutu13","a":"Kız Çocuk Genç Toka Seti Yıldız Model Kutulu","f":41.25},{"b":"renklikids124","a":"Kız Çocuk Karışık Figürlü 10 Parça Pens Toka","f":37.4},{"b":"renklikids889","a":"Kız Çocuk Kurdele Fiyonk Lastikli Toka","f":5.5},{"b":"renklikids8887","a":"Kız Çocuk Kurdele Fiyonk Toka","f":19.25},{"b":"renklikids8881","a":"Kız Çocuk Kurdele Fiyonk Toka","f":38.5},{"b":"renklikids1010116","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":14.3},{"b":"renklikids1010115","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":14.3},{"b":"renklikids1010117","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":46.2},{"b":"renklikids995p","a":"Kız Çocuk Ve Kız Bebek Labubu Pembe Toka Seti 8 Adet","f":29.7},{"b":"renklikids9954","a":"Kız Çocuk Ve Kız Bebek Labubu Toka Seti 8 Adet","f":60.5},{"b":"renklikids995y","a":"Kız Çocuk Ve Kız Bebek Labubu Yeşil Toka Seti 8 Adet","f":59.4},{"b":"renklikids50","a":"Kız Çocuk Ve Kız Bebek Pens Çıtçıtlı Toka Seti 14 Adet","f":82.5},{"b":"renklikids9891","a":"Kız Çocuk Ve Kız Bebek Renkli 24'lü Toka Seti","f":110.0},{"b":"renklikids9892","a":"Kız Çocuk Ve Kız Bebek Renkli 24'lü Toka Seti","f":27.5},{"b":"renklikids9874","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":38.5},{"b":"renklikids9872","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":55.0},{"b":"renklikids9871","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":82.5},{"b":"renklikids9965","a":"Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":60.5},{"b":"renklikids9964","a":"Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":20.9},{"b":"renklikids9942","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9946","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9944","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9945","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9943","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9941","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":60.5},{"b":"srcstorelbkshb","a":"Labubu Beyaz Kolye Seti Hediyelik","f":8.53},{"b":"srcstorelybshb","a":"Labubu Bileklik Seti Hediyelik","f":19.25},{"b":"srcstorelkbshb","a":"Labubu Kahverengi Bileklik Seti Hediyelik","f":15.4},{"b":"srcstorelkkshk","a":"Labubu Kahverengi Kolye Seti Hediyelik","f":28.88},{"b":"srcstorelykshk","a":"Labubu Kolye Seti Hediyelik","f":19.25},{"b":"renklikids9983","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":7.15},{"b":"renklikids9981","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":14.3},{"b":"renklikids9986","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":44.0},{"b":"renklikids9984","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":7.15},{"b":"renklikids9985","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":14.3},{"b":"srcstorelmkshk","a":"Labubu Mor Kolye Seti Hediyelik","f":6.6},{"b":"srcstorelpkshk","a":"Labubu Pembe Kolye Seti Hediyelik","f":3.3},{"b":"srcstorelsbshb","a":"Labubu Sarı Bileklik Seti Hediyelik","f":28.88},{"b":"srcstorelskshk","a":"Labubu Sarı Kolye Seti Hediyelik","f":1.65},{"b":"srcstorels5acs","a":"Labubu Silikon 5'li Anahtarlık Çanta Süsü","f":15.4},{"b":"srcstorelsacs3s","a":"Labubu Silikon Anahtarlık Çanta Süsü 3'lü Set","f":91.3},{"b":"srcstorelsacs4s","a":"Labubu Silikon Anahtarlık Çanta Süsü 4'lü Set","f":91.3},{"b":"srcstorelabubusya10cm6","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":6.05},{"b":"srcstorelabubusya10cm5","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":15.4},{"b":"srcstorelabubusya10cc3","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":15.4},{"b":"srcstorelabubusyıa10cm2","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":35.75},{"b":"srcstorelabubusyıa10cm1","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":35.75},{"b":"srcstorelabubusyıa10cm5","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm6","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm3","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm4","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":15.4},{"b":"srctechld2ots11cm1","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":44.0},{"b":"srctechld2ots11cm2","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":29.15},{"b":"srctechld2ots11cm3","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":39.6},{"b":"srctechld2ots","a":"Leopar Desenli 2'li Otomat Toka Seti","f":18.7},{"b":"srcstoreld2pt","a":"Leopar Desenli 2'li Pens Toka - 9 CM","f":30.8},{"b":"srctechldobakkmt1","a":"Leopar Desenli Orta Boy Asetat Kemik Mandal Toka - 10 CM","f":15.4},{"b":"srctechldobakkmt3","a":"Leopar Desenli Orta Boy Asetat Kemik Mandal Toka - 10 CM","f":30.8},{"b":"srctechld2ots3","a":"Leopar Desenli Otomat Toka 2'li Set","f":37.4},{"b":"srcstoretütsü16","a":"Lily Çubuk Tütsü","f":19.25},{"b":"srcstoretütsü88","a":"Limon Aromalı Çubuk Tütsü","f":55.0},{"b":"srcstorelcdmt6","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":35.75},{"b":"srcstorelcdmt4","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"srcstorelcdmt2","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"srcstorelcdmt5","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"6832165416","a":"MAKET BIÇAĞI PLASTİK 1 ADET","f":33.0},{"b":"srcstoretütsü80","a":"Mama & Baby Tütsü Doğal Premium","f":30.24},{"b":"srcstoretütsü13","a":"Mango Papaya Aromalı Çubuk Tütsü","f":8.53},{"b":"renkliparty241","a":"Metalik Kırmızı Beyaz Parlak 20 Adet Balon","f":8.8},{"b":"renkliparty242","a":"Metalik Kırmızı Beyaz Parlak 20 Adet Balon","f":22.0},{"b":"renkliparty17","a":"Metalik Sarı Kırmızı Parlak 20 Adet Balon","f":15.4},{"b":"renkliparty19","a":"Metalik Sarı Lacivert Parlak 20 Adet Balon","f":42.24},{"b":"renkliparty18","a":"Metalik Siyah Beyaz Parlak 20 Adet Balon","f":15.4},{"b":"renkliparty20","a":"Metalik Yeşil Beyaz Parlak 20 Adet Balon","f":19.8},{"b":"renkliparty21","a":"Metalik Yeşil Siyah Parlak 20 Adet Balon","f":39.6},{"b":"srcstoremmvmm2li","a":"Mickey Mouse ve Minnie Mouse 2'li Büyük Boy Anahtarlık","f":6.6},{"b":"rsihome68","a":"Microll Mikrofiber Temizlik Bezi - 14'lü Mega Paket","f":15.4},{"b":"srcstoretütsü72","a":"Milflores Aromalı Çubuk Tütsü","f":44.0},{"b":"TYBBMVEJWYU6IOPL43","a":"Mini Ateş ve Su Çelik Kolye 2'li","f":38.5},{"b":"srctech3dvazo2","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":37.4},{"b":"srctech3dvazo3","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":15.4},{"b":"srctech3dvazo1","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":46.2},{"b":"srcstoretütsü95","a":"New Wave Çubuk Tütsü","f":82.5},{"b":"srcstoretütsü5","a":"Orkide Çubuk Tütsü","f":28.88},{"b":"srcstoreoblkhlst","a":"Orta Boy Lüx Kalite Havlu Lastik Siyah Toka 6'lı","f":14.85},{"b":"srcstoreoblkhlt6nr","a":"Orta Boy Lüx Kalite Havlu Lastik Toka 6'lı Neon Renkler","f":38.5},{"b":"TYBRDDJ9Z9DAXLIF87","a":"P02 Pamuklu Beyaz Islak Mop Paspas Ucu - 1 Adet","f":19.25},{"b":"srctechpfyt4luset1","a":"Papatya Figürlü Yan Toka 4'lü Set","f":44.0},{"b":"srctechpfyt4luset2","a":"Papatya Figürlü Yan Toka 4'lü Set","f":14.3},{"b":"srctechpfyt4luset3","a":"Papatya Figürlü Yan Toka 4'lü Set","f":17.6},{"b":"5160708501041","a":"Pasta Cila Çizik Giderici Teflonlu 200 ml","f":30.8},{"b":"srctechpeluskrem","a":"Peluş Ayıcık Anahtarlık Krem Renk","f":19.25},{"b":"srctechpeluspembe","a":"Peluş Ayıcık Anahtarlık Pembe","f":28.88},{"b":"8585143","a":"Pembe Ayıcıklı Anahtarlık","f":6.6},{"b":"srcstorepedpaa","a":"Pembe Ekose Desenli Peluş Ayıcık Anahtarlık","f":25.3},{"b":"srctechprkflyt7s","a":"Pembe Renk Kurdele Figürlü Lastik, Yan Toka 7'li Set","f":17.6},{"b":"rsihome61","a":"Plastik Maket Bıçağı Falçata Geniş Ağızlı Büyük Boy","f":7.7},{"b":"rsihome62","a":"Pvc Elektrik Bandı Izolebant Siyah 5 Adet","f":19.8},{"b":"srcstoretütsü9","a":"Refreshing Çubuk Tütsü","f":15.4},{"b":"srcstoretütsü98","a":"Relaxation Çubuk Tütsü","f":59.4},{"b":"srctech3fr3mts5cm","a":"Renkli 3'lü Mandal Toka Seti - 5 CM","f":7.15},{"b":"07129443","a":"Renkli Cimcime Perma Saç Lastik","f":11.55},{"b":"srctechrmdkmt9cm4","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":44.0},{"b":"srctechrmdkmt9cm5","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":22.0},{"b":"srctechrmdkmt9cmw3","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":7.7},{"b":"srctechrmdkmt9cm1","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":15.4},{"b":"srctechrmdkmt9cm2","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":7.7},{"b":"srctechrmdkmt9cm6","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":15.4},{"b":"renklikids62","a":"Renkli Mini Havlu Lastik Toka Seti 20 Adet","f":27.5},{"b":"srctechrsmt31","a":"Renkli Şeffaf Mandal Toka 3'lü - 11 CM","f":7.15},{"b":"srcstoresg2ysts","a":"Sarı Gri 2'li Yılan Şekilli Toka Seti","f":19.25},{"b":"56236231","a":"Sarı Kırmızı Lateks Balon Seti 20'li Galatasaray Tema","f":15.4},{"b":"89797654","a":"Sarı Lacivert Balon Seti Fenerbahçe Tema","f":4.4},{"b":"srcstoresmcbkpkld2ts","a":"Saç Makyaj Klips Pens Kahverengi Leopar Desenli 2'li Toka Seti","f":38.5},{"b":"789431389471","a":"Saç Örgü Lastiği Kp0046","f":19.25},{"b":"rsihome4001","a":"Seramik 6'lı Gri Çerez Tabağı Sunumluk","f":9.9},{"b":"rsihome4003","a":"Seramik 6'lı Pembe Çerez Tabağı Sunumluk","f":19.8},{"b":"srcstoretütsü10","a":"Serenit Çubuk Tütsü","f":19.25},{"b":"renklikids16","a":"Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":52.8},{"b":"renklikids15","a":"Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":30.8},{"b":"renklikids205","a":"Sevimli Aslan Desenli 2'li Orta Boy Çocuk Mandal Toka","f":33.0},{"b":"srctechsp2li","a":"Sevimli Panda 2'li Anahtarlık","f":38.5},{"b":"srctechspa2li","a":"Sevimli Panda Anahtarlık 2'li","f":13.2},{"b":"srcstoresb2kft","a":"Siyah - Beyaz 2'li Kurdele Fiyonk Toka","f":11.0},{"b":"srctechs6mşts","a":"Siyah 6'lı Mandal, Lastik ve Taç Seti","f":30.8},{"b":"546543325","a":"Siyah Beyaz Lateks Balon Seti 20'li Beşiktaş Tema","f":2.2},{"b":"renklikids63","a":"Siyah Mini Havlu Lastik Toka Seti 20 Adet","f":7.7},{"b":"srctech2srmts3cm","a":"Siyah Renk Mandal Toka Seti 6'lı - 3 CM","f":7.15},{"b":"srctechkutts","a":"Siyah Renk Üçlü Topuz Tokası","f":24.2},{"b":"srcstoressst","a":"Siyah Saten Simit Toka","f":27.5},{"b":"srctechkututoka92","a":"Siyah Ve Beyaz Renk Yan Toka Ve Lastik Toka Set","f":77.0},{"b":"srcstoreskfymssa2","a":"Sukuşi Kuromi Figürlü Yumuşak 2'li Anahtarlık","f":19.25},{"b":"srcstorekuromi3","a":"Sukuşi Kuromi Figürlü Yumuşak Mor Pembe Anahtarlık 2'li","f":3.85},{"b":"srcstoretütsü23","a":"Sweet Mogra Çubuk Tütsü","f":33.0},{"b":"srctechsansli2","a":"Sürpriz Şanlı Hediye Kutu Konsept Takı 14-15 Parça Set","f":99.0},{"b":"srctechsansli1","a":"Sürpriz Şanlı Hediye Kutu Konsept Toka 6-7 Parça Set","f":99.0},{"b":"8697623610981","a":"Sıcak Su Torbası","f":19.25},{"b":"TYBOVV1EFH1H2CTH56","a":"Sıcak Su Torbası 2lt","f":11.55},{"b":"TYBNHCEGT89VS8HU45","a":"Sıcak Su Torbası 2lt Mavi","f":15.4},{"b":"srctechkalpatanlabubu1","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu2","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu3","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu4","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"renklikidskutu3","a":"Tavşan Model Kutulu Çantalı Toka Seti","f":45.1},{"b":"srctechtüy","a":"Tiftik ve Tüy Alıcı Toplama Makinesi","f":99.0},{"b":"src3d2","a":"Tutunan Kedi Tasarımlı Masa Kenarı 3D Baskı Askılık","f":1.81},{"b":"srctechunicorn9cm1","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":29.7},{"b":"srctechunicorn9cm4","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":4.4},{"b":"srctechunicorn9cm6","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":22.0},{"b":"srctechunicorn9cm5","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":11.0},{"b":"srctechunicorn9cm2","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":6.6},{"b":"srcstoreuksacs2","a":"Unicorn Karakter Sukuşi Anahtarlık 2'li","f":6.05},{"b":"srcstoretütsü68","a":"Vanilya Aromalı Çubuk Tütsü","f":13.75},{"b":"srctechwtpefy2a","a":"Winnie The Pooh ve Eeyore Figürlü Yumuşak 2'li Anahtarlık","f":66.0},{"b":"TYB14N8TQUW0WCF760","a":"Wn-1161 Tek Çip Rgb Şerit Led Seti 4,5 M","f":57.75},{"b":"srcstoretütsü83","a":"Yaban Mersini Aromalı Çubuk Tütsü","f":15.4},{"b":"srcstoresksfyacsy","a":"Yeni Model Siyah Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":1.81},{"b":"srctechytkr3ts","a":"Yeni Trend Kadın Klips Renkli 3'lü Toka Seti","f":60.5},{"b":"srctechytppfsb3","a":"Yeni Trend Kırmızı Pullu Fiyonklu Saç Bandı","f":46.2},{"b":"srctechytppfsb","a":"Yeni Trend Pembe Pullu Fiyonklu Saç Bandı","f":29.7},{"b":"srctechytppfsb1","a":"Yeni Trend Pullu Fiyonklu Saç Bandı","f":14.3},{"b":"srctechytppfsb2","a":"Yeni Trend Siyah Pullu Fiyonklu Saç Bandı","f":28.6},{"b":"srcstoretütsü90","a":"Yeşil Elma Aromalı Çubuk Tütsü","f":18.15},{"b":"srctechrozet1","a":"Ying Yang Çanta Rozet 44 mm 2'li","f":4.95},{"b":"srcstoretütsü15","a":"Yoga Chakra Çubuk Tütsü","f":8.53},{"b":"srctechyydskptkk","a":"Yoğurt Yulaf Müsli Diyet Saklama Kabı Kaşıklı","f":30.8},{"b":"renklikidsyildizli","a":"Yıldız Kız Çocuk Çıtçıtlı Tokası 6'lı Set","f":3.85},{"b":"690857002597","a":"Yıldızlar Çizim Takımı (Cetvel+Gönye+İletki+Pergel)","f":15.4},{"b":"8639772800277","a":"Zeka Küpü","f":8.8},{"b":"985236475123","a":"Zeka Küpü","f":1.65},{"b":"rsihome26","a":"Zeka Küpü Sihirli Mini Rubik Zeka Sabır Küpü","f":1.65},{"b":"srctechzdmt2li8cm","a":"Zincir Desenli Mandal Toka 2'li - 8 CM","f":12.1},{"b":"rsihome37","a":"Çift Camlı Cidarlı Kuru Kafa Tasarımlı Kahve Cam 75 ml Bardak","f":22.0},{"b":"srcstoretütsü73","a":"Çikolata Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü69","a":"Çilek & Kavun Aromalı Çubuk Tütsü","f":13.75},{"b":"srcstoretütsü20","a":"Çilek Aromalı Çubuk Tütsü","f":52.8},{"b":"srctechcdot1","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":33.0},{"b":"srctechcdot5","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":30.8},{"b":"srctechcdot3","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":15.4},{"b":"srctechcdot2","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":33.0},{"b":"srctechcdot4","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":14.3},{"b":"srctechcdot6","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":29.7},{"b":"renklikids3501","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":33.0},{"b":"renklikids3503","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":20.9},{"b":"renklikids3502","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":44.0},{"b":"rsihome11","a":"Çok Fonksiyonlu El Şarj Edilebilir LED Torch El Feneri","f":8.53},{"b":"srctechkututoka93","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 3'lü Set","f":6.88},{"b":"srctechkututoka942","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":35.2},{"b":"srctechkututoka943","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":30.8},{"b":"srctechkututoka941","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":77.0},{"b":"srcstoretütsü79","a":"Üzüm & Kivi Aromalı Çubuk Tütsü","f":15.4},{"b":"srctechsldbpt11cm","a":"Şeffaf Leopar Desenli Büyük Pens Toka - 11 Cm","f":16.5},{"b":"srcstoretütsü76","a":"Şeftali Aromalı Çubuk Tütsü","f":110.0},{"b":"renklikids204","a":"Şirin Pembe Kedi Desenli 2'li Orta Boy Çocuk Mandal Toka","f":33.0}];
+// ========== XLSX PARSING ==========
 
-// State
-const selMap = new Map(); // barkod -> {b, a, alis, satis, qty, kom, _qtyManual}
+function _xColIdx(ref) {
+  var m = ref.match(/^([A-Z]+)/);
+  var col = 0;
+  for (var i = 0; i < m[1].length; i++) col = col * 26 + (m[1].charCodeAt(i) - 64);
+  return col - 1;
+}
+
+async function _xXml(zip, path) {
+  var entry = zip.file(path);
+  if (!entry) return null;
+  var bytes = await entry.async('uint8array');
+  return new DOMParser().parseFromString(new TextDecoder('utf-8').decode(bytes), 'application/xml');
+}
+
+async function _xSheet(zip) {
+  var wb = await _xXml(zip, 'xl/workbook.xml');
+  var rl = await _xXml(zip, 'xl/_rels/workbook.xml.rels');
+  if (!wb || !rl) return 'xl/worksheets/sheet1.xml';
+  var sheets = wb.getElementsByTagName('sheet');
+  if (!sheets.length) return 'xl/worksheets/sheet1.xml';
+  var rId = sheets[0].getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id') || sheets[0].getAttribute('r:id');
+  var rels = rl.getElementsByTagName('Relationship');
+  for (var i = 0; i < rels.length; i++) {
+    if (rels[i].getAttribute('Id') === rId) {
+      var t = rels[i].getAttribute('Target').replace(/^\//,'');
+      return t.startsWith('xl/') ? t : 'xl/' + t;
+    }
+  }
+  return 'xl/worksheets/sheet1.xml';
+}
+
+async function _xRows(zip) {
+  var sst = [];
+  var sstDoc = await _xXml(zip, 'xl/sharedStrings.xml');
+  if (sstDoc) {
+    var sis = sstDoc.getElementsByTagName('si');
+    for (var i = 0; i < sis.length; i++) {
+      var txt = '';
+      var ts = sis[i].getElementsByTagName('t');
+      for (var j = 0; j < ts.length; j++) txt += ts[j].textContent;
+      sst.push(txt);
+    }
+  }
+  var sheetDoc = await _xXml(zip, await _xSheet(zip));
+  if (!sheetDoc) throw new Error('Çalışma sayfası bulunamadı.');
+  var rows = [];
+  var rowEls = sheetDoc.getElementsByTagName('row');
+  for (var r = 0; r < rowEls.length; r++) {
+    var row = [];
+    var cells = rowEls[r].getElementsByTagName('c');
+    for (var c = 0; c < cells.length; c++) {
+      var cell = cells[c];
+      var ref = cell.getAttribute('r'); if (!ref) continue;
+      var idx = _xColIdx(ref);
+      var tp = cell.getAttribute('t');
+      var vEl = cell.getElementsByTagName('v')[0];
+      var val = null;
+      if (tp === 's') val = vEl ? sst[parseInt(vEl.textContent, 10)] : null;
+      else if (tp === 'str') val = vEl ? vEl.textContent : null;
+      else if (tp === 'inlineStr') { var t2 = cell.getElementsByTagName('t')[0]; val = t2 ? t2.textContent : null; }
+      else if (vEl) val = parseFloat(vEl.textContent);
+      row[idx] = val;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+function _xNum(v) { var n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : 0; }
+
+async function parseUrunlerXlsx(ab) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZip yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
+  var zip = await JSZip.loadAsync(ab);
+  var rows = await _xRows(zip);
+  if (rows.length < 2) throw new Error('Dosyada veri satırı bulunamadı.');
+  var hdr = rows[0].map(function(h){ return h == null ? '' : String(h).trim(); });
+  var ci = function(name){ return hdr.indexOf(name); };
+  var iUrun = ci('ÜRÜN İSMİ') !== -1 ? ci('ÜRÜN İSMİ') : ci('Ürün İsmi');
+  var iBarkod = ci('BARKOD') !== -1 ? ci('BARKOD') : ci('Barkod');
+  var iMaliyet = ci('Maliyet');
+  if (iUrun === -1) throw new Error('"ÜRÜN İSMİ" kolonu bulunamadı. Trendyol KomisyonTarifeleriÜrünleri formatı bekleniyor.');
+  var urunler = [];
+  for (var r = 1; r < rows.length; r++) {
+    var row = rows[r]; if (!row) continue;
+    var ad = row[iUrun];
+    if (ad == null || String(ad).trim() === '') continue;
+    var barkod = (iBarkod !== -1 && row[iBarkod] != null) ? String(row[iBarkod]).trim() : '';
+    var maliyet = iMaliyet !== -1 ? _xNum(row[iMaliyet]) : 0;
+    urunler.push({b: barkod || String(ad).trim(), a: String(ad).trim(), f: maliyet});
+  }
+  if (!urunler.length) throw new Error('Hiç geçerli ürün satırı bulunamadı.');
+  return urunler;
+}
+
+async function parseMaliyetXlsx(ab) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZip yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
+  var zip = await JSZip.loadAsync(ab);
+  var rows = await _xRows(zip);
+  if (rows.length < 2) throw new Error('Dosyada veri satırı bulunamadı.');
+  var hdr = rows[0].map(function(h){ return h == null ? '' : String(h).trim(); });
+  var ci = function(name){ return hdr.indexOf(name); };
+  var iBarkod = ci('Barkod No');
+  var iAlis = ci('Alış Tutarı (KDV)');
+  if (iBarkod === -1 || iAlis === -1) throw new Error('"Barkod No" ve "Alış Tutarı (KDV)" kolonları bulunamadı. Trendyol Aktif-Pasif Ürün export\'u bekleniyor.');
+  var kayitlar = {};
+  for (var r = 1; r < rows.length; r++) {
+    var row = rows[r]; if (!row) continue;
+    var bk = row[iBarkod];
+    if (bk == null || String(bk).trim() === '') continue;
+    var m = _xNum(row[iAlis]);
+    if (m > 0) kayitlar[String(bk).trim()] = m;
+  }
+  if (!Object.keys(kayitlar).length) throw new Error('Hiç geçerli maliyet satırı bulunamadı.');
+  return kayitlar;
+}
+
+// ========== TOAST ==========
+
+function showToast(msg, ok) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? 'var(--grn)' : 'var(--red)';
+  t.style.color = ok ? '#000' : '#fff';
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function(){ t.classList.remove('show'); }, 3200);
+}
+
+// ========== DATA ==========
+
+const URUNLER_DEFAULT = [{"b":"BLS1236","a":"1 Adet Plastik Maket Bıçağı Falçata","f":18.7},{"b":"rsihome115","a":"1 Paket 8 Yaprak Taşınabilir Çanta Boy Cep Tipi Mini Islak Mendil","f":13.9},{"b":"rsihome116","a":"1 Paket 8 Yaprak Taşınabilir Çanta Boy Cep Tipi Mini Islak Mendil - Turuncu","f":30.8},{"b":"srctech10lukstt","a":"10'lu Kadın Siyah Tel Toka","f":3.03},{"b":"srcstorestrolp","a":"100 Adet Renkli Saç Örgü Lastiği","f":1.65},{"b":"srcstore12nroblkhlt","a":"12'li Neon Renkler Orta Boy Lüx Kalite Havlu Lastik Toka - 5 cm","f":7.7},{"b":"renkliparty13","a":"15 Adet Metalik Fuşya Parlak Balon","f":44.0},{"b":"renkliparty22","a":"15 Adet Metalik Gri Parlak Balon","f":59.4},{"b":"renkliparty8","a":"15 Adet Metalik Gümüş Parlak Balon","f":3.85},{"b":"renkliparty7","a":"15 Adet Metalik İnci Beyazı Parlak Balon","f":13.2},{"b":"renkliparty1","a":"15 Adet Metalik Kahverengi Parlak Balon","f":65.47},{"b":"renkliparty12","a":"15 Adet Metalik Karışık Renk Parlak Balon","f":23.1},{"b":"renkliparty9","a":"15 Adet Metalik Kırmızı Parlak Balon","f":29.7},{"b":"renkliparty3","a":"15 Adet Metalik Lacivert Parlak Balon","f":17.6},{"b":"renkliparty23","a":"15 Adet Metalik Mor Parlak Balon","f":30.8},{"b":"renkliparty11","a":"15 Adet Metalik Pembe Parlak Balon","f":15.4},{"b":"renkliparty14","a":"15 Adet Metalik Rose Gold Parlak Balon","f":12.1},{"b":"renkliparty4","a":"15 Adet Metalik Sarı Parlak Balon","f":24.2},{"b":"renkliparty10","a":"15 Adet Metalik Siyah Parlak Balon","f":13.2},{"b":"renkliparty2","a":"15 Adet Metalik Turuncu Parlak Balon","f":14.85},{"b":"renkliparty5","a":"15 Adet Metalik Yeşil Parlak Balon","f":12.1},{"b":"rsihome55","a":"2 Adet 40x50 Mikro Lüks Mikrofiber Cam Temizlik Bezi","f":25.3},{"b":"ASA3832091P","a":"2 Adet Renkli Tüplü Saç Örgü Lastiği Perma Lastik","f":37.4},{"b":"Rsihome59","a":"2 Bölmeli Bambu Çerezlik Peynir Sunum Tabağı","f":19.25},{"b":"srctechrozet3","a":"2'li Ateş ve Su 44 mm Çanta Rozet","f":26.4},{"b":"srcstorebpedpa","a":"2'li Beyaz - Pembe Ekose Peluş Ayıcık Anahtarlık","f":40.7},{"b":"srcstore3bbbrdts","a":"2'li Büyük Boy Beyaz Renkli Turuncu Desenli Toka Seti","f":28.88},{"b":"srcstore2bblsksasso","a":"2'li Büyük Boy Lüx Sevimli Köpek ve Sincap Anahtarlıklı Squishy","f":28.88},{"b":"renklikids9865","a":"2'li Büyük Boy Mandal Toka 9 CM","f":41.25},{"b":"renklikids9866","a":"2'li Büyük Boy Mandal Toka 9 CM","f":1.65},{"b":"renklikids9864","a":"2'li Büyük Boy Mandal Toka 9 CM","f":10.5},{"b":"srcstorepelustoka10","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":58.86},{"b":"srcstorepelustoka11","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":29.7},{"b":"srcstorepelustoka7","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":12.1},{"b":"srcstorepelustoka8","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":30.8},{"b":"srcstorepelustoka5","a":"2'li Büyük Boy Peluş Mandal Toka - 12 CM","f":7.15},{"b":"srctech2kmsq","a":"2'li Kimmy Miki Squishy Anahtarlık","f":28.6},{"b":"srcstorekakedpa","a":"2'li Koyu ve Açık Kahverengi Peluş Ayıcık Anahtarlık","f":13.9},{"b":"srcstore2ksfymsa","a":"2'li Kuromi Sukuşi Figürlü Yumuşak Mor Siyah Anahtarlık","f":12.1},{"b":"srcstore2ksbyts","a":"2'li Kıskançlı Siyah Beyaz Yan Toka Seti","f":44.0},{"b":"srcstorelabubu10cm","a":"2'li Labubu Sık Bırak Silikon Anahtarlık - 10 CM","f":99.0},{"b":"srctechld2ots2","a":"2'li Leopar Desenli Otomat Toka Seti","f":50.6},{"b":"renklikids2064","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2061","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2063","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":44.0},{"b":"renklikids2062","a":"2'li Orta Boy Sevimli Çocuk Mandal Toka","f":8.8},{"b":"srctech2pksfya","a":"2'li Pembe Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":30.8},{"b":"srctech2pmrcfyt","a":"2'li Pembe Ve Mor Renk Çiçek Figürlü Yan Toka","f":1.59},{"b":"srcstore2smcbkpts","a":"2'li Saç Makyaj Cilt Bakımı Klips Pens Toka Seti","f":99.0},{"b":"srctech2lsafsya","a":"2'li Sevimli Ayıcık Figürlü Sukuşi Yumuşak Anahtarlık","f":15.4},{"b":"srctech2lipanda","a":"2'li Sevimli Panda Anahtarlık","f":38.5},{"b":"srcstore2sgksacs","a":"2'li Siyah - Gri Kuromi Silikon Anahtarlık","f":15.4},{"b":"srctech2yts","a":"2'li Yan Toka Seti","f":55.0},{"b":"srctech7210","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Toka","f":1.32},{"b":"srctech728","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Romantik Set Toka","f":13.2},{"b":"srctech723","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Toka","f":7.15},{"b":"srctech729","a":"2'li Zarif ve Yeni Trend Taşlı İncili Pens Zarif Set Toka","f":7.92},{"b":"srctech2cfptst","a":"2'li Çiçek Figürlü Taş Süslemeli Toka","f":18.15},{"b":"renkliparty15","a":"20 Adet Renkli Balon Karışık Renk Parti","f":28.6},{"b":"rsihome25","a":"21 Parça Tornavida Seti","f":6.6},{"b":"renklikidshobi","a":"24 Gözlü Kutulu Harf ve Renkli Boncuk Seti","f":40.15},{"b":"srctech2lisgpst1","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":14.3},{"b":"srctech2lisgpst3","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":41.8},{"b":"srctech2lisgpst2","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":49.5},{"b":"srctech2lisgpst6","a":"2'li Mermer Görünümlü Pens Saç Tokası","f":40.7},{"b":"srctechkututoka98","a":"3 Farklı Model Karışık Renk Çocuk Havlu Toka Seti","f":22.0},{"b":"srctechkututoka99","a":"3 Farklı Model Kutulu Toka Seti","f":38.5},{"b":"srcstore3koyots","a":"3'lü Desenli Küçük Oval Yan Toka Seti","f":19.25},{"b":"srcstore3kyots","a":"3'lü Desenli Küçük Yan Toka Seti","f":1.65},{"b":"srctech3dmmts4cm","a":"3'lü Dikdörtgen Model Mandal Toka Seti - 4 CM","f":19.62},{"b":"srctech3frmts2","a":"3'lü Farklı Renkler Mandal Toka Seti","f":14.3},{"b":"srcstore3krkfmts","a":"3'lü Karışık Renk Kelebek Figürlü Mandal Toka Set","f":3.3},{"b":"srctechkrmt3lu2","a":"3'lü Kelebek Renkli Mandal Toka - 9 cm","f":14.3},{"b":"srcstore3kft","a":"3'lü Kurdele Fiyonk Toka","f":6.6},{"b":"srcstore3kmtkyts","a":"3'lü Kurdele Model Taşlı Klips Yan Toka Seti","f":1.65},{"b":"srcstore3kukmts","a":"3'lü Küçük Kahverengi Mandal Toka Seti","f":3.3},{"b":"srcstore3ksdyts","a":"3'lü Kırmızı Siyah Desenli Yan Toka Seti","f":6.6},{"b":"srctech3ldpt3fm1","a":"3'lü Leopar Desenli Pens Toka","f":27.5},{"b":"srctech3ldpt3fm2","a":"3'lü Leopar Desenli Pens Toka","f":6.88},{"b":"srctech3lulotuscmt2","a":"3'lü Lotus Çiçek Model Büyük Toka","f":38.5},{"b":"srctech3lulotuscmt1","a":"3'lü Lotus Çiçek Model Büyük Toka","f":13.2},{"b":"srcstore3psdyts","a":"3'lü Pembe Siyah Desenli Yan Toka Seti","f":8.53},{"b":"srctech33frmts3cm3","a":"3'lü Renkli Mandal Toka Seti 3 CM","f":14.85},{"b":"srctech33frmts3cm2","a":"3'lü Renkli Mandal Toka Seti 3 CM","f":20.9},{"b":"srctech3rsmt2","a":"3'lü Renkli Şeffaf Mandal Toka - 11 CM","f":3.58},{"b":"srcstore3smcbkpkldts","a":"3'lü Saç Makyaj Klips Pens Kahverengi Leopar Desenli Toka Seti","f":28.88},{"b":"srctech3SRPT","a":"3'lü Siyah Renk Pens Toka","f":55.0},{"b":"srctech3ympts","a":"3'lü Yeni Model Pens Toka Seti","f":12.1},{"b":"srctech3cdpt11cm4","a":"3'lü Çiçek Desenli Pens Toka - 11 Cm","f":3.59},{"b":"srctech3cdpt11cm3","a":"3'lü Çiçek Desenli Pens Toka - 11 Cm","f":7.7},{"b":"renklikids7001","a":"3'lü Çıtçıtlı Büyük Yan Saç Tokası - 7 CM","f":15.4},{"b":"srctechteltoka30","a":"30'lu Siyah Tel Toka Seti","f":91.3},{"b":"rsihome41","a":"4'lü Bulaşık Süngeri ve 1 Adet Bulaşık Teli Seti","f":22.0},{"b":"srctech4iobmyrm","a":"4'lü İnci Oval Boncuk Model Mandal Toka","f":9.35},{"b":"srcstoreksfs4acs","a":"4'lü Kuromi Silikon Anahtarlık Çanta Süsü","f":8.53},{"b":"srcstorekuromi4lu","a":"4'lü Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":15.4},{"b":"srctech4ptmt5cm","a":"4'lü Pastel Tonlarda Mandal Toka - 5 CM","f":30.8},{"b":"srcstore4ryts","a":"4'lü Renkli Yan Toka Seti","f":22.0},{"b":"srcstore4ydts","a":"4'lü Yan Düz Renk Toka Seti","f":1.65},{"b":"282737288347","a":"40w Ampul","f":3.3},{"b":"srctechmarenicka7","a":"5 Adet Marteniçka Hediye Dilek Bilekliği","f":19.25},{"b":"srctech5prmt3cm","a":"5'li Pastel Renkli Mandal Toka - 3 Cm","f":27.5},{"b":"srcstore5pkcvbts","a":"5'li Pembe Kız Çocuk ve Bebek Toka Seti","f":33.0},{"b":"srctech5rftmst","a":"5'li Rengarenk File Tasarımlı Mandal Saç Toka","f":27.5},{"b":"srctechr5mts5cm","a":"5'li Renkli KISKAÇ Mandal Toka - 5 CM","f":30.8},{"b":"srctech5rmts5cm","a":"5'li Renkli Mandal Toka Seti - 5 CM","f":41.8},{"b":"srcstore5skcvbts","a":"5'li Sarı Kız Çocuk ve Bebek Toka Seti","f":33.0},{"b":"srcstore6rfksmmts","a":"6'lı Renkli Fare Kulağı Şekilli Mini Mandal Toka Seti","f":8.53},{"b":"srcstore6lırmmts","a":"6'lı Renkli Mini Mandal Toka Seti","f":15.4},{"b":"srctech6iobmyrm3","a":"6'lı İnci Oval Boncuk Model Mandal Toka","f":14.3},{"b":"srctech6iobmyrm2","a":"6'lı İnci Oval Boncuk Model Mandal Toka","f":117.72},{"b":"renklikids6kprkfyts","a":"6'lı Karışık Pembe Renk Kelebek Figürlü Yan Toka Set","f":30.8},{"b":"srctech6rftmst","a":"6'lı Rengarenk File Tasarımlı Mandal Saç Toka","f":41.8},{"b":"srctechr66frmts3cm","a":"6'lı Renkli Mandal Toka Seti - 3 CM","f":30.8},{"b":"srctech9iobmyrm","a":"9'lu İnci Oval Boncuk Model Mandal Toka","f":20.9},{"b":"srcstoretütsü85","a":"Amber Aromalı Çubuk Tütsü 20 çubuk","f":12.1},{"b":"srcstoretütsü82","a":"Ananas & Yasemin Çiçekleri Aromalı Çubuk Tütsü","f":3.85},{"b":"RNA11743507BIJ","a":"Ateş Su 2'Li Vinlex Deri Kolye","f":38.5},{"b":"TYB5NV33NJ42W71K49","a":"Ateş Su 2'Li Vinlex Deri Kolye","f":9.35},{"b":"TYB9TGN2P0S8Q9DZ88","a":"Ateş ve Su 2'li Vinlex Deri Kolye","f":28.6},{"b":"TYBLLC1SCVVAZNUJ25","a":"Ateş ve Su 2'li Vinlex Deri Kolye","f":35.75},{"b":"srctechrozet2","a":"Ateş ve Su Çanta Rozet 44 mm 2'li","f":3.3},{"b":"srctechatesvesuanahtarlık","a":"Ateş ve Su Çift Metal Anahtarlık","f":3.3},{"b":"srctechatessukolye","a":"Ateş Ve Su Çift Sevgili Kolye","f":8.53},{"b":"srctechkututoka96","a":"Açık Kahve Kelebek Figürlü Leopar Desenli Toka Set","f":13.75},{"b":"srctechpelusapembe","a":"Açık Pembe Peluş Ayıcık Anahtarlık","f":5.45},{"b":"Rsihome45","a":"Bambu Kesim Tahtası - 18*28 Cm","f":38.5},{"b":"srcstoretütsü71","a":"Bebek Pudrası Aromalı Çubuk Tütsü","f":10.08},{"b":"srcstoretütsü2","a":"Beyaz Adaçayı & Hindistan Cevizi Aromalı Tütsü","f":3.3},{"b":"srcstoretütsü81","a":"Beyaz Adaçayı & Vanilya Aromalı Çubuk Tütsü","f":30.8},{"b":"srcstorebedpaa","a":"Beyaz Ekose Desenli Peluş Ayıcık Anahtarlık","f":28.6},{"b":"srcstorebkft","a":"Beyaz Kurdele Fiyonk Toka","f":3.3},{"b":"srctechpelusbeyaz","a":"Beyaz Peluş Ayıcık Anahtarlık","f":5.45},{"b":"srcstoretütsü97","a":"Biberiye Aromalı Premium Çubuk Tütsü","f":29.7},{"b":"srcstoretütsü93","a":"Blue Champa Çubuk Tütsü","f":55.0},{"b":"TYB2SURKDKHU039327","a":"Büyük Boy Tüp Saç Örgü Lastiği Renkli Perma Lastik","f":24.2},{"b":"8699721111038","a":"Cansın Yara Bandı 10'lu 1 Kutu","f":30.8},{"b":"srcstore8002","a":"Capybara Büyük Boy Sık Bırak Anahtarlık - 9 CM","f":18.15},{"b":"srcstoretütsü17","a":"Cleaning Power Çubuk Tütsü","f":6.6},{"b":"srcstoretütsü96","a":"Cool Water Çubuk Tütsü","f":110.0},{"b":"srcstoredladtcd2s2","a":"Desenli Lüks Asetat Dikdörtgen Toka 2'li Set","f":55.0},{"b":"renklikids3","a":"Desenli Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":30.8},{"b":"srctechddddfya","a":"Donald Duck, Daisy Duck Figürlü Yumuşak 2'li Anahtarlık","f":22.0},{"b":"srctech3d11","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":30.8},{"b":"srctech3d12","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":37.4},{"b":"srctech3d14","a":"Duşakabin Üstü Çiftli Havlu Askı Aparatı - 2 Adet","f":18.7},{"b":"rsihome65","a":"Ekonomik Beyaz Tahta Kalemi Mavi 1 Adet","f":25.3},{"b":"srcstoretütsü22","a":"Energie Positive Doğal Premium Çubuk Tütsü","f":33.0},{"b":"srcstoretütsü67","a":"Erotica Koku Aromalı Çubuk Tütsü","f":27.5},{"b":"srctechpelusgri","a":"Gri Peluş Ayıcık Anahtarlık","f":3.63},{"b":"srcstoretütsü21","a":"Güneş Aromalı Doğal Premium Çubuk Tütsü","f":33.0},{"b":"rsihome79","a":"Hamur, Pizza, Börek Kesme Bıçağı Paslanmaz Çelik","f":13.75},{"b":"srcstorehellokitymavi","a":"Hello Kity Anahtarlık Çanta Süsü Büyük Boy","f":3.3},{"b":"srctechhkksfy2a","a":"Hello Kity Kuromi Sukuşi Figürlü Yumuşak 2'li Anahtarlık","f":38.5},{"b":"renklikids9971","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":41.8},{"b":"renklikids9973","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":83.6},{"b":"renklikids9974","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":20.9},{"b":"renklikids9975","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":62.7},{"b":"renklikids9972","a":"Hello Kity Kız Çocuk Ve Kız Bebek Toka Seti 7 Adet","f":125.4},{"b":"srcstorebaloniyikidogdun","a":"Helyuma Uyumlu İyi Doğdun Baskılı Balon 10 Adet","f":33.0},{"b":"srcstorebalonipli","a":"Helyuma Uyumlu Zıpzıp Lastikli Balon Karışık Renk 5 Adet","f":30.8},{"b":"srcstoretütsü87","a":"Hindistan Cevizi Aromalı Çubuk Tütsü","f":19.8},{"b":"srcstoretütsü91","a":"Hindistan Cevizi ve Mango Aromalı Çubuk Tütsü","f":6.05},{"b":"src3d1","a":"Hogwarts Temalı Kale 3D Baskı Kalemlik","f":3.63},{"b":"6009684354880","a":"Hopel 40w Torch Led Ampul","f":3.85},{"b":"VT875113","a":"İnce Metal Gövdeli Maket Bıçağı / Falçata Küçük Boy","f":77.0},{"b":"srcstoreima2yts2","a":"İnci Modelli Akrilik Açık Pembe 2'li Yan Toka Seti","f":3.44},{"b":"srcstoreima2yts1","a":"İnci Modelli Akrilik Beyaz 2'li Yan Toka Seti","f":11.55},{"b":"srcstoretütsü12","a":"Juniper Berry Çubuk Tütsü","f":1.65},{"b":"TYBY6LIZVI1Y6ZH292","a":"Kablo Düzenleyici Kablo Tutucu Kablo Sabitleyici","f":41.2},{"b":"srcstoretütsü86","a":"Kahve (Coffee) Aromalı Çubuk Tütsü","f":9.9},{"b":"srctechk6mlts","a":"Kahverengi 6'lı Mandal, Lastik ve Taç Seti","f":30.8},{"b":"srcstorekedpaa","a":"Kahverengi Ekose Desenli Peluş Ayıcık Anahtarlık","f":25.3},{"b":"srctechkldmt","a":"Kahverengi Leopar Desenli Mandal Toka","f":1.81},{"b":"srcstorekldpft","a":"Kahverengi Leopar Desenli Pens Fiyonk Toka","f":13.2},{"b":"srctechpeluskrengi","a":"Kahverengi Peluş Ayıcık Anahtarlık","f":3.63},{"b":"renklikidsktfytlts","a":"Kahverengi Tavşan Figürlü Yan Toka Ve Lastik Toka Set","f":35.2},{"b":"srctechkutt","a":"Kahverengi Üçlü Topuz Tokası","f":8.8},{"b":"srctechkalpatan3","a":"Kalp Atan Anahtarlık Çanta Aksesuarı Trend Squishy","f":28.6},{"b":"srctechkalpatan1","a":"Kalp Atan Anahtarlık Çanta Aksesuarı Trend Squishy","f":28.6},{"b":"srcstoretütsü89","a":"Kamasutra Aromalı Premium Çubuk Tütsü","f":14.3},{"b":"srcstoretütsü78","a":"Karamel Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü70","a":"Karpuz Aromalı Çubuk Tütsü","f":19.8},{"b":"srcstorekrkf3mts","a":"Karışık Renk Kelebek Figürlü 3'lü Mandal Toka Set","f":1.65},{"b":"srctechkututoka91","a":"Karışık Renk Kutulu Lastik Toka Set","f":38.5},{"b":"srctechkututoka90","a":"Karışık Renk Kutulu Toka Seti","f":40.7},{"b":"srctechkututoka97","a":"Karışık Renk Çocuk Havlu Toka Yan Toka Set","f":11.0},{"b":"srctechkrmt3lu1","a":"Kelebek Renkli Mandal Toka 3'lü - 9 cm","f":21.45},{"b":"srcstoretütsü77","a":"Kiraz Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü14","a":"Kiraz ve Vanilya Aromalı Çubuk Tütsü","f":15.4},{"b":"renklikids1231","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":8.58},{"b":"renklikids1232","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":17.6},{"b":"renklikids1233","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":15.4},{"b":"renklikids1234","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":82.5},{"b":"renklikids1235","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":12.1},{"b":"renklikids1236","a":"Kore Tarzı Figürlü 6'lı Çocuk Pens ve Lastik Toka Seti","f":44.88},{"b":"srcstorekkedpaa","a":"Koyu Kahverengi Ekose Desenli Peluş Ayıcık Anahtarlık","f":28.6},{"b":"srcstorekdtks2kt","a":"Kurdele Fiyonk Toka Kırmızı Siyah 2'li","f":6.6},{"b":"5623541288923","a":"Kuromi Slime Hazır Slime Ele Yapışmaz Renkli","f":28.88},{"b":"srcstorekuromi1","a":"Kuromi Sukuşi Figürlü 2'li Yumuşak Siyah Mor Anahtarlık","f":7.7},{"b":"srcstorekuromi4","a":"Kuromi Sukuşi Figürlü Siyah Pembe 2'li Yumuşak Anahtarlık","f":1.65},{"b":"srctech2lips","a":"Kuromi Sukuşi Figürlü Yumuşak 2'li Anahtarlık","f":33.0},{"b":"srcstor49ekuromi3luV2","a":"Kuromi Sukuşi Figürlü Yumuşak 3'lü Anahtarlık","f":27.5},{"b":"srcstoreksfy4sacs","a":"Kuromi Sukuşi Figürlü Yumuşak 4'lü Siyah Anahtarlık","f":26.4},{"b":"srcstorekuromi2","a":"Kuromi Sukuşi Figürlü Yumuşak Siyah - Beyaz Anahtarlık 2'li","f":18.7},{"b":"renklikidskutu10","a":"Kutulu Kız Çocuk Genç Toka Seti","f":41.25},{"b":"renklikidskutu2","a":"Kutulu Tavşan Model Çantalı Renkli Toka Seti","f":45.1},{"b":"renklikidskutu1","a":"Kutulu Tavşan Model Çantalı Toka Seti","f":45.1},{"b":"renklikidskutu5","a":"Kutulu Çantalı Kız Çocuk Genç Renkli Toka Seti","f":45.1},{"b":"srcstorekb2kft","a":"Kırmızı Beyaz 2'li Kurdele Fiyonk Toka","f":28.88},{"b":"srcstoretütsü75","a":"Kırmızı Elma Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstorekkft","a":"Kırmızı Kurdele Fiyonk Toka","f":3.3},{"b":"srcstorekk3yts","a":"Kıskançlı Kahverengi 3'lü Yan Toka Seti","f":7.7},{"b":"srcstorekkp2yts","a":"Kıskançlı Kırmızı Pembe 2'li Yan Toka Seti","f":15.4},{"b":"srcstoreksb2yts","a":"Kıskançlı Siyah Beyaz 2'li Yan Toka Seti","f":8.53},{"b":"renklikids9852","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":55.0},{"b":"renklikids9855","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":82.5},{"b":"renklikids9853","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":110.0},{"b":"renklikids9851","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":137.5},{"b":"renklikids9854","a":"Kız Bebek Kız Çocuk Sevimli Toka Seti 10'lu","f":27.5},{"b":"renklikidskutu9","a":"Kız Çocuk Genç Kutulu Keman Model Çantalı Renkli Toka Seti","f":28.6},{"b":"renklikidskutu8","a":"Kız Çocuk Genç Kutulu Keman Model Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu14","a":"Kız Çocuk Genç Kutulu Toka Seti","f":30.8},{"b":"renklikidskutu11","a":"Kız Çocuk Genç Kutulu Toka Seti","f":41.25},{"b":"renklikidskutu6","a":"Kız Çocuk Genç Kutulu Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu7","a":"Kız Çocuk Genç Renkli Kutulu Çantalı Toka Seti","f":28.6},{"b":"renklikidskutu12","a":"Kız Çocuk Genç Toka Seti Kalp Model Kutulu","f":41.25},{"b":"renklikidskutu13","a":"Kız Çocuk Genç Toka Seti Yıldız Model Kutulu","f":41.25},{"b":"renklikids124","a":"Kız Çocuk Karışık Figürlü 10 Parça Pens Toka","f":37.4},{"b":"renklikids889","a":"Kız Çocuk Kurdele Fiyonk Lastikli Toka","f":5.5},{"b":"renklikids8887","a":"Kız Çocuk Kurdele Fiyonk Toka","f":19.25},{"b":"renklikids8881","a":"Kız Çocuk Kurdele Fiyonk Toka","f":38.5},{"b":"renklikids1010116","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":14.3},{"b":"renklikids1010115","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":14.3},{"b":"renklikids1010117","a":"Kız Çocuk Kuromi 12'li Toka Seti","f":46.2},{"b":"renklikids995p","a":"Kız Çocuk Ve Kız Bebek Labubu Pembe Toka Seti 8 Adet","f":29.7},{"b":"renklikids9954","a":"Kız Çocuk Ve Kız Bebek Labubu Toka Seti 8 Adet","f":60.5},{"b":"renklikids995y","a":"Kız Çocuk Ve Kız Bebek Labubu Yeşil Toka Seti 8 Adet","f":59.4},{"b":"renklikids50","a":"Kız Çocuk Ve Kız Bebek Pens Çıtçıtlı Toka Seti 14 Adet","f":82.5},{"b":"renklikids9891","a":"Kız Çocuk Ve Kız Bebek Renkli 24'lü Toka Seti","f":110.0},{"b":"renklikids9892","a":"Kız Çocuk Ve Kız Bebek Renkli 24'lü Toka Seti","f":27.5},{"b":"renklikids9874","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":38.5},{"b":"renklikids9872","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":55.0},{"b":"renklikids9871","a":"Kız Çocuk Ve Kız Bebek Sevimli Toka Seti 6'lı","f":82.5},{"b":"renklikids9965","a":"Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":60.5},{"b":"renklikids9964","a":"Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":20.9},{"b":"renklikids9942","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9946","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9944","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9945","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9943","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":73.7},{"b":"renklikids9941","a":"Kız Çocuk Ve Kız Bebek Yıldız Modelli Toka Seti 8 Adet","f":60.5},{"b":"srcstorelbkshb","a":"Labubu Beyaz Kolye Seti Hediyelik","f":8.53},{"b":"srcstorelybshb","a":"Labubu Bileklik Seti Hediyelik","f":19.25},{"b":"srcstorelkbshb","a":"Labubu Kahverengi Bileklik Seti Hediyelik","f":15.4},{"b":"srcstorelkkshk","a":"Labubu Kahverengi Kolye Seti Hediyelik","f":28.88},{"b":"srcstorelykshk","a":"Labubu Kolye Seti Hediyelik","f":19.25},{"b":"renklikids9983","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":7.15},{"b":"renklikids9981","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":14.3},{"b":"renklikids9986","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":44.0},{"b":"renklikids9984","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":7.15},{"b":"renklikids9985","a":"Labubu Kız Çocuk Ve Kız Bebek Toka Seti 6 Adet","f":14.3},{"b":"srcstorelmkshk","a":"Labubu Mor Kolye Seti Hediyelik","f":6.6},{"b":"srcstorelpkshk","a":"Labubu Pembe Kolye Seti Hediyelik","f":3.3},{"b":"srcstorelsbshb","a":"Labubu Sarı Bileklik Seti Hediyelik","f":28.88},{"b":"srcstorelskshk","a":"Labubu Sarı Kolye Seti Hediyelik","f":1.65},{"b":"srcstorels5acs","a":"Labubu Silikon 5'li Anahtarlık Çanta Süsü","f":15.4},{"b":"srcstorelsacs3s","a":"Labubu Silikon Anahtarlık Çanta Süsü 3'lü Set","f":91.3},{"b":"srcstorelsacs4s","a":"Labubu Silikon Anahtarlık Çanta Süsü 4'lü Set","f":91.3},{"b":"srcstorelabubusya10cm6","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":6.05},{"b":"srcstorelabubusya10cm5","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":15.4},{"b":"srcstorelabubusya10cc3","a":"Labubu Squishy Yumuşak Anahtarlık - 10 CM","f":15.4},{"b":"srcstorelabubusyıa10cm2","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":35.75},{"b":"srcstorelabubusyıa10cm1","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":35.75},{"b":"srcstorelabubusyıa10cm5","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm6","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm3","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":16.5},{"b":"srcstorelabubusyıa10cm4","a":"Labubu Squishy Yumuşak Işıklı Anahtarlık - 10 CM","f":15.4},{"b":"srctechld2ots11cm1","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":44.0},{"b":"srctechld2ots11cm2","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":29.15},{"b":"srctechld2ots11cm3","a":"Leopar Desenli 2'li Otomat Toka Set - 11 CM","f":39.6},{"b":"srctechld2ots","a":"Leopar Desenli 2'li Otomat Toka Seti","f":18.7},{"b":"srcstoreld2pt","a":"Leopar Desenli 2'li Pens Toka - 9 CM","f":30.8},{"b":"srctechldobakkmt1","a":"Leopar Desenli Orta Boy Asetat Kemik Mandal Toka - 10 CM","f":15.4},{"b":"srctechldobakkmt3","a":"Leopar Desenli Orta Boy Asetat Kemik Mandal Toka - 10 CM","f":30.8},{"b":"srctechld2ots3","a":"Leopar Desenli Otomat Toka 2'li Set","f":37.4},{"b":"srcstoretütsü16","a":"Lily Çubuk Tütsü","f":19.25},{"b":"srcstoretütsü88","a":"Limon Aromalı Çubuk Tütsü","f":55.0},{"b":"srcstorelcdmt6","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":35.75},{"b":"srcstorelcdmt4","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"srcstorelcdmt2","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"srcstorelcdmt5","a":"Lotus Çiçeği Desenli Mandal Toka - 4Cm","f":40.7},{"b":"6832165416","a":"MAKET BIÇAĞI PLASTİK 1 ADET","f":33.0},{"b":"srcstoretütsü80","a":"Mama & Baby Tütsü Doğal Premium","f":30.24},{"b":"srcstoretütsü13","a":"Mango Papaya Aromalı Çubuk Tütsü","f":8.53},{"b":"renkliparty241","a":"Metalik Kırmızı Beyaz Parlak 20 Adet Balon","f":8.8},{"b":"renkliparty242","a":"Metalik Kırmızı Beyaz Parlak 20 Adet Balon","f":22.0},{"b":"renkliparty17","a":"Metalik Sarı Kırmızı Parlak 20 Adet Balon","f":15.4},{"b":"renkliparty19","a":"Metalik Sarı Lacivert Parlak 20 Adet Balon","f":42.24},{"b":"renkliparty18","a":"Metalik Siyah Beyaz Parlak 20 Adet Balon","f":15.4},{"b":"renkliparty20","a":"Metalik Yeşil Beyaz Parlak 20 Adet Balon","f":19.8},{"b":"renkliparty21","a":"Metalik Yeşil Siyah Parlak 20 Adet Balon","f":39.6},{"b":"srcstoremmvmm2li","a":"Mickey Mouse ve Minnie Mouse 2'li Büyük Boy Anahtarlık","f":6.6},{"b":"rsihome68","a":"Microll Mikrofiber Temizlik Bezi - 14'lü Mega Paket","f":15.4},{"b":"srcstoretütsü72","a":"Milflores Aromalı Çubuk Tütsü","f":44.0},{"b":"TYBBMVEJWYU6IOPL43","a":"Mini Ateş ve Su Çelik Kolye 2'li","f":38.5},{"b":"srctech3dvazo2","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":37.4},{"b":"srctech3dvazo3","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":15.4},{"b":"srctech3dvazo1","a":"Modern Şık Ve Dekoratif 3D Baskı Vazo - 13 CM","f":46.2},{"b":"srcstoretütsü95","a":"New Wave Çubuk Tütsü","f":82.5},{"b":"srcstoretütsü5","a":"Orkide Çubuk Tütsü","f":28.88},{"b":"srcstoreoblkhlst","a":"Orta Boy Lüx Kalite Havlu Lastik Siyah Toka 6'lı","f":14.85},{"b":"srcstoreoblkhlt6nr","a":"Orta Boy Lüx Kalite Havlu Lastik Toka 6'lı Neon Renkler","f":38.5},{"b":"TYBRDDJ9Z9DAXLIF87","a":"P02 Pamuklu Beyaz Islak Mop Paspas Ucu - 1 Adet","f":19.25},{"b":"srctechpfyt4luset1","a":"Papatya Figürlü Yan Toka 4'lü Set","f":44.0},{"b":"srctechpfyt4luset2","a":"Papatya Figürlü Yan Toka 4'lü Set","f":14.3},{"b":"srctechpfyt4luset3","a":"Papatya Figürlü Yan Toka 4'lü Set","f":17.6},{"b":"5160708501041","a":"Pasta Cila Çizik Giderici Teflonlu 200 ml","f":30.8},{"b":"srctechpeluskrem","a":"Peluş Ayıcık Anahtarlık Krem Renk","f":19.25},{"b":"srctechpeluspembe","a":"Peluş Ayıcık Anahtarlık Pembe","f":28.88},{"b":"8585143","a":"Pembe Ayıcıklı Anahtarlık","f":6.6},{"b":"srcstorepedpaa","a":"Pembe Ekose Desenli Peluş Ayıcık Anahtarlık","f":25.3},{"b":"srctechprkflyt7s","a":"Pembe Renk Kurdele Figürlü Lastik, Yan Toka 7'li Set","f":17.6},{"b":"rsihome61","a":"Plastik Maket Bıçağı Falçata Geniş Ağızlı Büyük Boy","f":7.7},{"b":"rsihome62","a":"Pvc Elektrik Bandı Izolebant Siyah 5 Adet","f":19.8},{"b":"srcstoretütsü9","a":"Refreshing Çubuk Tütsü","f":15.4},{"b":"srcstoretütsü98","a":"Relaxation Çubuk Tütsü","f":59.4},{"b":"srctech3fr3mts5cm","a":"Renkli 3'lü Mandal Toka Seti - 5 CM","f":7.15},{"b":"07129443","a":"Renkli Cimcime Perma Saç Lastik","f":11.55},{"b":"srctechrmdkmt9cm4","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":44.0},{"b":"srctechrmdkmt9cm5","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":22.0},{"b":"srctechrmdkmt9cmw3","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":7.7},{"b":"srctechrmdkmt9cm1","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":15.4},{"b":"srctechrmdkmt9cm2","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":7.7},{"b":"srctechrmdkmt9cm6","a":"Renkli Mermer Desenli Kemik Mandal Toka - 9 CM","f":15.4},{"b":"renklikids62","a":"Renkli Mini Havlu Lastik Toka Seti 20 Adet","f":27.5},{"b":"srctechrsmt31","a":"Renkli Şeffaf Mandal Toka 3'lü - 11 CM","f":7.15},{"b":"srcstoresg2ysts","a":"Sarı Gri 2'li Yılan Şekilli Toka Seti","f":19.25},{"b":"56236231","a":"Sarı Kırmızı Lateks Balon Seti 20'li Galatasaray Tema","f":15.4},{"b":"89797654","a":"Sarı Lacivert Balon Seti Fenerbahçe Tema","f":4.4},{"b":"srcstoresmcbkpkld2ts","a":"Saç Makyaj Klips Pens Kahverengi Leopar Desenli 2'li Toka Seti","f":38.5},{"b":"789431389471","a":"Saç Örgü Lastiği Kp0046","f":19.25},{"b":"rsihome4001","a":"Seramik 6'lı Gri Çerez Tabağı Sunumluk","f":9.9},{"b":"rsihome4003","a":"Seramik 6'lı Pembe Çerez Tabağı Sunumluk","f":19.8},{"b":"srcstoretütsü10","a":"Serenit Çubuk Tütsü","f":19.25},{"b":"renklikids16","a":"Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":52.8},{"b":"renklikids15","a":"Sevimli 2'li Orta Boy Çocuk Mandal Toka","f":30.8},{"b":"renklikids205","a":"Sevimli Aslan Desenli 2'li Orta Boy Çocuk Mandal Toka","f":33.0},{"b":"srctechsp2li","a":"Sevimli Panda 2'li Anahtarlık","f":38.5},{"b":"srctechspa2li","a":"Sevimli Panda Anahtarlık 2'li","f":13.2},{"b":"srcstoresb2kft","a":"Siyah - Beyaz 2'li Kurdele Fiyonk Toka","f":11.0},{"b":"srctechs6mşts","a":"Siyah 6'lı Mandal, Lastik ve Taç Seti","f":30.8},{"b":"546543325","a":"Siyah Beyaz Lateks Balon Seti 20'li Beşiktaş Tema","f":2.2},{"b":"renklikids63","a":"Siyah Mini Havlu Lastik Toka Seti 20 Adet","f":7.7},{"b":"srctech2srmts3cm","a":"Siyah Renk Mandal Toka Seti 6'lı - 3 CM","f":7.15},{"b":"srctechkutts","a":"Siyah Renk Üçlü Topuz Tokası","f":24.2},{"b":"srcstoressst","a":"Siyah Saten Simit Toka","f":27.5},{"b":"srctechkututoka92","a":"Siyah Ve Beyaz Renk Yan Toka Ve Lastik Toka Set","f":77.0},{"b":"srcstoreskfymssa2","a":"Sukuşi Kuromi Figürlü Yumuşak 2'li Anahtarlık","f":19.25},{"b":"srcstorekuromi3","a":"Sukuşi Kuromi Figürlü Yumuşak Mor Pembe Anahtarlık 2'li","f":3.85},{"b":"srcstoretütsü23","a":"Sweet Mogra Çubuk Tütsü","f":33.0},{"b":"srctechsansli2","a":"Sürpriz Şanlı Hediye Kutu Konsept Takı 14-15 Parça Set","f":99.0},{"b":"srctechsansli1","a":"Sürpriz Şanlı Hediye Kutu Konsept Toka 6-7 Parça Set","f":99.0},{"b":"8697623610981","a":"Sıcak Su Torbası","f":19.25},{"b":"TYBOVV1EFH1H2CTH56","a":"Sıcak Su Torbası 2lt","f":11.55},{"b":"TYBNHCEGT89VS8HU45","a":"Sıcak Su Torbası 2lt Mavi","f":15.4},{"b":"srctechkalpatanlabubu1","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu2","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu3","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"srctechkalpatanlabubu4","a":"Sıkıncı Kalp Atan Labubu Anahtarlık","f":38.5},{"b":"renklikidskutu3","a":"Tavşan Model Kutulu Çantalı Toka Seti","f":45.1},{"b":"srctechtüy","a":"Tiftik ve Tüy Alıcı Toplama Makinesi","f":99.0},{"b":"src3d2","a":"Tutunan Kedi Tasarımlı Masa Kenarı 3D Baskı Askılık","f":1.81},{"b":"srctechunicorn9cm1","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":29.7},{"b":"srctechunicorn9cm4","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":4.4},{"b":"srctechunicorn9cm6","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":22.0},{"b":"srctechunicorn9cm5","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":11.0},{"b":"srctechunicorn9cm2","a":"Unicorn Anahtarlık Squishy Yumuşak - 9 CM","f":6.6},{"b":"srcstoreuksacs2","a":"Unicorn Karakter Sukuşi Anahtarlık 2'li","f":6.05},{"b":"srcstoretütsü68","a":"Vanilya Aromalı Çubuk Tütsü","f":13.75},{"b":"srctechwtpefy2a","a":"Winnie The Pooh ve Eeyore Figürlü Yumuşak 2'li Anahtarlık","f":66.0},{"b":"TYB14N8TQUW0WCF760","a":"Wn-1161 Tek Çip Rgb Şerit Led Seti 4,5 M","f":57.75},{"b":"srcstoretütsü83","a":"Yaban Mersini Aromalı Çubuk Tütsü","f":15.4},{"b":"srcstoresksfyacsy","a":"Yeni Model Siyah Kuromi Sukuşi Figürlü Yumuşak Anahtarlık","f":1.81},{"b":"srctechytkr3ts","a":"Yeni Trend Kadın Klips Renkli 3'lü Toka Seti","f":60.5},{"b":"srctechytppfsb3","a":"Yeni Trend Kırmızı Pullu Fiyonklu Saç Bandı","f":46.2},{"b":"srctechytppfsb","a":"Yeni Trend Pembe Pullu Fiyonklu Saç Bandı","f":29.7},{"b":"srctechytppfsb1","a":"Yeni Trend Pullu Fiyonklu Saç Bandı","f":14.3},{"b":"srctechytppfsb2","a":"Yeni Trend Siyah Pullu Fiyonklu Saç Bandı","f":28.6},{"b":"srcstoretütsü90","a":"Yeşil Elma Aromalı Çubuk Tütsü","f":18.15},{"b":"srctechrozet1","a":"Ying Yang Çanta Rozet 44 mm 2'li","f":4.95},{"b":"srcstoretütsü15","a":"Yoga Chakra Çubuk Tütsü","f":8.53},{"b":"srctechyydskptkk","a":"Yoğurt Yulaf Müsli Diyet Saklama Kabı Kaşıklı","f":30.8},{"b":"renklikidsyildizli","a":"Yıldız Kız Çocuk Çıtçıtlı Tokası 6'lı Set","f":3.85},{"b":"690857002597","a":"Yıldızlar Çizim Takımı (Cetvel+Gönye+İletki+Pergel)","f":15.4},{"b":"8639772800277","a":"Zeka Küpü","f":8.8},{"b":"985236475123","a":"Zeka Küpü","f":1.65},{"b":"rsihome26","a":"Zeka Küpü Sihirli Mini Rubik Zeka Sabır Küpü","f":1.65},{"b":"srctechzdmt2li8cm","a":"Zincir Desenli Mandal Toka 2'li - 8 CM","f":12.1},{"b":"rsihome37","a":"Çift Camlı Cidarlı Kuru Kafa Tasarımlı Kahve Cam 75 ml Bardak","f":22.0},{"b":"srcstoretütsü73","a":"Çikolata Aromalı Çubuk Tütsü","f":13.2},{"b":"srcstoretütsü69","a":"Çilek & Kavun Aromalı Çubuk Tütsü","f":13.75},{"b":"srcstoretütsü20","a":"Çilek Aromalı Çubuk Tütsü","f":52.8},{"b":"srctechcdot1","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":33.0},{"b":"srctechcdot5","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":30.8},{"b":"srctechcdot3","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":15.4},{"b":"srctechcdot2","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":33.0},{"b":"srctechcdot4","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":14.3},{"b":"srctechcdot6","a":"Çiçek Desenli Otomat Toka Saç Tokası","f":29.7},{"b":"renklikids3501","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":33.0},{"b":"renklikids3503","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":20.9},{"b":"renklikids3502","a":"Çiçek Ve Çilek Figürlü Lastik Ve Yan Toka 2'li Set","f":44.0},{"b":"rsihome11","a":"Çok Fonksiyonlu El Şarj Edilebilir LED Torch El Feneri","f":8.53},{"b":"srctechkututoka93","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 3'lü Set","f":6.88},{"b":"srctechkututoka942","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":35.2},{"b":"srctechkututoka943","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":30.8},{"b":"srctechkututoka941","a":"ÇıtÇıtlı Leopar Desenli Saç Toka 4'lü Set","f":77.0},{"b":"srcstoretütsü79","a":"Üzüm & Kivi Aromalı Çubuk Tütsü","f":15.4},{"b":"srctechsldbpt11cm","a":"Şeffaf Leopar Desenli Büyük Pens Toka - 11 Cm","f":16.5},{"b":"srcstoretütsü76","a":"Şeftali Aromalı Çubuk Tütsü","f":110.0},{"b":"renklikids204","a":"Şirin Pembe Kedi Desenli 2'li Orta Boy Çocuk Mandal Toka","f":33.0}];
+
+// Load URUNLER: use localStorage if available, otherwise default
+var URUNLER = URUNLER_DEFAULT.slice();
+try { var _su = localStorage.getItem('kampanya_urunler_v1'); if (_su) URUNLER = JSON.parse(_su); } catch(e) {}
+
+// Maliyet kayitlari (barkod -> alis fiyati)
+var maliyetler = {};
+try { var _sm = localStorage.getItem('kampanya_maliyetler_v1'); if (_sm) maliyetler = JSON.parse(_sm); } catch(e) {}
+// Apply saved maliyetler to product list (updates card display)
+URUNLER.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
+
+function saveMaliyetler() {
+  try { localStorage.setItem('kampanya_maliyetler_v1', JSON.stringify(maliyetler)); } catch(e) {}
+}
+
+// ========== STATE ==========
+
+const selMap = new Map();
 let platMode = 'normal';
 let sortKey = 'a';
 let searchQ = '';
 let calcTimer = null;
+
+// ========== CORE FUNCTIONS ==========
 
 function getPF() { return platMode === 'normal' ? 8.41 : 13.41; }
 
@@ -214,7 +375,8 @@ function scaleToTarget(entries, target) {
   return entries.map(e => Object.assign({}, e, {qty: e.qty * scale}));
 }
 
-// ---- RENDER GRID ----
+// ========== RENDER GRID ==========
+
 function renderGrid() {
   let list = URUNLER.slice();
   if (searchQ) {
@@ -242,37 +404,41 @@ function renderGrid() {
       }).join('');
 }
 
-// ---- RENDER RIGHT PANEL ----
+// ========== RENDER RIGHT PANEL ==========
+
 function renderRight() {
   const ri = document.getElementById('ri');
   if (!selMap.size) {
-    ri.innerHTML = '<div class="empty-calc">← Sol panelden ürün seçin<br><small style="font-size:12px;opacity:.6">Birden fazla ürün seçip kampanya indirimi hesaplayın</small></div>';
+    ri.innerHTML = '<div class="empty-calc">← Sol panelden ürün seçin<br><small style="font-size:12px;opacity:.6">Birden fazla ürün seçip kampanya indirimini hesaplayın</small></div>';
     return;
   }
 
   let html = '';
 
-  // Platform fee toggle
   html += '<div class="pf-row">'
     + '<span class="pf-lbl">Platform Ücreti:</span>'
     + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,41 ₺ Normal</button>'
     + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,41 ₺ Yoğun / Hafta Sonu</button>'
     + '</div>';
 
-  // Product input rows section
   html += '<div>'
     + '<div class="sec-title">Seçilen Ürünler (' + selMap.size + ')</div>';
 
   for (const e of selMap.values()) {
     const mq = +e.satis > 0 ? minQty(+e.satis) : 1;
     const qv = e.qty || mq;
+    const av = e.alis > 0 ? e.alis.toFixed(2) : '';
     html += '<div class="prod-row">'
       + '<div class="pr-name">' + escH(e.a) + '</div>'
-      + '<div class="pr-bk">' + escH(e.b) + ' · Alış: ' + tl(e.alis) + '</div>'
+      + '<div class="pr-bk">' + escH(e.b) + '</div>'
       + '<div class="pr-inp">'
+      + '<label>Alış ₺<input class="pi w82" type="number" min="0" step="0.01"'
+        + ' value="' + escA(av) + '"'
+        + ' placeholder="0.00"'
+        + ' data-b="' + escA(e.b) + '" data-f="alis"></label>'
       + '<label>Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
         + ' value="' + escA(String(e.satis||'')) + '"'
-        + ' placeholder="' + e.alis.toFixed(2) + '"'
+        + ' placeholder="fiyat girin"'
         + ' data-b="' + escA(e.b) + '" data-f="satis"></label>'
       + '<label>Adet<input class="pi w54" type="number" min="1" step="1"'
         + ' value="' + qv + '"'
@@ -286,8 +452,6 @@ function renderRight() {
   }
 
   html += '</div>';
-
-  // Results container (updated separately to avoid focus loss)
   html += '<div id="cres"></div>';
 
   ri.innerHTML = html;
@@ -302,7 +466,7 @@ function updateResults() {
   const entries = [];
   for (const e of selMap.values()) {
     if (+e.satis > 0) {
-      entries.push({b:e.b, a:e.a, alis:e.alis, satis:+e.satis, qty:Math.max(1,+e.qty||1), kom:+e.kom||0});
+      entries.push({b:e.b, a:e.a, alis:+e.alis||0, satis:+e.satis, qty:Math.max(1,+e.qty||1), kom:+e.kom||0});
     }
   }
 
@@ -359,10 +523,8 @@ function buildScCard(title, sc, badge, entries) {
       + '<div class="sc-fi"><div class="sc-fl">Önerilen indirimle sepet</div><div class="sc-fv">' + tl(sc.discBasket) + '</div></div>'
       + '<div class="sc-fi"><div class="sc-fl">Ort. indirim / adet</div><div class="sc-fv">' + tl(discPerUnit) + '</div></div>';
 
-    // Profit if komisyon entered
     const hasKom = entries.some(e => e.kom > 0);
     if (hasKom) {
-      const totalRevDisc = sc.discBasket; // approximate: proportional
       const totalKom = entries.reduce((s,e) => s + e.satis * e.qty * e.kom / 100, 0);
       const totalAlis = entries.reduce((s,e) => s + e.alis * e.qty, 0);
       const discAmt = sc.savings * 0.7;
@@ -372,7 +534,6 @@ function buildScCard(title, sc, badge, entries) {
     html += '</div>';
   }
 
-  // Qty info
   if (entries.length > 1 || entries[0].qty > 1) {
     html += '<div class="sc-qty">'
       + entries.map(e => escH(e.a.length > 35 ? e.a.substring(0,35) + '…' : e.a) + ' × ' + e.qty + ' adet').join('<br>')
@@ -396,7 +557,8 @@ function scheduleCalc() {
   calcTimer = setTimeout(updateResults, 280);
 }
 
-// ---- EVENTS ----
+// ========== UI EVENTS ==========
+
 function onSearch() {
   searchQ = document.getElementById('sq').value.trim();
   renderGrid();
@@ -414,6 +576,7 @@ function toggleTheme() {
   r.dataset.theme = cur === 'dark' ? 'light' : 'dark';
 }
 
+// Grid click: select / deselect product
 document.getElementById('grid').addEventListener('click', function(e) {
   const card = e.target.closest('.card');
   if (!card) return;
@@ -423,14 +586,16 @@ document.getElementById('grid').addEventListener('click', function(e) {
   if (selMap.has(b)) {
     selMap.delete(b);
   } else {
-    selMap.set(b, {b:p.b, a:p.a, alis:p.f, satis:'', qty:1, kom:'', _qtyManual:false});
+    // Use saved maliyet if exists, otherwise product default
+    const savedAlis = maliyetler[b] || p.f;
+    selMap.set(b, {b:p.b, a:p.a, alis:savedAlis, satis:'', qty:1, kom:'', _qtyManual:false});
   }
   renderGrid();
   renderRight();
 });
 
+// Right panel clicks: platform toggle, remove button
 document.getElementById('ri').addEventListener('click', function(e) {
-  // Platform toggle
   const platBtn = e.target.closest('.pf-btn');
   if (platBtn && platBtn.dataset.plat) {
     platMode = platBtn.dataset.plat;
@@ -438,7 +603,6 @@ document.getElementById('ri').addEventListener('click', function(e) {
     scheduleCalc();
     return;
   }
-  // Remove
   const rmBtn = e.target.closest('.rm-btn');
   if (rmBtn && rmBtn.dataset.b) {
     selMap.delete(rmBtn.dataset.b);
@@ -447,6 +611,7 @@ document.getElementById('ri').addEventListener('click', function(e) {
   }
 });
 
+// Right panel input: update state, save alis to localStorage, auto-qty
 document.getElementById('ri').addEventListener('input', function(e) {
   const inp = e.target;
   if (!inp.dataset.b || !inp.dataset.f) return;
@@ -455,7 +620,21 @@ document.getElementById('ri').addEventListener('input', function(e) {
   const v = inp.value;
   if (!selMap.has(b)) return;
   const item = selMap.get(b);
-  item[f] = v;
+
+  if (f === 'alis') {
+    const n = +v;
+    item.alis = n >= 0 ? n : 0;
+    if (n > 0) {
+      maliyetler[b] = n;
+      saveMaliyetler();
+      // Sync product card display
+      const pu = URUNLER.find(function(x){ return x.b === b; });
+      if (pu) pu.f = n;
+    }
+  } else {
+    item[f] = v;
+  }
+
   if (f === 'satis' && +v > 0 && !item._qtyManual) {
     const mq = minQty(+v);
     item.qty = mq;
@@ -466,6 +645,65 @@ document.getElementById('ri').addEventListener('input', function(e) {
   }
   if (f === 'qty') item._qtyManual = true;
   scheduleCalc();
+});
+
+// ========== EXCEL UPLOAD ==========
+
+document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  if (typeof JSZip === 'undefined') {
+    showToast('JSZip yüklenemedi — sayfayı yenileyip tekrar deneyin.', false);
+    return;
+  }
+  var rd = new FileReader();
+  rd.onload = async function(ev) {
+    try {
+      var urunler = await parseUrunlerXlsx(ev.target.result);
+      // Apply saved maliyetler to new list
+      urunler.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
+      URUNLER = urunler;
+      try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(urunler)); } catch(x) {}
+      selMap.clear();
+      renderGrid();
+      renderRight();
+      showToast(urunler.length + ' ürün yüklendi', true);
+    } catch(err) {
+      showToast(err.message, false);
+    }
+  };
+  rd.readAsArrayBuffer(file);
+});
+
+document.getElementById('maliyetXlsxIn').addEventListener('change', function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  if (typeof JSZip === 'undefined') {
+    showToast('JSZip yüklenemedi — sayfayı yenileyip tekrar deneyin.', false);
+    return;
+  }
+  var rd = new FileReader();
+  rd.onload = async function(ev) {
+    try {
+      var kayitlar = await parseMaliyetXlsx(ev.target.result);
+      Object.assign(maliyetler, kayitlar);
+      saveMaliyetler();
+      // Apply to product list
+      URUNLER.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
+      // Apply to open selections
+      for (var item of selMap.values()) {
+        if (maliyetler[item.b]) item.alis = maliyetler[item.b];
+      }
+      renderGrid();
+      renderRight();
+      showToast(Object.keys(kayitlar).length + ' maliyet güncellendi', true);
+    } catch(err) {
+      showToast(err.message, false);
+    }
+  };
+  rd.readAsArrayBuffer(file);
 });
 
 // Init
