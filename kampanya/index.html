@@ -145,6 +145,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
           <button class="sb" data-sk="pa" onclick="setSort('pa')">↑ Fiyat</button>
           <button class="sb" data-sk="pd" onclick="setSort('pd')">↓ Fiyat</button>
         </div>
+        <button class="sb" id="editModeBtn" onclick="toggleEditMode()">✏️ Maliyet</button>
         <span class="rcount" id="rcount"></span>
       </div>
     </div>
@@ -295,6 +296,15 @@ let platMode = 'normal';
 let sortKey = 'a';
 let searchQ = '';
 let calcTimer = null;
+let editMode = false;
+
+function toggleEditMode() {
+  editMode = !editMode;
+  var btn = document.getElementById('editModeBtn');
+  btn.classList.toggle('act', editMode);
+  btn.textContent = editMode ? '✅ Bitti' : '✏️ Maliyet';
+  renderGrid();
+}
 
 // ========== CORE FUNCTIONS ==========
 
@@ -372,6 +382,18 @@ function renderGrid() {
   document.getElementById('grid').innerHTML = !list.length
     ? '<div style="padding:30px;text-align:center;color:var(--mut);font-size:13px">Ürün bulunamadı</div>'
     : list.map(p => {
+        if (editMode) {
+          const av = p.f > 0 ? p.f.toFixed(2) : '';
+          return '<div class="card" data-b="' + escA(p.b) + '" style="cursor:default">'
+            + '<div class="cn">' + escH(p.a) + '</div>'
+            + '<div class="cb">' + escH(p.b) + '</div>'
+            + '<div style="display:flex;align-items:center;gap:5px;margin-top:6px">'
+            + '<input class="pi" type="number" min="0" step="0.01" style="width:90px;font-size:12px"'
+            + ' value="' + escA(av) + '" placeholder="0.00"'
+            + ' data-b="' + escA(p.b) + '" data-f="grid-alis">'
+            + '<span style="font-size:9.5px;color:var(--sub)">alış ₺</span>'
+            + '</div></div>';
+        }
         const s = selMap.has(p.b);
         return '<div class="card' + (s ? ' sel' : '') + '" data-b="' + escA(p.b) + '">'
           + '<div class="cc">' + (s ? chk : '') + '</div>'
@@ -554,8 +576,9 @@ function toggleTheme() {
   r.dataset.theme = cur === 'dark' ? 'light' : 'dark';
 }
 
-// Grid click: select / deselect product
+// Grid click: select / deselect product (edit modunda devre dışı)
 document.getElementById('grid').addEventListener('click', function(e) {
+  if (editMode) return;
   const card = e.target.closest('.card');
   if (!card) return;
   const b = card.dataset.b;
@@ -564,12 +587,29 @@ document.getElementById('grid').addEventListener('click', function(e) {
   if (selMap.has(b)) {
     selMap.delete(b);
   } else {
-    // Use saved maliyet if exists, otherwise product default
     const savedAlis = maliyetler[b] || p.f;
     selMap.set(b, {b:p.b, a:p.a, alis:savedAlis, satis:'', qty:1, kom:'', _qtyManual:false});
   }
   renderGrid();
   renderRight();
+});
+
+// Grid edit modu: alış fiyatı güncelle
+document.getElementById('grid').addEventListener('change', function(e) {
+  var inp = e.target;
+  if (!editMode || inp.dataset.f !== 'grid-alis') return;
+  var b = inp.dataset.b;
+  var n = parseFloat(inp.value);
+  if (!b) return;
+  var pu = URUNLER.find(function(x){ return x.b === b; });
+  if (pu && n > 0) {
+    pu.f = n;
+    maliyetler[b] = n;
+    saveMaliyetler();
+    // Açık seçimde de güncelle
+    if (selMap.has(b)) selMap.get(b).alis = n;
+    try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(URUNLER)); } catch(x) {}
+  }
 });
 
 // Right panel clicks: platform toggle, remove button
