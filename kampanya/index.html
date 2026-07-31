@@ -504,6 +504,13 @@ function buildScCard(title, sc, badge, entries) {
   const savPos = sc.savings > 0;
   const kBracket = sc.combined < 200 ? '41 ₺ kargo dilimi' : sc.combined < 350 ? '79 ₺ kargo dilimi' : '93 ₺ kargo dilimi';
 
+  const totalAlis = entries.reduce(function(s,e){ return s + (+e.alis||0) * e.qty; }, 0);
+  const totalKom  = entries.reduce(function(s,e){ return s + e.satis * e.qty * (+e.kom||0) / 100; }, 0);
+  // discBasket = combined - önerilen indirim tutarı; ekstra discAmt çıkarmaya gerek yok
+  const profit     = sc.discBasket - totalAlis - sc.kargoComb - getPF() - totalKom;
+  const profitRate = totalAlis > 0 ? profit / totalAlis * 100 : null;
+  const profitClr  = profit >= 0 ? 'var(--grn)' : 'var(--red)';
+
   let html = '<div class="sc-card">'
     + '<div class="sc-hd">'
     + '<span class="sc-ttl">' + escH(title) + '</span>'
@@ -516,20 +523,18 @@ function buildScCard(title, sc, badge, entries) {
     + scIt('Maks. İndirim', '%' + sc.maxPct.toFixed(1), 'Önerilen: %' + sc.recPct.toFixed(1), sc.maxPct > 0 ? 'acc' : '')
     + '</div>';
 
-  if (savPos) {
-    const totalQty = entries.reduce((s,e) => s + e.qty, 0);
-    const discPerUnit = (sc.savings * 0.7) / totalQty;
-    html += '<div class="sc-footer">'
-      + '<div class="sc-fi"><div class="sc-fl">Önerilen indirimle sepet</div><div class="sc-fv">' + tl(sc.discBasket) + '</div></div>'
-      + '<div class="sc-fi"><div class="sc-fl">Ort. indirim / adet</div><div class="sc-fv">' + tl(discPerUnit) + '</div></div>';
-
-    const hasKom = entries.some(e => e.kom > 0);
-    if (hasKom) {
-      const totalKom = entries.reduce((s,e) => s + e.satis * e.qty * e.kom / 100, 0);
-      const totalAlis = entries.reduce((s,e) => s + e.alis * e.qty, 0);
-      const discAmt = sc.savings * 0.7;
-      const profit = sc.discBasket - totalAlis - sc.kargoComb - getPF() - totalKom - discAmt;
-      html += '<div class="sc-fi"><div class="sc-fl">Tahmini Kâr</div><div class="sc-fv" style="color:' + (profit>0?'var(--grn)':'var(--red)') + '">' + tl(profit) + '</div></div>';
+  const totalQty = entries.reduce(function(s,e){ return s + e.qty; }, 0);
+  const hasFooter = savPos || totalAlis > 0;
+  if (hasFooter) {
+    html += '<div class="sc-footer">';
+    if (savPos) {
+      const discPerUnit = (sc.savings * 0.7) / totalQty;
+      html += '<div class="sc-fi"><div class="sc-fl">Önerilen indirimle sepet</div><div class="sc-fv">' + tl(sc.discBasket) + '</div></div>'
+        + '<div class="sc-fi"><div class="sc-fl">Ort. indirim / adet</div><div class="sc-fv">' + tl(discPerUnit) + '</div></div>';
+    }
+    if (totalAlis > 0) {
+      html += '<div class="sc-fi"><div class="sc-fl">Tahmini Kâr</div><div class="sc-fv" style="color:' + profitClr + '">' + tl(profit) + '</div></div>'
+        + '<div class="sc-fi"><div class="sc-fl">Kâr Oranı</div><div class="sc-fv" style="color:' + profitClr + '">%' + profitRate.toFixed(1) + '</div></div>';
     }
     html += '</div>';
   }
