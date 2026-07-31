@@ -129,9 +129,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   <div class="logo">📦 Kampanya İndirim Hesaplayıcı</div>
   <div class="hdr-r">
     <input type="file" id="urunXlsxIn" accept=".xlsx" style="display:none">
-    <input type="file" id="maliyetXlsxIn" accept=".xlsx" style="display:none">
-    <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Trendyol KomisyonTarifeleriÜrünleri Excel yükle">📂 Ürün Excel</button>
-    <button class="tbtn" onclick="document.getElementById('maliyetXlsxIn').click()" title="Barkod No + Alış Tutarı (KDV) kolonlu Excel yükle">💰 Maliyet Excel</button>
+    <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) kolonlu Excel yükle">📂 Ürün Yükle</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
     <button class="tbtn" onclick="toggleTheme()">◑</button>
   </div>
@@ -241,44 +239,24 @@ async function parseUrunlerXlsx(ab) {
   if (rows.length < 2) throw new Error('Dosyada veri satırı bulunamadı.');
   var hdr = rows[0].map(function(h){ return h == null ? '' : String(h).trim(); });
   var ci = function(name){ return hdr.indexOf(name); };
-  var iUrun = ci('ÜRÜN İSMİ') !== -1 ? ci('ÜRÜN İSMİ') : ci('Ürün İsmi');
-  var iBarkod = ci('BARKOD') !== -1 ? ci('BARKOD') : ci('Barkod');
-  var iMaliyet = ci('Maliyet');
-  if (iUrun === -1) throw new Error('"ÜRÜN İSMİ" kolonu bulunamadı. Trendyol KomisyonTarifeleriÜrünleri formatı bekleniyor.');
+  // Hem "Barkod No + Ürün Adı" formatını hem "ÜRÜN İSMİ + BARKOD" formatını destekle
+  var iUrun = ci('Ürün Adı') !== -1 ? ci('Ürün Adı') : (ci('ÜRÜN İSMİ') !== -1 ? ci('ÜRÜN İSMİ') : ci('Ürün İsmi'));
+  var iBarkod = ci('Barkod No') !== -1 ? ci('Barkod No') : (ci('BARKOD') !== -1 ? ci('BARKOD') : ci('Barkod'));
+  var iAlis = ci('Alış Tutarı (KDV)') !== -1 ? ci('Alış Tutarı (KDV)') : ci('Maliyet');
+  if (iUrun === -1) throw new Error('"Ürün Adı" veya "ÜRÜN İSMİ" kolonu bulunamadı.');
   var urunler = [];
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r]; if (!row) continue;
     var ad = row[iUrun];
     if (ad == null || String(ad).trim() === '') continue;
     var barkod = (iBarkod !== -1 && row[iBarkod] != null) ? String(row[iBarkod]).trim() : '';
-    var maliyet = iMaliyet !== -1 ? _xNum(row[iMaliyet]) : 0;
+    var maliyet = iAlis !== -1 ? _xNum(row[iAlis]) : 0;
     urunler.push({b: barkod || String(ad).trim(), a: String(ad).trim(), f: maliyet});
   }
   if (!urunler.length) throw new Error('Hiç geçerli ürün satırı bulunamadı.');
   return urunler;
 }
 
-async function parseMaliyetXlsx(ab) {
-  if (typeof JSZip === 'undefined') throw new Error('JSZip yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
-  var zip = await JSZip.loadAsync(ab);
-  var rows = await _xRows(zip);
-  if (rows.length < 2) throw new Error('Dosyada veri satırı bulunamadı.');
-  var hdr = rows[0].map(function(h){ return h == null ? '' : String(h).trim(); });
-  var ci = function(name){ return hdr.indexOf(name); };
-  var iBarkod = ci('Barkod No');
-  var iAlis = ci('Alış Tutarı (KDV)');
-  if (iBarkod === -1 || iAlis === -1) throw new Error('"Barkod No" ve "Alış Tutarı (KDV)" kolonları bulunamadı. Trendyol Aktif-Pasif Ürün export\'u bekleniyor.');
-  var kayitlar = {};
-  for (var r = 1; r < rows.length; r++) {
-    var row = rows[r]; if (!row) continue;
-    var bk = row[iBarkod];
-    if (bk == null || String(bk).trim() === '') continue;
-    var m = _xNum(row[iAlis]);
-    if (m > 0) kayitlar[String(bk).trim()] = m;
-  }
-  if (!Object.keys(kayitlar).length) throw new Error('Hiç geçerli maliyet satırı bulunamadı.');
-  return kayitlar;
-}
 
 // ========== TOAST ==========
 
@@ -661,7 +639,12 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
   rd.onload = async function(ev) {
     try {
       var urunler = await parseUrunlerXlsx(ev.target.result);
-      // Apply saved maliyetler to new list
+      // Exceldeki alış fiyatlarını maliyetler'e kaydet
+      urunler.forEach(function(u){
+        if (u.f > 0) maliyetler[u.b] = u.f;
+      });
+      saveMaliyetler();
+      // Kayıtlı maliyet varsa onu kullan (daha önce elle girilmiş değer öncelikli)
       urunler.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
       URUNLER = urunler;
       try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(urunler)); } catch(x) {}
@@ -676,35 +659,6 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
   rd.readAsArrayBuffer(file);
 });
 
-document.getElementById('maliyetXlsxIn').addEventListener('change', function(e) {
-  var file = e.target.files[0];
-  if (!file) return;
-  e.target.value = '';
-  if (typeof JSZip === 'undefined') {
-    showToast('JSZip yüklenemedi — sayfayı yenileyip tekrar deneyin.', false);
-    return;
-  }
-  var rd = new FileReader();
-  rd.onload = async function(ev) {
-    try {
-      var kayitlar = await parseMaliyetXlsx(ev.target.result);
-      Object.assign(maliyetler, kayitlar);
-      saveMaliyetler();
-      // Apply to product list
-      URUNLER.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
-      // Apply to open selections
-      for (var item of selMap.values()) {
-        if (maliyetler[item.b]) item.alis = maliyetler[item.b];
-      }
-      renderGrid();
-      renderRight();
-      showToast(Object.keys(kayitlar).length + ' maliyet güncellendi', true);
-    } catch(err) {
-      showToast(err.message, false);
-    }
-  };
-  rd.readAsArrayBuffer(file);
-});
 
 // Init
 renderGrid();
