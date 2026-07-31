@@ -417,8 +417,8 @@ function renderRight() {
 
   html += '<div class="pf-row">'
     + '<span class="pf-lbl">Platform Ücreti:</span>'
-    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,41 ₺ Normal</button>'
-    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,41 ₺ Yoğun / Hafta Sonu</button>'
+    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,41 ₺ (00:00–14:59)</button>'
+    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,41 ₺ (15:00–23:59)</button>'
     + '</div>';
 
   html += '<div>'
@@ -482,14 +482,14 @@ function updateResults() {
 
   html += buildScCard('Mevcut Sepet', sc0, '', entries);
 
-  if (sc0.combined < 199.5) {
+  if (sc0.combined < 200) {
     const e2 = scaleToTarget(entries, 200);
     const sc2 = calcScenario(e2, pf);
     const scale = Math.ceil(200 / sc0.combined);
     if (sc2) html += buildScCard('200 ₺ Dilimi', sc2, '×' + scale + ' kat', e2);
   }
 
-  if (sc0.combined < 349.5) {
+  if (sc0.combined < 350) {
     const e3 = scaleToTarget(entries, 350);
     const sc3 = calcScenario(e3, pf);
     const scale = Math.ceil(350 / sc0.combined);
