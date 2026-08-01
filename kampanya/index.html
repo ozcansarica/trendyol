@@ -391,7 +391,7 @@ async function parseUrunlerXlsx(ab) {
     var kom     = iKom   !== -1 ? _xNum(row[iKom])   : 0;
     var obj = {b: barkod || String(ad).trim(), a: String(ad).trim(), f: Math.round(maliyet * 100) / 100};
     if (satis > 0) obj.s = Math.round(satis * 100) / 100;
-    if (kom   > 0) obj.k = Math.round(kom * 10000) / 10000;
+    if (kom   > 0) obj.k = Math.round(kom * 100) / 10000;   // Excel'de yüzde (15) → kesir (0.15)
     urunler.push(obj);
   }
   if (!urunler.length) throw new Error('Hiç geçerli ürün satırı bulunamadı.');
