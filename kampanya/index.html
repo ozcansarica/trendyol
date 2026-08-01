@@ -640,7 +640,7 @@ function buildScCard(title, sc, badge, entries) {
     + '<div class="sc-grid">'
     + scIt('Mevcut Sepet', tl(sc.mevcut), 'normal fiyatla', '')
     + scIt('İnd. Sepet', tl(sc.discBasket), kBracket, sc.mevcut > sc.discBasket ? 'grn' : '')
-    + scIt('Kargo (Kampanya)', tl(sc.kargoComb), 'Ayrı ayrı: ' + tl(sc.sepCost), '')
+    + scIt('Kargo (Kampanya)', tl(sc.kargoComb), '', '')
     + scIt('Tasarruf', tl(Math.max(0, sc.savings)), savPos ? 'kargo tasarrufu' : 'tasarruf yok', savPos ? 'grn' : 'red')
     + '</div>';
 
