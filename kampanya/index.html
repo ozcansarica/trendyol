@@ -756,8 +756,8 @@ document.getElementById('ri').addEventListener('click', function(e) {
 document.getElementById('ri').addEventListener('input', function(e) {
   const inp = e.target;
   if (inp.id === 'hedefOranInp') {
-    var v = parseFloat(inp.value);
-    if (!isNaN(v) && v >= 0) { hedefOran = v; updateResults(); }
+    const hv = parseFloat(inp.value);
+    if (!isNaN(hv) && hv >= 0) { hedefOran = hv; updateResults(); }
     return;
   }
   if (!inp.dataset.b || !inp.dataset.f) return;
