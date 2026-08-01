@@ -1546,14 +1546,14 @@ function _buildKombData() {
     if (arr.length > lim) {
       // Her kargo diliminden eşit sayıda en kârlı ürün seç → tab dağılımı anlamlı olsun
       var sortKar = function(a, b){ return _urunKarOrani(b) - _urunKarOrani(a); };
-      var cheap = arr.filter(function(u){ return u.s < 200; }).sort(sortKar);
-      var mid   = arr.filter(function(u){ return u.s >= 200 && u.s < 350; }).sort(sortKar);
-      var exp   = arr.filter(function(u){ return u.s >= 350; }).sort(sortKar);
+      var band41 = arr.filter(function(u){ return u.s < 200; }).sort(sortKar);
+      var band79 = arr.filter(function(u){ return u.s >= 200 && u.s < 350; }).sort(sortKar);
+      var band93 = arr.filter(function(u){ return u.s >= 350; }).sort(sortKar);
       var perBand = Math.round(lim / 3);
-      var c = cheap.slice(0, perBand);
-      var m = mid.slice(0, perBand);
+      var c = band41.slice(0, perBand);
+      var m = band79.slice(0, perBand);
       var rem = lim - c.length - m.length;
-      arr = c.concat(m).concat(exp.slice(0, rem > 0 ? rem : 0));
+      arr = c.concat(m).concat(band93.slice(0, rem > 0 ? rem : 0));
       autoNote = ' · her dilimden en kârlı ' + perBand + ' ürün';
     }
   }
@@ -1573,13 +1573,11 @@ function _buildKombData() {
     var kar = total - alis - kg - pf - kom - stopaj - oKdv;
     var karOrani = alis > 0 ? kar / alis * 100 : null;
     var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani};
-    if (kombN > 2) {
-      t79.push(combo);  // N>2: tek liste, kargo dilimi ayrımı yok
-    } else {
-      if (kg === 41) t41.push(combo);
-      else if (kg === 79) t79.push(combo);
-      else t93.push(combo);
-    }
+    // N>2: ürün başı ortalama fiyata göre tab belirlenir (toplam fiyat ≥350₺ olsa da)
+    var tierKg = kombN > 2 ? kargoFor(total / prods.length) : kg;
+    if (tierKg === 41) t41.push(combo);
+    else if (tierKg === 79) t79.push(combo);
+    else t93.push(combo);
   }
   var n = arr.length;
   if (kombN === 2) {
@@ -1630,17 +1628,11 @@ function _renderKombTabs() {
     for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= kombHedefOran) cnt++; }
     return cnt;
   }
-  if (kombN > 2) {
-    var cnt = filtCnt(d.t79);
-    document.getElementById('ktierBar').innerHTML =
-      '<button class="ktab act" onclick="setKombTier(\'79\')">'
-      + 'Tümü<small>kâra göre sıralı</small><em>' + cnt.toLocaleString('tr-TR') + ' ' + label + '</em></button>';
-    return;
-  }
+  var perProd = kombN > 2;
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
+    {key:'41', label:'< 200 ₺', sub: perProd ? 'ürün başı' : '41 ₺ kargo', cnt:filtCnt(d.t41)},
+    {key:'79', label:'200 – 350 ₺', sub: perProd ? 'ürün başı' : '79 ₺ kargo', cnt:filtCnt(d.t79)},
+    {key:'93', label:'≥ 350 ₺', sub: perProd ? 'ürün başı' : '93 ₺ kargo', cnt:filtCnt(d.t93)},
   ];
   document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
