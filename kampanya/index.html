@@ -156,6 +156,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .ut-inp{background:var(--sel);border:none;border-bottom:2px solid var(--acc);padding:2px 5px;width:78px;text-align:right;font-size:12.5px;color:var(--txt);font-variant-numeric:tabular-nums;outline:none;font-weight:700;-moz-appearance:textfield;border-radius:3px 3px 0 0}
 .ut-inp::-webkit-outer-spin-button,.ut-inp::-webkit-inner-spin-button{-webkit-appearance:none}
 .ut-saved{font-size:10px;color:var(--grn);margin-left:3px;opacity:0;transition:opacity .25s;font-weight:700;pointer-events:none}
+/* Kombinasyonlar sayfası */
+.kpage{position:fixed;inset:50px 0 0 0;background:var(--bg);z-index:20;display:none;flex-direction:column;overflow:hidden}
+.kpage.show{display:flex}
+.kpage-top{padding:10px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--surf)}
+.ktier-bar{display:flex;gap:0;border-bottom:1px solid var(--brd);flex-shrink:0;background:var(--surf);overflow-x:auto}
+.ktab{background:none;border:none;border-bottom:2px solid transparent;padding:9px 16px;cursor:pointer;color:var(--sub);font-size:12.5px;font-weight:700;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:1px;transition:all .12s}
+.ktab:hover{color:var(--txt)}
+.ktab.act{color:var(--acc);border-bottom-color:var(--acc)}
+.ktab small{font-size:10px;font-weight:400;color:var(--mut)}
+.ktab em{font-size:10.5px;font-style:normal;font-variant-numeric:tabular-nums;margin-top:1px}
+.ktable-wrap{flex:1;overflow:auto}
+.kmore-btn{display:block;width:100%;padding:11px;background:var(--surf);border:none;border-top:1px solid var(--brd);color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;text-align:center}
+.kmore-btn:hover{color:var(--acc)}
+.krow-sel{cursor:pointer}
+.krow-sel:hover td{background:var(--sel)}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -174,8 +189,36 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) + Satış Tutarı (KDV) + Komisyon Oranı kolonlu Excel yükle">📂 Ürün Yükle</button>
     <button class="tbtn" onclick="resetUrunler()" title="Yüklenen Excel'i temizle, varsayılan ürün listesine dön" style="font-size:11px;opacity:.7">↺ Sıfırla</button>
     <button class="tbtn" id="upageBtn" onclick="toggleUrunler()">📋 Ürünler</button>
+    <button class="tbtn" id="kpageBtn" onclick="toggleKombo()">🔗 Kombinasyonlar</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
     <button class="tbtn" onclick="toggleTheme()">◑</button>
+  </div>
+</div>
+
+<!-- Kombinasyonlar tam sayfa overlay -->
+<div class="kpage" id="kpage">
+  <div class="kpage-top">
+    <input class="sinput" id="kpageQ" placeholder="Ürün adı veya barkod ara…" oninput="onKombSearch()" autocomplete="off" spellcheck="false" style="max-width:300px">
+    <span id="kcount" style="font-size:12px;color:var(--mut)"></span>
+    <button class="tbtn" onclick="toggleKombo()" style="margin-left:auto">✕ Kapat</button>
+  </div>
+  <div class="ktier-bar" id="ktierBar"></div>
+  <div class="ktable-wrap" id="ktableWrap">
+    <table class="utable">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>Ürün A</th>
+          <th>Ürün B</th>
+          <th style="text-align:right">Toplam ₺</th>
+          <th style="text-align:right">Kargo ₺</th>
+          <th style="text-align:right">Ayrı Kargo</th>
+          <th style="text-align:right;color:var(--grn)">Tasarruf</th>
+        </tr>
+      </thead>
+      <tbody id="ktbody"></tbody>
+    </table>
+    <button class="kmore-btn" id="kmoreBtn" style="display:none" onclick="loadMoreKomb()">↓ Daha fazla göster</button>
   </div>
 </div>
 
@@ -807,6 +850,7 @@ function resetUrunler() {
   if (!confirm('Yüklenen Excel silinecek ve varsayılan ürün listesi geri yüklenecek. Emin misiniz?')) return;
   try { localStorage.removeItem('kampanya_urunler_v1'); } catch(e) {}
   URUNLER = URUNLER_DEFAULT.slice();
+  _invalidateKomb();
   anaUrun = null;
   yanMap.clear();
   renderGrid();
@@ -1315,6 +1359,7 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
       // Kayıtlı maliyet varsa onu kullan (daha önce elle girilmiş değer öncelikli)
       urunler.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
       URUNLER = urunler;
+      _invalidateKomb();
       try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(urunler)); } catch(x) {}
       anaUrun = null;
       yanMap.clear();
@@ -1392,6 +1437,7 @@ function _utSave(b, uf, val) {
     if (anaUrun && anaUrun.b === b && !anaUrun.kom) anaUrun.kom = val;
     else if (yanMap.has(b) && !yanMap.get(b).kom) yanMap.get(b).kom = val;
   }
+  _invalidateKomb();
   try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(URUNLER)); } catch(x) {}
   renderGrid();
   updateResults();
@@ -1447,6 +1493,152 @@ document.getElementById('upage').addEventListener('click', function(ev) {
     if (e.key === 'Escape') { inp.value = rawV; inp.blur(); }
   });
 });
+
+// ========== KOMBİNASYONLAR SAYFASI ==========
+
+var kombData = null;   // {t41:[], t79:[], t93:[]} — lazy built
+var kombTier = '79';   // active tier key
+var kombOffset = 0;
+var KOMB_PAGE = 100;
+
+function _invalidateKomb() { kombData = null; }
+
+function _buildKombData() {
+  var arr = URUNLER.filter(function(u){ return u.s > 0; });
+  var t41 = [], t79 = [], t93 = [];
+  for (var i = 0; i < arr.length; i++) {
+    for (var j = i + 1; j < arr.length; j++) {
+      var a = arr[i], b = arr[j];
+      var total = a.s + b.s;
+      var k = kargoFor(total);
+      var ka = kargoFor(a.s) + kargoFor(b.s);
+      var pair = {a:a, b:b, total:total, kargo:k, kargoAyri:ka, tas:ka-k};
+      if (k === 41) t41.push(pair);
+      else if (k === 79) t79.push(pair);
+      else t93.push(pair);
+    }
+  }
+  var bySav = function(x,y){ return y.tas - x.tas || y.total - x.total; };
+  t41.sort(bySav); t79.sort(bySav); t93.sort(bySav);
+  return {t41:t41, t79:t79, t93:t93};
+}
+
+function _kombList() {
+  var tiers = {t41:'41', t79:'79', t93:'93'};
+  var key = 't' + kombTier;
+  var base = kombData[key] || [];
+  var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
+  if (!q) return base;
+  return base.filter(function(p){
+    return p.a.a.toLocaleLowerCase('tr-TR').includes(q) || p.a.b.toLocaleLowerCase('tr-TR').includes(q)
+        || p.b.a.toLocaleLowerCase('tr-TR').includes(q) || p.b.b.toLocaleLowerCase('tr-TR').includes(q);
+  });
+}
+
+function _renderKombTabs() {
+  var d = kombData;
+  var tabs = [
+    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:d.t41.length},
+    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:d.t79.length},
+    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:d.t93.length},
+  ];
+  document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
+    return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
+      + t.label + '<small>' + t.sub + '</small><em>' + t.cnt.toLocaleString('tr-TR') + ' çift</em></button>';
+  }).join('');
+}
+
+function setKombTier(key) {
+  kombTier = key;
+  kombOffset = 0;
+  _renderKombTabs();
+  renderKomb();
+}
+
+function renderKomb() {
+  var list = _kombList();
+  var end = kombOffset + KOMB_PAGE;
+  var visible = list.slice(0, end);
+  document.getElementById('kcount').textContent = list.length.toLocaleString('tr-TR') + ' kombinasyon';
+  document.getElementById('ktbody').innerHTML = visible.map(function(p, i){
+    var nameA = p.a.a.length > 38 ? p.a.a.substring(0,38) + '…' : p.a.a;
+    var nameB = p.b.a.length > 38 ? p.b.a.substring(0,38) + '…' : p.b.a;
+    return '<tr class="krow-sel" data-ba="' + escA(p.a.b) + '" data-bb="' + escA(p.b.b) + '" title="Tıkla: hesaplayıcıya ekle">'
+      + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px">' + (i+1) + '</td>'
+      + '<td class="ut-name">' + escH(nameA) + '<div class="ut-bk">' + escH(p.a.b) + '</div></td>'
+      + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
+      + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
+      + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
+      + '<td style="text-align:right;color:var(--mut)">' + tl(p.kargoAyri) + '</td>'
+      + '<td style="text-align:right;font-weight:800;color:' + (p.tas > 0 ? 'var(--grn)' : 'var(--mut)') + '">'
+        + (p.tas > 0 ? '+' + tl(p.tas) : '—') + '</td>'
+      + '</tr>';
+  }).join('');
+  document.getElementById('kmoreBtn').style.display = visible.length < list.length ? 'block' : 'none';
+}
+
+function onKombSearch() { kombOffset = 0; renderKomb(); }
+
+function loadMoreKomb() { kombOffset += KOMB_PAGE; renderKomb(); }
+
+function toggleKombo() {
+  var page = document.getElementById('kpage');
+  var btn  = document.getElementById('kpageBtn');
+  var show = !page.classList.contains('show');
+  // Close diğer overlay
+  if (show) {
+    document.getElementById('upage').classList.remove('show');
+    document.getElementById('upageBtn').classList.remove('act');
+  }
+  page.classList.toggle('show', show);
+  btn.classList.toggle('act', show);
+  if (show) {
+    if (!kombData) {
+      document.getElementById('kcount').textContent = 'Hesaplanıyor…';
+      document.getElementById('ktbody').innerHTML = '';
+      setTimeout(function(){
+        kombData = _buildKombData();
+        // Default tier: ilk boş olmayan
+        if (!kombData.t79.length && kombData.t41.length) kombTier = '41';
+        else if (!kombData.t79.length && kombData.t93.length) kombTier = '93';
+        else kombTier = '79';
+        kombOffset = 0;
+        _renderKombTabs();
+        document.getElementById('kpageQ').value = '';
+        renderKomb();
+      }, 0);
+    } else {
+      _renderKombTabs();
+      document.getElementById('kpageQ').value = '';
+      kombOffset = 0;
+      renderKomb();
+    }
+    document.getElementById('kpageQ').focus();
+  }
+}
+
+// Kombinasyon satırına tıklayınca hesaplayıcıya ekle
+document.getElementById('ktbody').addEventListener('click', function(ev) {
+  var row = ev.target.closest('.krow-sel');
+  if (!row) return;
+  var ba = row.dataset.ba, bb = row.dataset.bb;
+  var ua = URUNLER.find(function(x){ return x.b === ba; });
+  var ub = URUNLER.find(function(x){ return x.b === bb; });
+  if (!ua || !ub) return;
+  var makeEntry = function(u){
+    return {b:u.b, a:u.a, alis:maliyetler[u.b]||u.f||0, satis:u.s||'', indirimli:'', qty:1, kom:u.k ? Math.round(u.k*100*10)/10 : '', _qtyManual:false};
+  };
+  anaUrun = makeEntry(ua);
+  yanMap.clear();
+  yanMap.set(ub.b, makeEntry(ub));
+  toggleKombo();
+  renderGrid();
+  renderRight();
+  showToast(ua.a.substring(0,20) + '… + ' + ub.a.substring(0,20) + '… eklendi', true);
+});
+
+// URUNLER değişince kombData'yı sıfırla — Excel upload veya fiyat düzenleme
+var _origResetUrunler = resetUrunler;
 
 // Init
 renderGrid();
