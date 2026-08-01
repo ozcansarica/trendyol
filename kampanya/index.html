@@ -171,6 +171,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .kmore-btn:hover{color:var(--acc)}
 .krow-sel{cursor:pointer}
 .krow-sel:hover td{background:var(--sel)}
+.kn-bar{display:flex;gap:0;border-bottom:1px solid var(--brd);flex-shrink:0;background:var(--surf);overflow-x:auto}
+.knbtn{background:none;border:none;border-bottom:2px solid transparent;padding:9px 22px;cursor:pointer;color:var(--sub);font-size:13px;font-weight:700;white-space:nowrap;transition:all .12s}
+.knbtn:hover{color:var(--txt)}
+.knbtn.act{color:var(--acc);border-bottom-color:var(--acc)}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -205,14 +209,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span id="kcount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
     <button class="tbtn" onclick="toggleKombo()" style="margin-left:auto">✕ Kapat</button>
   </div>
+  <div class="kn-bar" id="knBar">
+    <button class="knbtn act" onclick="setKombN(2)">2-li Kombinasyon</button>
+    <button class="knbtn" onclick="setKombN(3)">3-lü Kombinasyon</button>
+    <button class="knbtn" onclick="setKombN(4)">4-lü Kombinasyon</button>
+  </div>
   <div class="ktier-bar" id="ktierBar"></div>
   <div class="ktable-wrap" id="ktableWrap">
     <table class="utable">
       <thead>
         <tr>
           <th style="width:36px">#</th>
-          <th>Ürün A</th>
-          <th>Ürün B</th>
+          <th>Ürünler</th>
           <th style="text-align:right">Toplam ₺</th>
           <th style="text-align:right">Kargo ₺</th>
           <th style="text-align:right;color:var(--grn)">Tahmini Kâr</th>
@@ -1500,35 +1508,80 @@ document.getElementById('upage').addEventListener('click', function(ev) {
 
 // ========== KOMBİNASYONLAR SAYFASI ==========
 
-var kombData = null;   // {t41:[], t79:[], t93:[]} — lazy built
-var kombTier = '79';   // active tier key
+var kombData = null;
+var kombTier = '79';
 var kombOffset = 0;
 var KOMB_PAGE = 200;
 var kombHedefOran = 0;
+var kombN = 2;  // 2, 3 veya 4
+var KOMB_N_LIMIT = {3: 120, 4: 40};
 
 function _invalidateKomb() { kombData = null; }
 
+function setKombN(n) {
+  kombN = n;
+  _invalidateKomb();
+  kombOffset = 0;
+  kombTier = '79';
+  document.querySelectorAll('.knbtn').forEach(function(b, i){ b.classList.toggle('act', i + 2 === n); });
+  var ph = n === 2 ? 'Ürün adı veya barkod ara…' : 'Arama ile ürün filtrele (zorunlu ' + n + '+lü için)';
+  document.getElementById('kpageQ').placeholder = ph;
+  if (document.getElementById('kpage').classList.contains('show')) _buildAndRenderAll();
+}
+
 function _buildKombData() {
-  var arr = URUNLER.filter(function(u){ return u.s > 0; });
-  var t41 = [], t79 = [], t93 = [];
-  for (var i = 0; i < arr.length; i++) {
-    for (var j = i + 1; j < arr.length; j++) {
-      var a = arr[i], b = arr[j];
-      var total = a.s + b.s;
-      var k = kargoFor(total);
-      var alis = (a.f||0) + (b.f||0);
-      var pf = getPF();
-      var kom = a.s * (a.k||0) + b.s * (b.k||0);
-      var rv = 20 / 120;
-      var stopaj = total / 1.20 * 0.01;
-      var odenecekKdv = Math.max(0, total*rv - (alis*rv + k*rv + kom*rv + pf*rv));
-      var kar = total - alis - k - pf - kom - stopaj - odenecekKdv;
-      var karOrani = alis > 0 ? kar / alis * 100 : null;
-      var pair = {a:a, b:b, total:total, kargo:k, kar:kar, karOrani:karOrani};
-      if (k === 41) t41.push(pair);
-      else if (k === 79) t79.push(pair);
-      else t93.push(pair);
+  var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
+  var all = URUNLER.filter(function(u){ return u.s > 0; });
+  var arr = all;
+  if (kombN > 2 && q) {
+    arr = all.filter(function(u){
+      return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
+    });
+  }
+  if (kombN > 2) {
+    var limit = KOMB_N_LIMIT[kombN] || 40;
+    if (arr.length > limit) {
+      var msg = (q ? '"' + q + '" araması ' + arr.length + ' ürün buldu, ' : arr.length + ' ürün var, ')
+        + 'maksimum ' + limit + '. Arama ile ürün sayısını azaltın.';
+      return {t41:[], t79:[], t93:[], error: msg};
     }
+  }
+  var t41 = [], t79 = [], t93 = [];
+  var pf = getPF();
+  var rv = 20 / 120;
+  function addCombo(prods) {
+    var total = 0, alis = 0, kom = 0;
+    for (var pi = 0; pi < prods.length; pi++) {
+      total += prods[pi].s;
+      alis  += (prods[pi].f || 0);
+      kom   += prods[pi].s * (prods[pi].k || 0);
+    }
+    var kg = kargoFor(total);
+    var stopaj = total / 1.20 * 0.01;
+    var oKdv = Math.max(0, total*rv - (alis*rv + kg*rv + kom*rv + pf*rv));
+    var kar = total - alis - kg - pf - kom - stopaj - oKdv;
+    var karOrani = alis > 0 ? kar / alis * 100 : null;
+    var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani};
+    if (kg === 41) t41.push(combo);
+    else if (kg === 79) t79.push(combo);
+    else t93.push(combo);
+  }
+  var n = arr.length;
+  if (kombN === 2) {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        addCombo([arr[i], arr[j]]);
+  } else if (kombN === 3) {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        for (var kk = j+1; kk < n; kk++)
+          addCombo([arr[i], arr[j], arr[kk]]);
+  } else {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        for (var kk = j+1; kk < n; kk++)
+          for (var ll = kk+1; ll < n; ll++)
+            addCombo([arr[i], arr[j], arr[kk], arr[ll]]);
   }
   var byKar = function(x,y){ return (y.karOrani||0) - (x.karOrani||0) || y.total - x.total; };
   t41.sort(byKar); t79.sort(byKar); t93.sort(byKar);
@@ -1538,28 +1591,32 @@ function _buildKombData() {
 function _kombList() {
   var key = 't' + kombTier;
   var base = kombData[key] || [];
-  var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
-  var minOran = kombHedefOran;
   var result = base;
-  if (q) {
-    result = result.filter(function(p){
-      return p.a.a.toLocaleLowerCase('tr-TR').includes(q) || p.a.b.toLocaleLowerCase('tr-TR').includes(q)
-          || p.b.a.toLocaleLowerCase('tr-TR').includes(q) || p.b.b.toLocaleLowerCase('tr-TR').includes(q);
-    });
+  // N=2 için arama sonuç listesini filtreler; N>2 için input ürünler zaten filtrelendi
+  if (kombN === 2) {
+    var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
+    if (q) {
+      result = result.filter(function(p){
+        return p.prods.some(function(u){
+          return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
+        });
+      });
+    }
   }
-  if (minOran > 0) {
-    result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= minOran; });
+  if (kombHedefOran > 0) {
+    result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= kombHedefOran; });
   }
   return result;
 }
 
 function _renderKombTabs() {
   var d = kombData;
+  var label = kombN === 2 ? 'çift' : kombN === 3 ? 'üçlü' : 'dörtlü';
   function filtCnt(arr) {
     if (kombHedefOran <= 0) return arr.length;
-    var n = 0;
-    for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= kombHedefOran) n++; }
-    return n;
+    var cnt = 0;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= kombHedefOran) cnt++; }
+    return cnt;
   }
   var tabs = [
     {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
@@ -1568,7 +1625,7 @@ function _renderKombTabs() {
   ];
   document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
-      + t.label + '<small>' + t.sub + '</small><em>' + t.cnt.toLocaleString('tr-TR') + ' çift</em></button>';
+      + t.label + '<small>' + t.sub + '</small><em>' + t.cnt.toLocaleString('tr-TR') + ' ' + label + '</em></button>';
   }).join('');
 }
 
@@ -1580,17 +1637,21 @@ function setKombTier(key) {
 }
 
 function _kombRow(p, i) {
-  var nameA = p.a.a.length > 38 ? p.a.a.substring(0,38) + '…' : p.a.a;
-  var nameB = p.b.a.length > 38 ? p.b.a.substring(0,38) + '…' : p.b.a;
-  return '<tr class="krow-sel" data-ba="' + escA(p.a.b) + '" data-bb="' + escA(p.b.b) + '" title="Tıkla: hesaplayıcıya ekle">'
-    + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px">' + (i+1) + '</td>'
-    + '<td class="ut-name">' + escH(nameA) + '<div class="ut-bk">' + escH(p.a.b) + '</div></td>'
-    + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
-    + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
-    + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
-    + '<td style="text-align:right;font-weight:800;color:' + (p.kar > 0 ? 'var(--grn)' : 'var(--red)') + '">'
+  var prodsHtml = p.prods.map(function(u){
+    var nm = u.a.length > 50 ? u.a.substring(0,50) + '…' : u.a;
+    return '<div style="margin-bottom:1px">' + escH(nm) + '<div class="ut-bk">' + escH(u.b) + '</div></div>';
+  }).join('');
+  var bsAttr = escA(JSON.stringify(p.prods.map(function(u){ return u.b; })));
+  var karClr = p.kar > 0 ? 'var(--grn)' : 'var(--red)';
+  var orClr = p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)');
+  return '<tr class="krow-sel" data-bs="' + bsAttr + '" title="Tıkla: hesaplayıcıya ekle">'
+    + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px;vertical-align:top;padding-top:6px">' + (i+1) + '</td>'
+    + '<td style="vertical-align:top;padding:4px 8px">' + prodsHtml + '</td>'
+    + '<td class="ut-price" style="text-align:right;vertical-align:middle">' + tl(p.total) + '</td>'
+    + '<td style="text-align:right;font-weight:700;color:var(--acc);vertical-align:middle">' + tl(p.kargo) + '</td>'
+    + '<td style="text-align:right;font-weight:800;color:' + karClr + ';vertical-align:middle">'
       + (p.kar > 0 ? '+' + tl(p.kar) : tl(p.kar)) + '</td>'
-    + '<td style="text-align:right;font-weight:800;color:' + (p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)')) + '">'
+    + '<td style="text-align:right;font-weight:800;color:' + orClr + ';vertical-align:middle">'
       + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
     + '</tr>';
 }
@@ -1604,7 +1665,30 @@ function renderKomb() {
   document.getElementById('kmoreBtn').style.display = kombOffset < list.length ? 'block' : 'none';
 }
 
-function onKombSearch() { kombOffset = 0; renderKomb(); }
+function onKombSearch() {
+  kombOffset = 0;
+  if (kombN > 2) { _invalidateKomb(); _buildAndRenderAll(); }
+  else renderKomb();
+}
+
+function _buildAndRenderAll() {
+  document.getElementById('kcount').textContent = 'Hesaplanıyor…';
+  document.getElementById('ktbody').innerHTML = '';
+  document.getElementById('ktierBar').innerHTML = '';
+  setTimeout(function(){
+    kombData = _buildKombData();
+    kombOffset = 0;
+    if (kombData.error) {
+      document.getElementById('kcount').textContent = kombData.error;
+      return;
+    }
+    if (!kombData.t79.length && kombData.t41.length) kombTier = '41';
+    else if (!kombData.t79.length && kombData.t93.length) kombTier = '93';
+    else kombTier = '79';
+    _renderKombTabs();
+    renderKomb();
+  }, 0);
+}
 
 function loadMoreKomb() {
   var list = _kombList();
@@ -1629,24 +1713,12 @@ function toggleKombo() {
   page.classList.toggle('show', show);
   btn.classList.toggle('act', show);
   if (show) {
+    document.getElementById('kpageQ').value = '';
     if (!kombData) {
-      document.getElementById('kcount').textContent = 'Hesaplanıyor…';
-      document.getElementById('ktbody').innerHTML = '';
-      setTimeout(function(){
-        kombData = _buildKombData();
-        // Default tier: ilk boş olmayan
-        if (!kombData.t79.length && kombData.t41.length) kombTier = '41';
-        else if (!kombData.t79.length && kombData.t93.length) kombTier = '93';
-        else kombTier = '79';
-        kombOffset = 0;
-        _renderKombTabs();
-        document.getElementById('kpageQ').value = '';
-        renderKomb();
-      }, 0);
+      _buildAndRenderAll();
     } else {
-      _renderKombTabs();
-      document.getElementById('kpageQ').value = '';
       kombOffset = 0;
+      _renderKombTabs();
       renderKomb();
     }
     document.getElementById('kpageQ').focus();
@@ -1657,20 +1729,20 @@ function toggleKombo() {
 document.getElementById('ktbody').addEventListener('click', function(ev) {
   var row = ev.target.closest('.krow-sel');
   if (!row) return;
-  var ba = row.dataset.ba, bb = row.dataset.bb;
-  var ua = URUNLER.find(function(x){ return x.b === ba; });
-  var ub = URUNLER.find(function(x){ return x.b === bb; });
-  if (!ua || !ub) return;
+  var barkodlar;
+  try { barkodlar = JSON.parse(row.dataset.bs); } catch(e) { return; }
+  var urunler = barkodlar.map(function(b){ return URUNLER.find(function(x){ return x.b === b; }); });
+  if (urunler.some(function(u){ return !u; })) return;
   var makeEntry = function(u){
     return {b:u.b, a:u.a, alis:maliyetler[u.b]||u.f||0, satis:u.s||'', indirimli:'', qty:1, kom:u.k ? Math.round(u.k*100*10)/10 : '', _qtyManual:false};
   };
-  anaUrun = makeEntry(ua);
+  anaUrun = makeEntry(urunler[0]);
   yanMap.clear();
-  yanMap.set(ub.b, makeEntry(ub));
+  for (var xi = 1; xi < urunler.length; xi++) yanMap.set(urunler[xi].b, makeEntry(urunler[xi]));
   toggleKombo();
   renderGrid();
   renderRight();
-  showToast(ua.a.substring(0,20) + '… + ' + ub.a.substring(0,20) + '… eklendi', true);
+  showToast(urunler[0].a.substring(0,20) + '… + ' + (urunler.length - 1) + ' ürün eklendi', true);
 });
 
 // Kombinasyonlar tablosunda aşağı scroll'layınca otomatik daha fazla yükle
