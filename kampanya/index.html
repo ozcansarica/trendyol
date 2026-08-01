@@ -114,6 +114,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .sc-fl{font-size:9.5px;color:var(--mut)}
 .sc-fv{font-size:12.5px;font-weight:700;color:var(--txt)}
 .sc-qty{font-size:10.5px;color:var(--sub);margin-top:6px;line-height:1.5;border-top:1px solid var(--brd);padding-top:7px}
+/* Ana / Yan ürün kartları */
+.card.sel-ana{background:rgba(245,158,11,.14);border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
+.card.sel-ana .cc{background:var(--acc);border-color:var(--acc)}
+/* Rol rozetleri (sağ panel bölüm başlıkları) */
+.role-badge{font-size:9px;font-weight:800;border-radius:3px;padding:2px 6px;letter-spacing:.3px;vertical-align:middle;margin-right:4px}
+.role-ana{background:var(--acc);color:#000}
+.role-yan{background:var(--blu);color:#fff}
+.role-section{margin-bottom:8px}
 /* Hedef oran */
 .hk-row{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
 .hk-lbl{font-size:12px;color:var(--sub)}
@@ -327,7 +335,8 @@ function resetUrunler() {
   if (!confirm('Yüklenen Excel silinecek ve varsayılan ürün listesi geri yüklenecek. Emin misiniz?')) return;
   try { localStorage.removeItem('kampanya_urunler_v1'); } catch(e) {}
   URUNLER = URUNLER_DEFAULT.slice();
-  selMap.clear();
+  anaUrun = null;
+  yanMap.clear();
   renderGrid();
   renderRight();
   showToast(URUNLER.length + ' varsayılan ürün yüklendi', true);
@@ -335,7 +344,8 @@ function resetUrunler() {
 
 // ========== STATE ==========
 
-const selMap = new Map();
+let anaUrun = null;
+const yanMap = new Map();
 let platMode = 'normal';
 let hedefOran = 50;
 let sortKey = 'a';
@@ -472,10 +482,12 @@ function renderGrid() {
   else if (sortKey === 'pd') list.sort((a,b) => b.f - a.f);
   else list.sort((a,b) => a.a.localeCompare(b.a,'tr'));
 
+  const selTotal = (anaUrun ? 1 : 0) + yanMap.size;
   document.getElementById('rcount').textContent = list.length + ' / ' + URUNLER.length;
-  document.getElementById('selcnt').textContent = selMap.size + ' seçili';
+  document.getElementById('selcnt').textContent = selTotal ? selTotal + ' seçili' : '0 seçili';
 
   const chk = '<svg width="9" height="9" viewBox="0 0 9 9"><polyline points="1,4.5 3.5,7 8,2" stroke="#000" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const star = '<svg width="9" height="9" viewBox="0 0 9 9"><polygon points="4.5,1 5.7,3.5 8.5,3.7 6.5,5.5 7.1,8.2 4.5,6.8 1.9,8.2 2.5,5.5 0.5,3.7 3.3,3.5" fill="#000"/></svg>';
   document.getElementById('grid').innerHTML = !list.length
     ? '<div style="padding:30px;text-align:center;color:var(--mut);font-size:13px">Ürün bulunamadı</div>'
     : list.map(p => {
@@ -491,9 +503,12 @@ function renderGrid() {
             + '<span style="font-size:9.5px;color:var(--sub)">alış ₺</span>'
             + '</div></div>';
         }
-        const s = selMap.has(p.b);
-        return '<div class="card' + (s ? ' sel' : '') + '" data-b="' + escA(p.b) + '">'
-          + '<div class="cc">' + (s ? chk : '') + '</div>'
+        const isAna = anaUrun && anaUrun.b === p.b;
+        const isYan = yanMap.has(p.b);
+        const cls = isAna ? ' sel-ana' : isYan ? ' sel' : '';
+        const ico = isAna ? star : isYan ? chk : '';
+        return '<div class="card' + cls + '" data-b="' + escA(p.b) + '">'
+          + '<div class="cc">' + ico + '</div>'
           + '<div class="cn">' + escH(p.a) + '</div>'
           + '<div class="cb">' + escH(p.b) + '</div>'
           + '<div class="cf">' + tl(p.f) + '<span>alış</span></div>'
@@ -503,10 +518,34 @@ function renderGrid() {
 
 // ========== RENDER RIGHT PANEL ==========
 
+function prodRow(e) {
+  const mq = +e.satis > 0 ? minQty(+e.satis) : 1;
+  const qv = e.qty || mq;
+  const av = e.alis > 0 ? e.alis.toFixed(2) : '';
+  return '<div class="prod-row">'
+    + '<div class="pr-name">' + escH(e.a) + '</div>'
+    + '<div class="pr-bk">' + escH(e.b) + '</div>'
+    + '<div class="pr-inp">'
+    + '<label>Alış ₺<input class="pi w82" type="number" min="0" step="0.01"'
+      + ' value="' + escA(av) + '" placeholder="0.00"'
+      + ' data-b="' + escA(e.b) + '" data-f="alis"></label>'
+    + '<label>Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
+      + ' value="' + escA(String(e.satis||'')) + '" placeholder="fiyat girin"'
+      + ' data-b="' + escA(e.b) + '" data-f="satis"></label>'
+    + '<label>Adet<input class="pi w54" type="number" min="1" step="1"'
+      + ' value="' + qv + '"'
+      + ' data-b="' + escA(e.b) + '" data-f="qty"></label>'
+    + '<label>Kom %<input class="pi w60" type="number" min="0" max="100" step="0.1"'
+      + ' value="' + escA(String(e.kom||'')) + '" placeholder="opsiyonel"'
+      + ' data-b="' + escA(e.b) + '" data-f="kom"></label>'
+    + '<button class="rm-btn" data-b="' + escA(e.b) + '">×</button>'
+    + '</div></div>';
+}
+
 function renderRight() {
   const ri = document.getElementById('ri');
-  if (!selMap.size) {
-    ri.innerHTML = '<div class="empty-calc">← Sol panelden ürün seçin<br><small style="font-size:12px;opacity:.6">Birden fazla ürün seçip kampanya indirimini hesaplayın</small></div>';
+  if (!anaUrun) {
+    ri.innerHTML = '<div class="empty-calc">← Sol panelden <b>ana ürünü</b> seçin<br><small style="font-size:12px;opacity:.6">İlk seçilen ana ürün olur; sonrakiler yan ürün olarak eklenir</small></div>';
     return;
   }
 
@@ -523,39 +562,22 @@ function renderRight() {
     + '<span class="hk-lbl">%</span>'
     + '</div>';
 
-  html += '<div>'
-    + '<div class="sec-title">Seçilen Ürünler (' + selMap.size + ')</div>';
+  html += '<div class="role-section">'
+    + '<div class="sec-title"><span class="role-badge role-ana">ANA ÜRÜN</span></div>'
+    + prodRow(anaUrun)
+    + '</div>';
 
-  for (const e of selMap.values()) {
-    const mq = +e.satis > 0 ? minQty(+e.satis) : 1;
-    const qv = e.qty || mq;
-    const av = e.alis > 0 ? e.alis.toFixed(2) : '';
-    html += '<div class="prod-row">'
-      + '<div class="pr-name">' + escH(e.a) + '</div>'
-      + '<div class="pr-bk">' + escH(e.b) + '</div>'
-      + '<div class="pr-inp">'
-      + '<label>Alış ₺<input class="pi w82" type="number" min="0" step="0.01"'
-        + ' value="' + escA(av) + '"'
-        + ' placeholder="0.00"'
-        + ' data-b="' + escA(e.b) + '" data-f="alis"></label>'
-      + '<label>Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
-        + ' value="' + escA(String(e.satis||'')) + '"'
-        + ' placeholder="fiyat girin"'
-        + ' data-b="' + escA(e.b) + '" data-f="satis"></label>'
-      + '<label>Adet<input class="pi w54" type="number" min="1" step="1"'
-        + ' value="' + qv + '"'
-        + ' data-b="' + escA(e.b) + '" data-f="qty"></label>'
-      + '<label>Kom %<input class="pi w60" type="number" min="0" max="100" step="0.1"'
-        + ' value="' + escA(String(e.kom||'')) + '"'
-        + ' placeholder="opsiyonel"'
-        + ' data-b="' + escA(e.b) + '" data-f="kom"></label>'
-      + '<button class="rm-btn" data-b="' + escA(e.b) + '">×</button>'
-      + '</div></div>';
+  if (yanMap.size > 0) {
+    html += '<div class="role-section">'
+      + '<div class="sec-title"><span class="role-badge role-yan">YAN ÜRÜNLER</span>'
+      + ' <span style="font-size:11px;color:var(--sub)">(' + yanMap.size + ')</span></div>';
+    for (const e of yanMap.values()) html += prodRow(e);
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:11px;color:var(--mut);padding:5px 2px;text-align:center">← Sol panelden yan ürün ekleyin</div>';
   }
 
-  html += '</div>';
   html += '<div id="cres"></div>';
-
   ri.innerHTML = html;
   updateResults();
 }
@@ -566,7 +588,10 @@ function updateResults() {
 
   const pf = getPF();
   const entries = [];
-  for (const e of selMap.values()) {
+  if (anaUrun && +anaUrun.satis > 0) {
+    entries.push({b:anaUrun.b, a:anaUrun.a, alis:+anaUrun.alis||0, satis:+anaUrun.satis, qty:Math.max(1,+anaUrun.qty||1), kom:+anaUrun.kom||0});
+  }
+  for (const e of yanMap.values()) {
     if (+e.satis > 0) {
       entries.push({b:e.b, a:e.a, alis:+e.alis||0, satis:+e.satis, qty:Math.max(1,+e.qty||1), kom:+e.kom||0});
     }
@@ -707,11 +732,26 @@ document.getElementById('grid').addEventListener('click', function(e) {
   const b = card.dataset.b;
   const p = URUNLER.find(function(x){ return x.b === b; });
   if (!p) return;
-  if (selMap.has(b)) {
-    selMap.delete(b);
+
+  if (anaUrun && anaUrun.b === b) {
+    // Ana ürünü kaldır — ilk yan ürün ana olur
+    if (yanMap.size > 0) {
+      const first = yanMap.values().next().value;
+      yanMap.delete(first.b);
+      anaUrun = first;
+    } else {
+      anaUrun = null;
+    }
+  } else if (yanMap.has(b)) {
+    yanMap.delete(b);
   } else {
     const savedAlis = maliyetler[b] || p.f;
-    selMap.set(b, {b:p.b, a:p.a, alis:savedAlis, satis:'', qty:1, kom:'', _qtyManual:false});
+    const entry = {b:p.b, a:p.a, alis:savedAlis, satis:'', qty:1, kom:'', _qtyManual:false};
+    if (!anaUrun) {
+      anaUrun = entry;
+    } else {
+      yanMap.set(b, entry);
+    }
   }
   renderGrid();
   renderRight();
@@ -730,7 +770,8 @@ document.getElementById('grid').addEventListener('change', function(e) {
     maliyetler[b] = n;
     saveMaliyetler();
     // Açık seçimde de güncelle
-    if (selMap.has(b)) selMap.get(b).alis = n;
+    if (anaUrun && anaUrun.b === b) anaUrun.alis = n;
+    else if (yanMap.has(b)) yanMap.get(b).alis = n;
     try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(URUNLER)); } catch(x) {}
   }
 });
@@ -746,7 +787,18 @@ document.getElementById('ri').addEventListener('click', function(e) {
   }
   const rmBtn = e.target.closest('.rm-btn');
   if (rmBtn && rmBtn.dataset.b) {
-    selMap.delete(rmBtn.dataset.b);
+    const rb = rmBtn.dataset.b;
+    if (anaUrun && anaUrun.b === rb) {
+      if (yanMap.size > 0) {
+        const first = yanMap.values().next().value;
+        yanMap.delete(first.b);
+        anaUrun = first;
+      } else {
+        anaUrun = null;
+      }
+    } else {
+      yanMap.delete(rb);
+    }
     renderGrid();
     renderRight();
   }
@@ -764,8 +816,8 @@ document.getElementById('ri').addEventListener('input', function(e) {
   const b = inp.dataset.b;
   const f = inp.dataset.f;
   const v = inp.value;
-  if (!selMap.has(b)) return;
-  const item = selMap.get(b);
+  const item = (anaUrun && anaUrun.b === b) ? anaUrun : yanMap.get(b);
+  if (!item) return;
 
   if (f === 'alis') {
     const n = +v;
@@ -816,7 +868,8 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
       urunler.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
       URUNLER = urunler;
       try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(urunler)); } catch(x) {}
-      selMap.clear();
+      anaUrun = null;
+      yanMap.clear();
       renderGrid();
       renderRight();
       showToast(urunler.length + ' ürün yüklendi', true);
