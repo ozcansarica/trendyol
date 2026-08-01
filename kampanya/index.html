@@ -1555,10 +1555,16 @@ function _kombList() {
 
 function _renderKombTabs() {
   var d = kombData;
+  function filtCnt(arr) {
+    if (kombHedefOran <= 0) return arr.length;
+    var n = 0;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= kombHedefOran) n++; }
+    return n;
+  }
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:d.t41.length},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:d.t79.length},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:d.t93.length},
+    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
+    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
+    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
   ];
   document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
@@ -1676,6 +1682,7 @@ document.getElementById('kombHedefOranInp').addEventListener('input', function()
   var v = parseFloat(this.value);
   kombHedefOran = (!isNaN(v) && v >= 0) ? v : 0;
   kombOffset = 0;
+  if (kombData) _renderKombTabs();
   renderKomb();
 });
 
