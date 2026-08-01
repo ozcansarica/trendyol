@@ -212,7 +212,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
           <th>Ürün B</th>
           <th style="text-align:right">Toplam ₺</th>
           <th style="text-align:right">Kargo ₺</th>
-          <th style="text-align:right">Ayrı Kargo</th>
           <th style="text-align:right;color:var(--grn)">Tasarruf</th>
         </tr>
       </thead>
@@ -1569,7 +1568,6 @@ function renderKomb() {
       + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
       + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
       + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
-      + '<td style="text-align:right;color:var(--mut)">' + tl(p.kargoAyri) + '</td>'
       + '<td style="text-align:right;font-weight:800;color:' + (p.tas > 0 ? 'var(--grn)' : 'var(--mut)') + '">'
         + (p.tas > 0 ? '+' + tl(p.tas) : '—') + '</td>'
       + '</tr>';
