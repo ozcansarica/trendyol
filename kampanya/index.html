@@ -1520,10 +1520,12 @@ function _invalidateKomb() { kombData = null; }
 
 function _urunKarOrani(u) {
   var pf = getPF(), rv = 20/120;
-  var kg = kargoFor(u.s), kom = u.s * (u.k||0);
-  var stopaj = u.s / 1.20 * 0.01;
-  var oKdv = Math.max(0, u.s*rv - ((u.f||0)*rv + kg*rv + kom*rv + pf*rv));
-  return (u.f||0) > 0 ? (u.s - (u.f||0) - kg - pf - kom - stopaj - oKdv) / (u.f||0) * 100 : -Infinity;
+  var qty = minQty(u.s);
+  var rev = u.s * qty, alis = (u.f || 0) * qty;
+  var kg = kargoFor(rev), kom = rev * (u.k||0);
+  var stopaj = rev / 1.20 * 0.01;
+  var oKdv = Math.max(0, rev*rv - (alis*rv + kg*rv + kom*rv + pf*rv));
+  return alis > 0 ? (rev - alis - kg - pf - kom - stopaj - oKdv) / alis * 100 : -Infinity;
 }
 
 function setKombN(n) {
@@ -1572,9 +1574,10 @@ function _buildKombData(searchQuery) {
   function addCombo(prods) {
     var total = 0, alis = 0, kom = 0;
     for (var pi = 0; pi < prods.length; pi++) {
-      total += prods[pi].s;
-      alis  += (prods[pi].f || 0);
-      kom   += prods[pi].s * (prods[pi].k || 0);
+      var qty = minQty(prods[pi].s);
+      total += prods[pi].s * qty;
+      alis  += (prods[pi].f || 0) * qty;
+      kom   += prods[pi].s * qty * (prods[pi].k || 0);
     }
     var kg = kargoFor(total);
     var stopaj = total / 1.20 * 0.01;
@@ -1656,7 +1659,9 @@ function setKombTier(key) {
 function _kombRow(p, i) {
   var prodsHtml = p.prods.map(function(u){
     var nm = u.a.length > 50 ? u.a.substring(0,50) + '…' : u.a;
-    return '<div style="margin-bottom:1px">' + escH(nm) + '<div class="ut-bk">' + escH(u.b) + '</div></div>';
+    var qty = minQty(u.s);
+    var qtyTag = qty > 1 ? ' <span style="color:var(--acc);font-size:9px;font-weight:700">×' + qty + '</span>' : '';
+    return '<div style="margin-bottom:1px">' + escH(nm) + qtyTag + '<div class="ut-bk">' + escH(u.b) + '</div></div>';
   }).join('');
   var bsAttr = escA(JSON.stringify(p.prods.map(function(u){ return u.b; })));
   var karClr = p.kar > 0 ? 'var(--grn)' : 'var(--red)';
@@ -1762,7 +1767,7 @@ document.getElementById('ktbody').addEventListener('click', function(ev) {
   var urunler = barkodlar.map(function(b){ return URUNLER.find(function(x){ return x.b === b; }); });
   if (urunler.some(function(u){ return !u; })) return;
   var makeEntry = function(u){
-    return {b:u.b, a:u.a, alis:maliyetler[u.b]||u.f||0, satis:u.s||'', indirimli:'', qty:1, kom:u.k ? Math.round(u.k*100*10)/10 : '', _qtyManual:false};
+    return {b:u.b, a:u.a, alis:maliyetler[u.b]||u.f||0, satis:u.s||'', indirimli:'', qty:minQty(u.s||0), kom:u.k ? Math.round(u.k*100*10)/10 : '', _qtyManual:false};
   };
   anaUrun = makeEntry(urunler[0]);
   yanMap.clear();
