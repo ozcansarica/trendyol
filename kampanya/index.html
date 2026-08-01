@@ -117,13 +117,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* Hedef oran */
 .hk-row{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
 .hk-lbl{font-size:12px;color:var(--sub)}
-.hk-inp{width:62px;border:1px solid var(--brd);border-radius:6px;padding:3px 8px;background:var(--bg2);color:var(--txt);font-size:13px;text-align:right}
+.hk-inp{width:62px;border:1px solid var(--brd);border-radius:6px;padding:3px 8px;background:var(--surf);color:var(--txt);font-size:13px;text-align:right}
 /* Kampanya değerlendirme bloğu */
 .pe-block{margin-top:8px;padding-top:8px;border-top:1px solid var(--brd)}
 .pe-verdict{font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:5px;margin-bottom:6px}
 .pe-ok{background:rgba(34,197,94,.14);color:var(--grn)}
 .pe-no{background:rgba(239,68,68,.11);color:var(--red)}
-.pe-item{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;gap:6px;border-bottom:1px solid color-mix(in srgb,var(--brd) 50%,transparent)}
+.pe-item{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;gap:6px;border-bottom:1px solid var(--brd)}
 .pe-item:last-child{border-bottom:none}
 .pe-iname{flex:1;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
 .pe-inum{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:10px;white-space:nowrap}
@@ -256,20 +256,23 @@ async function parseUrunlerXlsx(ab) {
   var rows = await _xRows(zip);
   if (rows.length < 2) throw new Error('Dosyada veri satırı bulunamadı.');
   var hdr = rows[0].map(function(h){ return h == null ? '' : String(h).trim(); });
-  // Büyük/küçük harf duyarsız ve Türkçe karakter toleranslı arama
+  // Büyük/küçük harf duyarsız ve Türkçe karakter toleranslı arama (tr-TR locale)
+  var normH = function(s) {
+    s = String(s == null ? '' : s).trim();
+    try { return s.toLocaleLowerCase('tr-TR'); } catch(e) { return s.toLowerCase(); }
+  };
   var ciLax = function(candidates) {
-    var lower = hdr.map(function(h){ return h.toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı'); });
+    var lower = hdr.map(normH);
     for (var ci = 0; ci < candidates.length; ci++) {
-      var cand = candidates[ci].toLowerCase().replace(/İ/g,'i').replace(/I/g,'ı');
-      var idx = lower.indexOf(cand);
+      var idx = lower.indexOf(normH(candidates[ci]));
       if (idx !== -1) return idx;
     }
     return -1;
   };
-  var iUrun   = ciLax(['ürün adı','ürün i̇smi','ürün ismi','urun adi','urun ismi','ürün başlığı','product name']);
-  var iBarkod = ciLax(['barkod no','barkod','barcode','barkod numarası']);
-  var iAlis   = ciLax(['alış tutarı (kdv)','alış fiyatı','alış tutarı','alis tutari','maliyet','alış','cost']);
-  if (iUrun === -1) throw new Error('Ürün adı kolonu bulunamadı. Beklenen: "Ürün Adı" veya "ÜRÜN İSMİ"\nDosyadaki kolonlar: ' + hdr.filter(Boolean).join(', '));
+  var iUrun   = ciLax(['ürün adı','ürün ismi','urun adi','urun ismi','ürün başlığı','product name','ürün i̇smi']);
+  var iBarkod = ciLax(['barkod no','barkod','barcode','barkod numarası','barkod no.']);
+  var iAlis   = ciLax(['alış tutarı (kdv)','alış fiyatı','alış tutarı','alis tutari','maliyet','alış','cost','alış tutari']);
+  if (iUrun === -1) throw new Error('Ürün adı kolonu bulunamadı.\nBeklenen: "Ürün Adı", "Ürün İsmi" veya benzeri.\nDosyadaki kolonlar: ' + hdr.filter(Boolean).join(' | '));
   var urunler = [];
   for (var r = 1; r < rows.length; r++) {
     var row = rows[r]; if (!row) continue;
