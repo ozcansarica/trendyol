@@ -114,6 +114,22 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .sc-fl{font-size:9.5px;color:var(--mut)}
 .sc-fv{font-size:12.5px;font-weight:700;color:var(--txt)}
 .sc-qty{font-size:10.5px;color:var(--sub);margin-top:6px;line-height:1.5;border-top:1px solid var(--brd);padding-top:7px}
+/* Hedef oran */
+.hk-row{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+.hk-lbl{font-size:12px;color:var(--sub)}
+.hk-inp{width:62px;border:1px solid var(--brd);border-radius:6px;padding:3px 8px;background:var(--bg2);color:var(--txt);font-size:13px;text-align:right}
+/* Kampanya değerlendirme bloğu */
+.pe-block{margin-top:8px;padding-top:8px;border-top:1px solid var(--brd)}
+.pe-verdict{font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:5px;margin-bottom:6px}
+.pe-ok{background:rgba(34,197,94,.14);color:var(--grn)}
+.pe-no{background:rgba(239,68,68,.11);color:var(--red)}
+.pe-item{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;gap:6px;border-bottom:1px solid color-mix(in srgb,var(--brd) 50%,transparent)}
+.pe-item:last-child{border-bottom:none}
+.pe-iname{flex:1;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt)}
+.pe-inum{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:10px;white-space:nowrap}
+.pe-sep{color:var(--sub)}
+.pe-bun{color:var(--grn);font-weight:700}
+.pe-empty{font-size:11px;color:var(--sub);text-align:center;padding:4px 0}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -293,6 +309,7 @@ function saveMaliyetler() {
 
 const selMap = new Map();
 let platMode = 'normal';
+let hedefOran = 50;
 let sortKey = 'a';
 let searchQ = '';
 let calcTimer = null;
@@ -324,6 +341,58 @@ function kargoFor(b) {
   if (b < 200) return 41;
   if (b < 350) return 79;
   return 93;
+}
+
+function calcSingleProfit(e, pf) {
+  var qty = minQty(+e.satis);
+  var rev = +e.satis * qty;
+  var alis = (+e.alis || 0) * qty;
+  var kom = rev * (+e.kom || 0) / 100;
+  var kargo = kargoFor(rev);
+  var r = 20 / 120;
+  var stopaj = rev / 1.20 * 0.01;
+  var odenecekKdv = Math.max(0, rev*r - (alis*r + kargo*r + kom*r + pf*r));
+  return rev - alis - kargo - pf - kom - stopaj - odenecekKdv;
+}
+
+function buildEvalBlock(entries, sc, basketProfit, profitRate, pf) {
+  var items = entries.map(function(e) {
+    if (+e.alis <= 0) return null;
+    var revFrac = sc.combined > 0 ? (+e.satis * e.qty) / sc.combined : 0;
+    var bundleShare = basketProfit * revFrac;
+    var singleP = calcSingleProfit(e, pf);
+    return { e: e, bundleShare: bundleShare, singleP: singleP, viable: bundleShare >= singleP };
+  }).filter(function(p){ return p !== null; });
+  if (!items.length) return '';
+
+  var viableItems = items.filter(function(p){ return p.viable; });
+  var meetsTarget = profitRate !== null && profitRate >= hedefOran;
+
+  var html = '<div class="pe-block">';
+  html += '<div class="pe-verdict ' + (meetsTarget ? 'pe-ok' : 'pe-no') + '">';
+  if (meetsTarget) {
+    html += '✓ Kampanya önerilir · Kâr Oranı %' + profitRate.toFixed(1) + ' ≥ Hedef %' + hedefOran;
+  } else {
+    html += '✗ Önerilmez · Kâr Oranı %' + (profitRate !== null ? profitRate.toFixed(1) : '—') + ' < Hedef %' + hedefOran;
+  }
+  html += '</div>';
+
+  if (viableItems.length) {
+    viableItems.forEach(function(p) {
+      var name = p.e.a.length > 30 ? p.e.a.substring(0, 30) + '…' : p.e.a;
+      html += '<div class="pe-item">'
+        + '<div class="pe-iname">' + escH(name) + '</div>'
+        + '<div class="pe-inum">'
+        + '<span class="pe-sep">Tekli: ' + tl(p.singleP) + '</span>'
+        + '<span class="pe-bun">Sepette: ' + tl(p.bundleShare) + ' ✓</span>'
+        + '</div></div>';
+    });
+  } else {
+    html += '<div class="pe-empty">Hiçbir ürün tekli satıştan iyi değil</div>';
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function tl(v) {
@@ -419,6 +488,11 @@ function renderRight() {
     + '<span class="pf-lbl">Platform Ücreti:</span>'
     + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,19 ₺ (00:00–14:59)</button>'
     + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,19 ₺ (15:00–23:59)</button>'
+    + '</div>'
+    + '<div class="hk-row">'
+    + '<span class="hk-lbl">Hedef Kâr Oranı:</span>'
+    + '<input id="hedefOranInp" class="hk-inp" type="number" min="0" step="1" value="' + hedefOran + '">'
+    + '<span class="hk-lbl">%</span>'
     + '</div>';
 
   html += '<div>'
@@ -557,6 +631,10 @@ function buildScCard(title, sc, badge, entries) {
       + '</div>';
   }
 
+  if (totalAlis > 0) {
+    html += buildEvalBlock(entries, sc, profit, profitRate, pf);
+  }
+
   html += '</div>';
   return html;
 }
@@ -649,6 +727,11 @@ document.getElementById('ri').addEventListener('click', function(e) {
 // Right panel input: update state, save alis to localStorage, auto-qty
 document.getElementById('ri').addEventListener('input', function(e) {
   const inp = e.target;
+  if (inp.id === 'hedefOranInp') {
+    var v = parseFloat(inp.value);
+    if (!isNaN(v) && v >= 0) { hedefOran = v; updateResults(); }
+    return;
+  }
   if (!inp.dataset.b || !inp.dataset.f) return;
   const b = inp.dataset.b;
   const f = inp.dataset.f;
