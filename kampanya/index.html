@@ -168,7 +168,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   <div class="logo">📦 Kampanya İndirim Hesaplayıcı</div>
   <div class="hdr-r">
     <input type="file" id="urunXlsxIn" accept=".xlsx" style="display:none">
-    <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) kolonlu Excel yükle">📂 Ürün Yükle</button>
+    <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) + Satış Tutarı (KDV) + Komisyon Oranı kolonlu Excel yükle">📂 Ürün Yükle</button>
     <button class="tbtn" onclick="resetUrunler()" title="Yüklenen Excel'i temizle, varsayılan ürün listesine dön" style="font-size:11px;opacity:.7">↺ Sıfırla</button>
     <button class="tbtn" id="upageBtn" onclick="toggleUrunler()">📋 Ürünler</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
@@ -320,6 +320,8 @@ async function parseUrunlerXlsx(ab) {
   var iUrun   = ciLax(['ürün adı','ürün ismi','urun adi','urun ismi','ürün başlığı','product name','ürün i̇smi']);
   var iBarkod = ciLax(['barkod no','barkod','barcode','barkod numarası','barkod no.']);
   var iAlis   = ciLax(['alış tutarı (kdv)','alış fiyatı','alış tutarı','alis tutari','maliyet','alış','cost','alış tutari']);
+  var iSatis  = ciLax(['satış tutarı (kdv)','satış fiyatı','satış tutarı','satis tutari','satış','sale price','satis']);
+  var iKom    = ciLax(['komisyon oranı','komisyon %','komisyon','commission rate','commission']);
   if (iUrun === -1) throw new Error('Ürün adı kolonu bulunamadı.\nBeklenen: "Ürün Adı", "Ürün İsmi" veya benzeri.\nDosyadaki kolonlar: ' + hdr.filter(Boolean).join(' | '));
   var urunler = [];
   for (var r = 1; r < rows.length; r++) {
@@ -328,7 +330,12 @@ async function parseUrunlerXlsx(ab) {
     if (ad == null || String(ad).trim() === '') continue;
     var barkod = (iBarkod !== -1 && row[iBarkod] != null) ? String(row[iBarkod]).trim() : '';
     var maliyet = iAlis !== -1 ? _xNum(row[iAlis]) : 0;
-    urunler.push({b: barkod || String(ad).trim(), a: String(ad).trim(), f: maliyet});
+    var satis   = iSatis !== -1 ? _xNum(row[iSatis]) : 0;
+    var kom     = iKom   !== -1 ? _xNum(row[iKom])   : 0;
+    var obj = {b: barkod || String(ad).trim(), a: String(ad).trim(), f: Math.round(maliyet * 100) / 100};
+    if (satis > 0) obj.s = Math.round(satis * 100) / 100;
+    if (kom   > 0) obj.k = Math.round(kom * 10000) / 10000;
+    urunler.push(obj);
   }
   if (!urunler.length) throw new Error('Hiç geçerli ürün satırı bulunamadı.');
   return urunler;
