@@ -138,6 +138,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .pe-sep{color:var(--sub)}
 .pe-bun{color:var(--grn);font-weight:700}
 .pe-empty{font-size:11px;color:var(--sub);text-align:center;padding:4px 0}
+/* Ürünler sayfası */
+.upage{position:fixed;inset:50px 0 0 0;background:var(--bg);z-index:20;display:none;flex-direction:column;overflow:hidden}
+.upage.show{display:flex}
+.upage-top{padding:10px 14px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--surf)}
+.utable-wrap{flex:1;overflow:auto;padding:0}
+.utable{width:100%;border-collapse:collapse;font-size:12.5px}
+.utable thead th{background:var(--surf);border-bottom:2px solid var(--brd);padding:9px 12px;text-align:left;font-size:10.5px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:1}
+.utable tbody td{padding:7px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.utable tbody tr:hover td{background:var(--sel)}
+.ut-bk{font-size:10px;color:var(--mut);font-family:monospace}
+.ut-name{color:var(--txt);line-height:1.35}
+.ut-price{font-variant-numeric:tabular-nums;font-weight:700;color:var(--acc);white-space:nowrap}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -155,8 +167,31 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <input type="file" id="urunXlsxIn" accept=".xlsx" style="display:none">
     <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) kolonlu Excel yükle">📂 Ürün Yükle</button>
     <button class="tbtn" onclick="resetUrunler()" title="Yüklenen Excel'i temizle, varsayılan ürün listesine dön" style="font-size:11px;opacity:.7">↺ Sıfırla</button>
+    <button class="tbtn" id="upageBtn" onclick="toggleUrunler()">📋 Ürünler</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
     <button class="tbtn" onclick="toggleTheme()">◑</button>
+  </div>
+</div>
+
+<!-- Ürünler tam sayfa overlay -->
+<div class="upage" id="upage">
+  <div class="upage-top">
+    <input class="sinput" id="upageQ" placeholder="Ürün adı veya barkod ara…" oninput="renderUpage()" autocomplete="off" spellcheck="false" style="max-width:320px">
+    <span id="ucount" style="font-size:12px;color:var(--mut)"></span>
+    <button class="tbtn" onclick="toggleUrunler()" style="margin-left:auto">✕ Kapat</button>
+  </div>
+  <div class="utable-wrap">
+    <table class="utable">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>Barkod</th>
+          <th>Ürün Adı</th>
+          <th style="text-align:right">Alış ₺</th>
+        </tr>
+      </thead>
+      <tbody id="utbody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -855,6 +890,38 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
   rd.readAsArrayBuffer(file);
 });
 
+
+// ========== ÜRÜNLER SAYFASI ==========
+
+function toggleUrunler() {
+  const page = document.getElementById('upage');
+  const btn  = document.getElementById('upageBtn');
+  const show = !page.classList.contains('show');
+  page.classList.toggle('show', show);
+  btn.classList.toggle('act', show);
+  if (show) {
+    document.getElementById('upageQ').value = '';
+    renderUpage();
+    document.getElementById('upageQ').focus();
+  }
+}
+
+function renderUpage() {
+  const q = document.getElementById('upageQ').value.trim();
+  const qn = q ? q.toLocaleLowerCase('tr-TR') : '';
+  const list = qn
+    ? URUNLER.filter(function(u){ return u.a.toLocaleLowerCase('tr-TR').includes(qn) || u.b.toLocaleLowerCase('tr-TR').includes(qn); })
+    : URUNLER;
+  document.getElementById('ucount').textContent = list.length + ' / ' + URUNLER.length + ' ürün';
+  document.getElementById('utbody').innerHTML = list.map(function(u, i){
+    return '<tr>'
+      + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px">' + (i + 1) + '</td>'
+      + '<td class="ut-bk">' + escH(u.b) + '</td>'
+      + '<td class="ut-name">' + escH(u.a) + '</td>'
+      + '<td class="ut-price" style="text-align:right">' + (u.f > 0 ? tl(u.f) : '<span style="color:var(--mut)">—</span>') + '</td>'
+      + '</tr>';
+  }).join('');
+}
 
 // Init
 renderGrid();
