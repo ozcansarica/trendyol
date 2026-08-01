@@ -198,8 +198,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 <!-- Kombinasyonlar tam sayfa overlay -->
 <div class="kpage" id="kpage">
   <div class="kpage-top">
-    <input class="sinput" id="kpageQ" placeholder="Ürün adı veya barkod ara…" oninput="onKombSearch()" autocomplete="off" spellcheck="false" style="max-width:300px">
-    <span id="kcount" style="font-size:12px;color:var(--mut)"></span>
+    <input class="sinput" id="kpageQ" placeholder="Ürün adı veya barkod ara…" oninput="onKombSearch()" autocomplete="off" spellcheck="false" style="max-width:260px">
+    <span class="hk-lbl" style="white-space:nowrap">Hedef Kâr Oranı:</span>
+    <input id="kombHedefOranInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield">
+    <span class="hk-lbl">%</span>
+    <span id="kcount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
     <button class="tbtn" onclick="toggleKombo()" style="margin-left:auto">✕ Kapat</button>
   </div>
   <div class="ktier-bar" id="ktierBar"></div>
@@ -1501,6 +1504,7 @@ var kombData = null;   // {t41:[], t79:[], t93:[]} — lazy built
 var kombTier = '79';   // active tier key
 var kombOffset = 0;
 var KOMB_PAGE = 200;
+var kombHedefOran = 0;
 
 function _invalidateKomb() { kombData = null; }
 
@@ -1532,15 +1536,21 @@ function _buildKombData() {
 }
 
 function _kombList() {
-  var tiers = {t41:'41', t79:'79', t93:'93'};
   var key = 't' + kombTier;
   var base = kombData[key] || [];
   var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
-  if (!q) return base;
-  return base.filter(function(p){
-    return p.a.a.toLocaleLowerCase('tr-TR').includes(q) || p.a.b.toLocaleLowerCase('tr-TR').includes(q)
-        || p.b.a.toLocaleLowerCase('tr-TR').includes(q) || p.b.b.toLocaleLowerCase('tr-TR').includes(q);
-  });
+  var minOran = kombHedefOran;
+  var result = base;
+  if (q) {
+    result = result.filter(function(p){
+      return p.a.a.toLocaleLowerCase('tr-TR').includes(q) || p.a.b.toLocaleLowerCase('tr-TR').includes(q)
+          || p.b.a.toLocaleLowerCase('tr-TR').includes(q) || p.b.b.toLocaleLowerCase('tr-TR').includes(q);
+    });
+  }
+  if (minOran > 0) {
+    result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= minOran; });
+  }
+  return result;
 }
 
 function _renderKombTabs() {
@@ -1661,6 +1671,13 @@ document.getElementById('ktbody').addEventListener('click', function(ev) {
 document.getElementById('ktableWrap').addEventListener('scroll', function() {
   if (this.scrollTop + this.clientHeight >= this.scrollHeight - 400) loadMoreKomb();
 }, {passive: true});
+
+document.getElementById('kombHedefOranInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  kombHedefOran = (!isNaN(v) && v >= 0) ? v : 0;
+  kombOffset = 0;
+  renderKomb();
+});
 
 // URUNLER değişince kombData'yı sıfırla — Excel upload veya fiyat düzenleme
 var _origResetUrunler = resetUrunler;
