@@ -1537,23 +1537,32 @@ function setKombN(n) {
   if (document.getElementById('kpage').classList.contains('show')) _buildAndRenderAll();
 }
 
-function _buildKombData() {
+function _buildKombData(searchQuery) {
   var all = URUNLER.filter(function(u){ return u.s > 0; });
   var arr = all;
   var autoNote = '';
   if (kombN > 2) {
     var lim = KOMB_AUTO_LIMIT[kombN];
     if (arr.length > lim) {
-      // Her kargo diliminden eşit sayıda en kârlı ürün seç → tab dağılımı anlamlı olsun
       var sortKar = function(a, b){ return _urunKarOrani(b) - _urunKarOrani(a); };
-      var band41 = arr.filter(function(u){ return u.s < 200; }).sort(sortKar);
-      var band79 = arr.filter(function(u){ return u.s >= 200 && u.s < 350; }).sort(sortKar);
-      var band93 = arr.filter(function(u){ return u.s >= 350; }).sort(sortKar);
-      var perBand = Math.round(lim / 3);
+      // Arama varsa eşleşen ürünleri havuza garantile — sınırlama dışında kalmasınlar
+      var pinned = [];
+      if (searchQuery && searchQuery.trim()) {
+        var ql = searchQuery.trim().toLocaleLowerCase('tr-TR');
+        pinned = arr.filter(function(u){
+          return u.a.toLocaleLowerCase('tr-TR').includes(ql) || u.b.toLocaleLowerCase('tr-TR').includes(ql);
+        });
+      }
+      var rest = arr.filter(function(u){ return pinned.indexOf(u) === -1; });
+      var remaining = Math.max(0, lim - pinned.length);
+      var band41 = rest.filter(function(u){ return u.s < 200; }).sort(sortKar);
+      var band79 = rest.filter(function(u){ return u.s >= 200 && u.s < 350; }).sort(sortKar);
+      var band93 = rest.filter(function(u){ return u.s >= 350; }).sort(sortKar);
+      var perBand = Math.round(remaining / 3);
       var c = band41.slice(0, perBand);
       var m = band79.slice(0, perBand);
-      var rem = lim - c.length - m.length;
-      arr = c.concat(m).concat(band93.slice(0, rem > 0 ? rem : 0));
+      var rem = remaining - c.length - m.length;
+      arr = pinned.concat(c).concat(m).concat(band93.slice(0, rem > 0 ? rem : 0));
       autoNote = ' · her dilimden en kârlı ' + perBand + ' ürün';
     }
   }
@@ -1675,7 +1684,19 @@ function renderKomb() {
 
 function onKombSearch() {
   kombOffset = 0;
-  renderKomb();
+  if (kombN > 2) {
+    var q = document.getElementById('kpageQ').value.trim();
+    document.getElementById('kcount').textContent = 'Hesaplanıyor…';
+    document.getElementById('ktbody').innerHTML = '';
+    setTimeout(function(){
+      kombData = _buildKombData(q);
+      kombOffset = 0;
+      _renderKombTabs();
+      renderKomb();
+    }, 0);
+  } else {
+    renderKomb();
+  }
 }
 
 function _buildAndRenderAll() {
