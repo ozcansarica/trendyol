@@ -212,7 +212,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
           <th>Ürün B</th>
           <th style="text-align:right">Toplam ₺</th>
           <th style="text-align:right">Kargo ₺</th>
-          <th style="text-align:right;color:var(--grn)">Tasarruf</th>
+          <th style="text-align:right;color:var(--grn)">Tahmini Kâr</th>
+          <th style="text-align:right;color:var(--grn)">Kâr Oranı</th>
         </tr>
       </thead>
       <tbody id="ktbody"></tbody>
@@ -1510,15 +1511,22 @@ function _buildKombData() {
       var a = arr[i], b = arr[j];
       var total = a.s + b.s;
       var k = kargoFor(total);
-      var ka = kargoFor(a.s) + kargoFor(b.s);
-      var pair = {a:a, b:b, total:total, kargo:k, kargoAyri:ka, tas:ka-k};
+      var alis = (a.f||0) + (b.f||0);
+      var pf = getPF();
+      var kom = a.s * (a.k||0) + b.s * (b.k||0);
+      var rv = 20 / 120;
+      var stopaj = total / 1.20 * 0.01;
+      var odenecekKdv = Math.max(0, total*rv - (alis*rv + k*rv + kom*rv + pf*rv));
+      var kar = total - alis - k - pf - kom - stopaj - odenecekKdv;
+      var karOrani = alis > 0 ? kar / alis * 100 : null;
+      var pair = {a:a, b:b, total:total, kargo:k, kar:kar, karOrani:karOrani};
       if (k === 41) t41.push(pair);
       else if (k === 79) t79.push(pair);
       else t93.push(pair);
     }
   }
-  var bySav = function(x,y){ return y.tas - x.tas || y.total - x.total; };
-  t41.sort(bySav); t79.sort(bySav); t93.sort(bySav);
+  var byKar = function(x,y){ return (y.karOrani||0) - (x.karOrani||0) || y.total - x.total; };
+  t41.sort(byKar); t79.sort(byKar); t93.sort(byKar);
   return {t41:t41, t79:t79, t93:t93};
 }
 
@@ -1568,8 +1576,10 @@ function renderKomb() {
       + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
       + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
       + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
-      + '<td style="text-align:right;font-weight:800;color:' + (p.tas > 0 ? 'var(--grn)' : 'var(--mut)') + '">'
-        + (p.tas > 0 ? '+' + tl(p.tas) : '—') + '</td>'
+      + '<td style="text-align:right;font-weight:800;color:' + (p.kar > 0 ? 'var(--grn)' : 'var(--red)') + '">'
+        + (p.kar > 0 ? '+' + tl(p.kar) : tl(p.kar)) + '</td>'
+      + '<td style="text-align:right;font-weight:800;color:' + (p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)')) + '">'
+        + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
       + '</tr>';
   }).join('');
   document.getElementById('kmoreBtn').style.display = visible.length < list.length ? 'block' : 'none';
