@@ -605,24 +605,9 @@ function updateResults() {
   const sc0 = calcScenario(entries, pf);
   if (!sc0) { area.innerHTML = ''; return; }
 
-  let html = '<div class="sec-title" style="margin-bottom:6px">📊 Senaryo Analizi</div><div class="sc-wrap">';
-
-  html += buildScCard('Mevcut Sepet', sc0, '', entries);
-
-  if (sc0.combined < 200) {
-    const e2 = scaleToTarget(entries, 200);
-    const sc2 = calcScenario(e2, pf);
-    const scale = Math.ceil(200 / sc0.combined);
-    if (sc2) html += buildScCard('200 ₺ Dilimi', sc2, '×' + scale + ' kat', e2);
-  }
-
-  if (sc0.combined < 350) {
-    const e3 = scaleToTarget(entries, 350);
-    const sc3 = calcScenario(e3, pf);
-    const scale = Math.ceil(350 / sc0.combined);
-    if (sc3) html += buildScCard('350 ₺ Dilimi', sc3, '×' + scale + ' kat', e3);
-  }
-
+  const bracketTitle = sc0.combined < 200 ? '41 ₺ Kargo Dilimi' : sc0.combined < 350 ? '79 ₺ Kargo Dilimi' : '93 ₺ Kargo Dilimi';
+  let html = '<div class="sec-title" style="margin-bottom:6px">📊 ' + bracketTitle + '</div><div class="sc-wrap">';
+  html += buildScCard('Sepet Analizi', sc0, '', entries);
   html += '</div>';
   area.innerHTML = html;
 }
