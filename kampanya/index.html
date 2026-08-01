@@ -1274,6 +1274,7 @@ document.getElementById('ri').addEventListener('click', function(e) {
   if (platBtn && platBtn.dataset.plat) {
     platMode = platBtn.dataset.plat;
     document.querySelectorAll('.pf-btn').forEach(function(b){ b.classList.toggle('act', b.dataset.plat === platMode); });
+    _invalidateKomb();
     scheduleCalc();
     return;
   }
