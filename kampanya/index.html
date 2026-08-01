@@ -1564,8 +1564,10 @@ function _buildKombData() {
     var kar = total - alis - kg - pf - kom - stopaj - oKdv;
     var karOrani = alis > 0 ? kar / alis * 100 : null;
     var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani};
-    if (kg === 41) t41.push(combo);
-    else if (kg === 79) t79.push(combo);
+    // N>2 için kategori ürün başı ortalama fiyata göre belirlenir (toplam fiyat her zaman ≥350₺ olur)
+    var tierKg = kombN > 2 ? kargoFor(total / prods.length) : kg;
+    if (tierKg === 41) t41.push(combo);
+    else if (tierKg === 79) t79.push(combo);
     else t93.push(combo);
   }
   var n = arr.length;
@@ -1617,10 +1619,11 @@ function _renderKombTabs() {
     for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= kombHedefOran) cnt++; }
     return cnt;
   }
+  var perProd = kombN > 2;
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
+    {key:'41', label:'< 200 ₺', sub: perProd ? 'ürün başı' : '41 ₺ kargo', cnt:filtCnt(d.t41)},
+    {key:'79', label:'200 – 350 ₺', sub: perProd ? 'ürün başı' : '79 ₺ kargo', cnt:filtCnt(d.t79)},
+    {key:'93', label:'≥ 350 ₺', sub: perProd ? 'ürün başı' : '93 ₺ kargo', cnt:filtCnt(d.t93)},
   ];
   document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
