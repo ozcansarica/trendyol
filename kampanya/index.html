@@ -1500,7 +1500,7 @@ document.getElementById('upage').addEventListener('click', function(ev) {
 var kombData = null;   // {t41:[], t79:[], t93:[]} — lazy built
 var kombTier = '79';   // active tier key
 var kombOffset = 0;
-var KOMB_PAGE = 100;
+var KOMB_PAGE = 200;
 
 function _invalidateKomb() { kombData = null; }
 
@@ -1563,30 +1563,43 @@ function setKombTier(key) {
   renderKomb();
 }
 
+function _kombRow(p, i) {
+  var nameA = p.a.a.length > 38 ? p.a.a.substring(0,38) + '…' : p.a.a;
+  var nameB = p.b.a.length > 38 ? p.b.a.substring(0,38) + '…' : p.b.a;
+  return '<tr class="krow-sel" data-ba="' + escA(p.a.b) + '" data-bb="' + escA(p.b.b) + '" title="Tıkla: hesaplayıcıya ekle">'
+    + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px">' + (i+1) + '</td>'
+    + '<td class="ut-name">' + escH(nameA) + '<div class="ut-bk">' + escH(p.a.b) + '</div></td>'
+    + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
+    + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
+    + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
+    + '<td style="text-align:right;font-weight:800;color:' + (p.kar > 0 ? 'var(--grn)' : 'var(--red)') + '">'
+      + (p.kar > 0 ? '+' + tl(p.kar) : tl(p.kar)) + '</td>'
+    + '<td style="text-align:right;font-weight:800;color:' + (p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)')) + '">'
+      + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
+    + '</tr>';
+}
+
 function renderKomb() {
   var list = _kombList();
+  var first = list.slice(0, KOMB_PAGE);
+  kombOffset = first.length;
   document.getElementById('kcount').textContent = list.length.toLocaleString('tr-TR') + ' kombinasyon';
-  document.getElementById('ktbody').innerHTML = list.map(function(p, i){
-    var nameA = p.a.a.length > 38 ? p.a.a.substring(0,38) + '…' : p.a.a;
-    var nameB = p.b.a.length > 38 ? p.b.a.substring(0,38) + '…' : p.b.a;
-    return '<tr class="krow-sel" data-ba="' + escA(p.a.b) + '" data-bb="' + escA(p.b.b) + '" title="Tıkla: hesaplayıcıya ekle">'
-      + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px">' + (i+1) + '</td>'
-      + '<td class="ut-name">' + escH(nameA) + '<div class="ut-bk">' + escH(p.a.b) + '</div></td>'
-      + '<td class="ut-name">' + escH(nameB) + '<div class="ut-bk">' + escH(p.b.b) + '</div></td>'
-      + '<td class="ut-price" style="text-align:right">' + tl(p.total) + '</td>'
-      + '<td style="text-align:right;font-weight:700;color:var(--acc)">' + tl(p.kargo) + '</td>'
-      + '<td style="text-align:right;font-weight:800;color:' + (p.kar > 0 ? 'var(--grn)' : 'var(--red)') + '">'
-        + (p.kar > 0 ? '+' + tl(p.kar) : tl(p.kar)) + '</td>'
-      + '<td style="text-align:right;font-weight:800;color:' + (p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)')) + '">'
-        + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
-      + '</tr>';
-  }).join('');
-  document.getElementById('kmoreBtn').style.display = 'none';
+  document.getElementById('ktbody').innerHTML = first.map(_kombRow).join('');
+  document.getElementById('kmoreBtn').style.display = kombOffset < list.length ? 'block' : 'none';
 }
 
 function onKombSearch() { kombOffset = 0; renderKomb(); }
 
-function loadMoreKomb() { kombOffset += KOMB_PAGE; renderKomb(); }
+function loadMoreKomb() {
+  var list = _kombList();
+  if (kombOffset >= list.length) return;
+  var startIdx = kombOffset;
+  var batch = list.slice(startIdx, startIdx + KOMB_PAGE);
+  kombOffset += batch.length;
+  document.getElementById('ktbody').insertAdjacentHTML('beforeend',
+    batch.map(function(p, i){ return _kombRow(p, startIdx + i); }).join(''));
+  document.getElementById('kmoreBtn').style.display = kombOffset < list.length ? 'block' : 'none';
+}
 
 function toggleKombo() {
   var page = document.getElementById('kpage');
@@ -1643,6 +1656,11 @@ document.getElementById('ktbody').addEventListener('click', function(ev) {
   renderRight();
   showToast(ua.a.substring(0,20) + '… + ' + ub.a.substring(0,20) + '… eklendi', true);
 });
+
+// Kombinasyonlar tablosunda aşağı scroll'layınca otomatik daha fazla yükle
+document.getElementById('ktableWrap').addEventListener('scroll', function() {
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 400) loadMoreKomb();
+}, {passive: true});
 
 // URUNLER değişince kombData'yı sıfırla — Excel upload veya fiyat düzenleme
 var _origResetUrunler = resetUrunler;
