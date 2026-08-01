@@ -1514,9 +1514,17 @@ var kombOffset = 0;
 var KOMB_PAGE = 200;
 var kombHedefOran = 0;
 var kombN = 2;  // 2, 3 veya 4
-var KOMB_N_LIMIT = {3: 120, 4: 40};
+var KOMB_AUTO_LIMIT = {3: 80, 4: 40};  // arama yoksa en iyi N ürün seçilir
 
 function _invalidateKomb() { kombData = null; }
+
+function _urunKarOrani(u) {
+  var pf = getPF(), rv = 20/120;
+  var kg = kargoFor(u.s), kom = u.s * (u.k||0);
+  var stopaj = u.s / 1.20 * 0.01;
+  var oKdv = Math.max(0, u.s*rv - ((u.f||0)*rv + kg*rv + kom*rv + pf*rv));
+  return (u.f||0) > 0 ? (u.s - (u.f||0) - kg - pf - kom - stopaj - oKdv) / (u.f||0) * 100 : -Infinity;
+}
 
 function setKombN(n) {
   kombN = n;
@@ -1524,8 +1532,7 @@ function setKombN(n) {
   kombOffset = 0;
   kombTier = '79';
   document.querySelectorAll('.knbtn').forEach(function(b, i){ b.classList.toggle('act', i + 2 === n); });
-  var ph = n === 2 ? 'Ürün adı veya barkod ara…' : 'Arama ile ürün filtrele (zorunlu ' + n + '+lü için)';
-  document.getElementById('kpageQ').placeholder = ph;
+  document.getElementById('kpageQ').placeholder = 'Ürün adı veya barkod ara…';
   if (document.getElementById('kpage').classList.contains('show')) _buildAndRenderAll();
 }
 
@@ -1533,17 +1540,18 @@ function _buildKombData() {
   var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
   var all = URUNLER.filter(function(u){ return u.s > 0; });
   var arr = all;
-  if (kombN > 2 && q) {
+  var autoNote = '';
+  if (q) {
     arr = all.filter(function(u){
       return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
     });
   }
   if (kombN > 2) {
-    var limit = KOMB_N_LIMIT[kombN] || 40;
-    if (arr.length > limit) {
-      var msg = (q ? '"' + q + '" araması ' + arr.length + ' ürün buldu, ' : arr.length + ' ürün var, ')
-        + 'maksimum ' + limit + '. Arama ile ürün sayısını azaltın.';
-      return {t41:[], t79:[], t93:[], error: msg};
+    var lim = KOMB_AUTO_LIMIT[kombN];
+    if (arr.length > lim) {
+      // Arama yoksa: bireysel kâr oranına göre en iyi N ürünü seç
+      arr = arr.slice().sort(function(a, b){ return _urunKarOrani(b) - _urunKarOrani(a); }).slice(0, lim);
+      autoNote = ' · en kârlı ' + lim + ' ürün';
     }
   }
   var t41 = [], t79 = [], t93 = [];
@@ -1585,7 +1593,7 @@ function _buildKombData() {
   }
   var byKar = function(x,y){ return (y.karOrani||0) - (x.karOrani||0) || y.total - x.total; };
   t41.sort(byKar); t79.sort(byKar); t93.sort(byKar);
-  return {t41:t41, t79:t79, t93:t93};
+  return {t41:t41, t79:t79, t93:t93, note:autoNote};
 }
 
 function _kombList() {
@@ -1678,15 +1686,15 @@ function _buildAndRenderAll() {
   setTimeout(function(){
     kombData = _buildKombData();
     kombOffset = 0;
-    if (kombData.error) {
-      document.getElementById('kcount').textContent = kombData.error;
-      return;
-    }
     if (!kombData.t79.length && kombData.t41.length) kombTier = '41';
     else if (!kombData.t79.length && kombData.t93.length) kombTier = '93';
     else kombTier = '79';
     _renderKombTabs();
     renderKomb();
+    if (kombData.note) {
+      var el = document.getElementById('kcount');
+      el.textContent = el.textContent + kombData.note;
+    }
   }, 0);
 }
 
