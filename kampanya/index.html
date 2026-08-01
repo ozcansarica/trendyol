@@ -1564,10 +1564,8 @@ function setKombTier(key) {
 
 function renderKomb() {
   var list = _kombList();
-  var end = kombOffset + KOMB_PAGE;
-  var visible = list.slice(0, end);
   document.getElementById('kcount').textContent = list.length.toLocaleString('tr-TR') + ' kombinasyon';
-  document.getElementById('ktbody').innerHTML = visible.map(function(p, i){
+  document.getElementById('ktbody').innerHTML = list.map(function(p, i){
     var nameA = p.a.a.length > 38 ? p.a.a.substring(0,38) + '…' : p.a.a;
     var nameB = p.b.a.length > 38 ? p.b.a.substring(0,38) + '…' : p.b.a;
     return '<tr class="krow-sel" data-ba="' + escA(p.a.b) + '" data-bb="' + escA(p.b.b) + '" title="Tıkla: hesaplayıcıya ekle">'
@@ -1582,7 +1580,7 @@ function renderKomb() {
         + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
       + '</tr>';
   }).join('');
-  document.getElementById('kmoreBtn').style.display = visible.length < list.length ? 'block' : 'none';
+  document.getElementById('kmoreBtn').style.display = 'none';
 }
 
 function onKombSearch() { kombOffset = 0; renderKomb(); }
