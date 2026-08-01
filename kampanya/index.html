@@ -396,7 +396,7 @@ function calcSingleProfit(e, pf) {
 function buildEvalBlock(entries, sc, basketProfit, profitRate, pf) {
   var items = entries.map(function(e) {
     if (+e.alis <= 0) return null;
-    var revFrac = sc.combined > 0 ? (+e.satis * e.qty) / sc.combined : 0;
+    var revFrac = sc.discBasket > 0 ? ((+e.indirimli > 0 ? +e.indirimli : +e.satis) * e.qty) / sc.discBasket : 0;
     var bundleShare = basketProfit * revFrac;
     var singleP = calcSingleProfit(e, pf);
     return { e: e, bundleShare: bundleShare, singleP: singleP, viable: bundleShare >= singleP };
@@ -445,9 +445,10 @@ function escA(s) {
 }
 
 function calcScenario(entries, pf) {
-  const combined = entries.reduce((s,e) => s + e.satis * e.qty, 0);
-  if (combined <= 0) return null;
-  const kargoComb = kargoFor(combined);
+  const mevcut = entries.reduce((s,e) => s + e.satis * e.qty, 0);
+  if (mevcut <= 0) return null;
+  const discBasket = entries.reduce((s,e) => s + (+e.indirimli > 0 ? +e.indirimli : e.satis) * e.qty, 0);
+  const kargoComb = kargoFor(discBasket);
   let sepCost = 0;
   entries.forEach(e => {
     const mq = minQty(e.satis);
@@ -456,11 +457,8 @@ function calcScenario(entries, pf) {
   });
   const combCost = kargoComb + pf;
   const savings = sepCost - combCost;
-  const maxPct = savings > 0 ? savings / combined * 100 : 0;
-  const recPct = maxPct * 0.7;
-  const discBasket = combined * (1 - recPct / 100);
   const totalQty = entries.reduce((s,e) => s + e.qty, 0);
-  return { combined, kargoComb, sepCost, combCost, savings, maxPct, recPct, discBasket, totalQty };
+  return { mevcut, discBasket, kargoComb, sepCost, combCost, savings, totalQty };
 }
 
 function scaleToTarget(entries, target) {
@@ -529,9 +527,12 @@ function prodRow(e) {
     + '<label>Alış ₺<input class="pi w82" type="number" min="0" step="0.01"'
       + ' value="' + escA(av) + '" placeholder="0.00"'
       + ' data-b="' + escA(e.b) + '" data-f="alis"></label>'
-    + '<label>Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
-      + ' value="' + escA(String(e.satis||'')) + '" placeholder="fiyat girin"'
+    + '<label>Mevcut Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
+      + ' value="' + escA(String(e.satis||'')) + '" placeholder="fiyat"'
       + ' data-b="' + escA(e.b) + '" data-f="satis"></label>'
+    + '<label>İnd. Satış ₺<input class="pi w82" type="number" min="0" step="0.01"'
+      + ' value="' + escA(String(+e.indirimli > 0 ? e.indirimli : '')) + '" placeholder="indirimli"'
+      + ' data-b="' + escA(e.b) + '" data-f="indirimli"></label>'
     + '<label>Adet<input class="pi w54" type="number" min="1" step="1"'
       + ' value="' + qv + '"'
       + ' data-b="' + escA(e.b) + '" data-f="qty"></label>'
@@ -589,11 +590,11 @@ function updateResults() {
   const pf = getPF();
   const entries = [];
   if (anaUrun && +anaUrun.satis > 0) {
-    entries.push({b:anaUrun.b, a:anaUrun.a, alis:+anaUrun.alis||0, satis:+anaUrun.satis, qty:Math.max(1,+anaUrun.qty||1), kom:+anaUrun.kom||0});
+    entries.push({b:anaUrun.b, a:anaUrun.a, alis:+anaUrun.alis||0, satis:+anaUrun.satis, indirimli:+anaUrun.indirimli||0, qty:Math.max(1,+anaUrun.qty||1), kom:+anaUrun.kom||0});
   }
   for (const e of yanMap.values()) {
     if (+e.satis > 0) {
-      entries.push({b:e.b, a:e.a, alis:+e.alis||0, satis:+e.satis, qty:Math.max(1,+e.qty||1), kom:+e.kom||0});
+      entries.push({b:e.b, a:e.a, alis:+e.alis||0, satis:+e.satis, indirimli:+e.indirimli||0, qty:Math.max(1,+e.qty||1), kom:+e.kom||0});
     }
   }
 
@@ -605,7 +606,7 @@ function updateResults() {
   const sc0 = calcScenario(entries, pf);
   if (!sc0) { area.innerHTML = ''; return; }
 
-  const bracketTitle = sc0.combined < 200 ? '41 ₺ Kargo Dilimi' : sc0.combined < 350 ? '79 ₺ Kargo Dilimi' : '93 ₺ Kargo Dilimi';
+  const bracketTitle = sc0.discBasket < 200 ? '41 ₺ Kargo Dilimi' : sc0.discBasket < 350 ? '79 ₺ Kargo Dilimi' : '93 ₺ Kargo Dilimi';
   let html = '<div class="sec-title" style="margin-bottom:6px">📊 ' + bracketTitle + '</div><div class="sc-wrap">';
   html += buildScCard('Sepet Analizi', sc0, '', entries);
   html += '</div>';
@@ -614,11 +615,10 @@ function updateResults() {
 
 function buildScCard(title, sc, badge, entries) {
   const savPos = sc.savings > 0;
-  const kBracket = sc.combined < 200 ? '41 ₺ kargo dilimi' : sc.combined < 350 ? '79 ₺ kargo dilimi' : '93 ₺ kargo dilimi';
+  const kBracket = sc.discBasket < 200 ? '41 ₺ kargo dilimi' : sc.discBasket < 350 ? '79 ₺ kargo dilimi' : '93 ₺ kargo dilimi';
 
   const totalAlis  = entries.reduce(function(s,e){ return s + (+e.alis||0) * e.qty; }, 0);
-  const discRatio  = sc.combined > 0 ? sc.discBasket / sc.combined : 1;
-  const totalKom   = entries.reduce(function(s,e){ return s + e.satis * e.qty * discRatio * (+e.kom||0) / 100; }, 0);
+  const totalKom   = entries.reduce(function(s,e){ return s + (+e.indirimli > 0 ? +e.indirimli : e.satis) * e.qty * (+e.kom||0) / 100; }, 0);
   const r = 20 / 120;
   const pf = getPF();
   const stopaj       = sc.discBasket / 1.20 * 0.01;
@@ -638,21 +638,14 @@ function buildScCard(title, sc, badge, entries) {
     + (badge ? '<span class="badge">' + escH(badge) + '</span>' : '')
     + '</div>'
     + '<div class="sc-grid">'
-    + scIt('Sepet Tutarı', tl(sc.combined), kBracket, '')
+    + scIt('Mevcut Sepet', tl(sc.mevcut), 'normal fiyatla', '')
+    + scIt('İnd. Sepet', tl(sc.discBasket), kBracket, sc.mevcut > sc.discBasket ? 'grn' : '')
     + scIt('Kargo (Kampanya)', tl(sc.kargoComb), 'Ayrı ayrı: ' + tl(sc.sepCost), '')
-    + scIt('Tasarruf', tl(Math.max(0, sc.savings)), savPos ? 'indirim kaynağı' : 'tasarruf yok', savPos ? 'grn' : 'red')
-    + scIt('Maks. İndirim', '%' + sc.maxPct.toFixed(1), 'Önerilen: %' + sc.recPct.toFixed(1), sc.maxPct > 0 ? 'acc' : '')
+    + scIt('Tasarruf', tl(Math.max(0, sc.savings)), savPos ? 'kargo tasarrufu' : 'tasarruf yok', savPos ? 'grn' : 'red')
     + '</div>';
 
-  const totalQty = entries.reduce(function(s,e){ return s + e.qty; }, 0);
-  const hasFooter = savPos || totalAlis > 0;
-  if (hasFooter) {
+  if (totalKom > 0 || totalAlis > 0) {
     html += '<div class="sc-footer">';
-    if (savPos) {
-      const discPerUnit = (sc.savings * 0.7) / totalQty;
-      html += '<div class="sc-fi"><div class="sc-fl">Önerilen indirimle sepet</div><div class="sc-fv">' + tl(sc.discBasket) + '</div></div>'
-        + '<div class="sc-fi"><div class="sc-fl">Ort. indirim / adet</div><div class="sc-fv">' + tl(discPerUnit) + '</div></div>';
-    }
     if (totalKom > 0) {
       html += '<div class="sc-fi"><div class="sc-fl">Komisyon</div><div class="sc-fv" style="color:var(--red)">' + tl(totalKom) + '</div></div>';
     }
@@ -731,7 +724,7 @@ document.getElementById('grid').addEventListener('click', function(e) {
     yanMap.delete(b);
   } else {
     const savedAlis = maliyetler[b] || p.f;
-    const entry = {b:p.b, a:p.a, alis:savedAlis, satis:'', qty:1, kom:'', _qtyManual:false};
+    const entry = {b:p.b, a:p.a, alis:savedAlis, satis:'', indirimli:'', qty:1, kom:'', _qtyManual:false};
     if (!anaUrun) {
       anaUrun = entry;
     } else {
