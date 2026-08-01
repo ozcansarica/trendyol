@@ -1531,25 +1531,19 @@ function setKombN(n) {
   _invalidateKomb();
   kombOffset = 0;
   kombTier = '79';
+  document.getElementById('kpageQ').value = '';
   document.querySelectorAll('.knbtn').forEach(function(b, i){ b.classList.toggle('act', i + 2 === n); });
   document.getElementById('kpageQ').placeholder = 'Ürün adı veya barkod ara…';
   if (document.getElementById('kpage').classList.contains('show')) _buildAndRenderAll();
 }
 
 function _buildKombData() {
-  var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
   var all = URUNLER.filter(function(u){ return u.s > 0; });
   var arr = all;
   var autoNote = '';
-  if (q) {
-    arr = all.filter(function(u){
-      return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
-    });
-  }
   if (kombN > 2) {
     var lim = KOMB_AUTO_LIMIT[kombN];
     if (arr.length > lim) {
-      // Arama yoksa: bireysel kâr oranına göre en iyi N ürünü seç
       arr = arr.slice().sort(function(a, b){ return _urunKarOrani(b) - _urunKarOrani(a); }).slice(0, lim);
       autoNote = ' · en kârlı ' + lim + ' ürün';
     }
@@ -1600,16 +1594,13 @@ function _kombList() {
   var key = 't' + kombTier;
   var base = kombData[key] || [];
   var result = base;
-  // N=2 için arama sonuç listesini filtreler; N>2 için input ürünler zaten filtrelendi
-  if (kombN === 2) {
-    var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
-    if (q) {
-      result = result.filter(function(p){
-        return p.prods.some(function(u){
-          return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
-        });
+  var q = document.getElementById('kpageQ').value.trim().toLocaleLowerCase('tr-TR');
+  if (q) {
+    result = result.filter(function(p){
+      return p.prods.some(function(u){
+        return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
       });
-    }
+    });
   }
   if (kombHedefOran > 0) {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= kombHedefOran; });
@@ -1675,8 +1666,7 @@ function renderKomb() {
 
 function onKombSearch() {
   kombOffset = 0;
-  if (kombN > 2) { _invalidateKomb(); _buildAndRenderAll(); }
-  else renderKomb();
+  renderKomb();
 }
 
 function _buildAndRenderAll() {
