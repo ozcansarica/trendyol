@@ -1949,7 +1949,7 @@ function _indExtraCol() { return indN === 2 && indHedefIndirim > 0; }
 
 function _indBaremHedef() {
   if (indTier === '79') return {target: 199, newKargo: 41, label: '199₺\'ye İndirim'};
-  if (indTier === '93') return {target: 299, newKargo: 79, label: '299₺\'ye İndirim'};
+  if (indTier === '93') return {target: 349, newKargo: 79, label: '349₺\'ye İndirim'};
   return null;
 }
 
@@ -2309,7 +2309,9 @@ function _indRow(p, i) {
   }
 
   var prodPriceCells = p.prods.map(function(pr) {
-    return '<td style="text-align:right;color:var(--mut);font-size:12px;vertical-align:middle;padding:4px 6px;white-space:nowrap">' + tl(pr.s) + '</td>';
+    var qty = minQty(pr.s);
+    var qtyLabel = qty > 1 ? ' <span style="font-size:9px;color:var(--acc)">×' + qty + '</span>' : '';
+    return '<td style="text-align:right;color:var(--mut);font-size:12px;vertical-align:middle;padding:4px 6px;white-space:nowrap">' + tl(pr.s * qty) + qtyLabel + '</td>';
   }).join('');
   return '<tr class="krow-sel" data-bs="' + bsAttr + '" title="Tıkla: hesaplayıcıya ekle">'
     + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px;vertical-align:top;padding-top:6px">' + (i+1) + '</td>'
