@@ -2336,9 +2336,13 @@ function _indRow(p, i) {
       var newStopaj = bh.target / 1.20 * 0.01;
       var newKar = bh.target - (p.alis||0) - bh.newKargo - pf - newKom - newStopaj - newOKdv;
       var newKarOrani = p.alis > 0 ? newKar / p.alis * 100 : null;
-      var discPct = (p.total - bh.target) / p.total * 100;
+      var discAmt = p.total - bh.target;
+      var discPct = discAmt / p.total * 100;
       var karClrB = newKarOrani != null && newKarOrani > 0 ? 'var(--grn)' : 'var(--red)';
-      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">−' + discPct.toFixed(1) + '%</td>'
+      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">'
+               + '−' + discPct.toFixed(1) + '%'
+               + '<div style="font-size:10px;font-weight:600;color:var(--red);margin-top:1px">−' + tl(discAmt) + '</div>'
+               + '</td>'
                + '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:' + karClrB + '">'
                + (newKarOrani != null ? (newKarOrani > 0 ? '+' : '') + newKarOrani.toFixed(1) + '%' : '—')
                + '</td>';
