@@ -2309,9 +2309,7 @@ function _indRow(p, i) {
   }
 
   var prodPriceCells = p.prods.map(function(pr) {
-    var qty = minQty(pr.s);
-    var qtyLabel = qty > 1 ? ' <span style="font-size:9px;color:var(--acc)">×' + qty + '</span>' : '';
-    return '<td style="text-align:right;color:var(--mut);font-size:12px;vertical-align:middle;padding:4px 6px;white-space:nowrap">' + tl(pr.s * qty) + qtyLabel + '</td>';
+    return '<td style="text-align:right;color:var(--mut);font-size:12px;vertical-align:middle;padding:4px 6px;white-space:nowrap">' + tl(pr.s * minQty(pr.s)) + '</td>';
   }).join('');
   return '<tr class="krow-sel" data-bs="' + bsAttr + '" title="Tıkla: hesaplayıcıya ekle">'
     + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px;vertical-align:top;padding-top:6px">' + (i+1) + '</td>'
