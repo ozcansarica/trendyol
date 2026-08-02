@@ -247,9 +247,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu)">1. Ürün Fiyatı:</span>
     <input id="indP1FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
     <span class="hk-lbl" style="color:var(--blu)">₺</span>
-    <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">İstediğim Kâr Oranı:</span>
+    <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">Önceki Kâr Oranı:</span>
     <input id="indHedefIndirimInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--blu)">
     <span class="hk-lbl" style="color:var(--blu)">%</span>
+    <span class="hk-lbl" style="white-space:nowrap;color:var(--grn);margin-left:6px">Sonraki Kâr Oranı:</span>
+    <input id="indSonrakiKarInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--grn)">
+    <span class="hk-lbl" style="color:var(--grn)">%</span>
     <button class="tbtn" onclick="downloadIndExcel()" style="margin-left:auto">📥 Excel İndir</button>
     <button class="tbtn" onclick="toggleIndirimli()">✕ Kapat</button>
   </div>
@@ -1940,9 +1943,22 @@ var indHedefOran = 0;
 var indN = 2;
 var IND_AUTO_LIMIT = {3: 80, 4: 40};
 var indHedefIndirim = 0;
+var indSonrakiKar = 0;
 var indP1Fiyat = 0;
 
-function _indExtraCol() { return indN === 2 && indHedefIndirim > 0; }
+function _indExtraCol() { return false; }
+
+function _indBaremKarOraniFor(p) {
+  var bh = _indBaremHedef();
+  if (!bh || p.total <= bh.target) return p.karOrani;
+  var ratio = bh.target / p.total;
+  var newKom = (p.kom || 0) * ratio;
+  var pf = getPF(), rv = 20 / 120;
+  var newOKdv = Math.max(0, bh.target*rv - ((p.alis||0)*rv + bh.newKargo*rv + newKom*rv + pf*rv));
+  var newStopaj = bh.target / 1.20 * 0.01;
+  var newKar = bh.target - (p.alis||0) - bh.newKargo - pf - newKom - newStopaj - newOKdv;
+  return p.alis > 0 ? newKar / p.alis * 100 : null;
+}
 
 function _indBaremHedef() {
   if (indTier === '79') return {target: 199, newKargo: 41, label: '199₺\'ye İndirim'};
@@ -2124,6 +2140,12 @@ function _indList() {
   if (indP1Fiyat > 0) {
     result = result.filter(function(p){ return p.prods[0] && p.prods[0].s >= indP1Fiyat; });
   }
+  if (indHedefIndirim > 0) {
+    result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefIndirim; });
+  }
+  if (indSonrakiKar > 0) {
+    result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && r >= indSonrakiKar; });
+  }
   return result;
 }
 
@@ -2133,8 +2155,11 @@ function _renderIndTabs() {
   function filtCnt(arr) {
     var cnt = 0;
     for (var i = 0; i < arr.length; i++) {
-      if (indHedefOran > 0 && (arr[i].karOrani === null || arr[i].karOrani < indHedefOran)) continue;
-      if (indP1Fiyat > 0 && (!arr[i].prods[0] || arr[i].prods[0].s < indP1Fiyat)) continue;
+      var p = arr[i];
+      if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
+      if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
+      if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
+      if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
       cnt++;
     }
     return cnt;
@@ -2475,7 +2500,13 @@ document.getElementById('indHedefIndirimInp').addEventListener('input', function
   var v = parseFloat(this.value);
   indHedefIndirim = (!isNaN(v) && v >= 0) ? v : 0;
   indOffset = 0;
-  if (indData) renderInd();
+  if (indData) { _renderIndTabs(); renderInd(); }
+});
+document.getElementById('indSonrakiKarInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indSonrakiKar = (!isNaN(v) && v >= 0) ? v : 0;
+  indOffset = 0;
+  if (indData) { _renderIndTabs(); renderInd(); }
 });
 
 document.getElementById('indP1FiyatInp').addEventListener('input', function() {
