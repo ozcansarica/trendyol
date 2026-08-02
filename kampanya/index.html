@@ -1965,9 +1965,12 @@ function _indUpdateHeader() {
     + (indP1Fiyat > 0 ? '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(1. ürün: ' + tl(indP1Fiyat) + ')</div>' : '');
   var extra = _indExtraCol()
     ? '<th style="text-align:right;color:var(--blu)">' + colHdr + '</th>' : '';
+  var prodCols = '';
+  for (var pi = 0; pi < indN; pi++) prodCols += '<th style="text-align:right;color:var(--mut)">' + (pi+1) + '. Ürün ₺</th>';
   el.innerHTML = '<tr>'
     + '<th style="width:36px">#</th>'
     + '<th>Ürünler</th>'
+    + prodCols
     + '<th style="text-align:right">Toplam ₺</th>'
     + '<th style="text-align:right">Kargo ₺</th>'
     + '<th style="text-align:right;color:var(--grn)">Tahmini Kâr</th>'
@@ -2305,9 +2308,13 @@ function _indRow(p, i) {
     }
   }
 
+  var prodPriceCells = p.prods.map(function(pr) {
+    return '<td style="text-align:right;color:var(--mut);font-size:12px;vertical-align:middle;padding:4px 6px;white-space:nowrap">' + tl(pr.s) + '</td>';
+  }).join('');
   return '<tr class="krow-sel" data-bs="' + bsAttr + '" title="Tıkla: hesaplayıcıya ekle">'
     + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px;vertical-align:top;padding-top:6px">' + (i+1) + '</td>'
     + '<td style="vertical-align:top;padding:4px 8px">' + prodsHtml + '</td>'
+    + prodPriceCells
     + '<td class="ut-price" style="text-align:right;vertical-align:middle">' + tl(p.total) + '</td>'
     + '<td style="text-align:right;font-weight:700;color:var(--acc);vertical-align:middle">' + tl(p.kargo) + '</td>'
     + '<td style="text-align:right;font-weight:800;color:' + karClr + ';vertical-align:middle">'
