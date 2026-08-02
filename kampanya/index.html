@@ -2121,6 +2121,9 @@ function _indList() {
   if (indHedefOran > 0) {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefOran; });
   }
+  if (indP1Fiyat > 0) {
+    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s >= indP1Fiyat; });
+  }
   return result;
 }
 
@@ -2128,9 +2131,12 @@ function _renderIndTabs() {
   var d = indData;
   var label = indN === 2 ? 'çift' : indN === 3 ? 'üçlü' : 'dörtlü';
   function filtCnt(arr) {
-    if (indHedefOran <= 0) return arr.length;
     var cnt = 0;
-    for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= indHedefOran) cnt++; }
+    for (var i = 0; i < arr.length; i++) {
+      if (indHedefOran > 0 && (arr[i].karOrani === null || arr[i].karOrani < indHedefOran)) continue;
+      if (indP1Fiyat > 0 && (!arr[i].prods[0] || arr[i].prods[0].s < indP1Fiyat)) continue;
+      cnt++;
+    }
     return cnt;
   }
   var tabs = [
