@@ -1958,7 +1958,9 @@ function _indUpdateHeader() {
   if (!el) return;
   var bh = _indBaremHedef();
   var baremCol = bh
-    ? '<th style="text-align:right;color:var(--acc)">' + bh.label + '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">İndirim % &amp; Yeni Kâr</div></th>' : '';
+    ? '<th style="text-align:right;color:var(--red)">' + bh.label + '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">İndirim %</div></th>'
+      + '<th style="text-align:right;color:var(--acc)">Yeni Kâr Oranı<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'de)</div></th>'
+    : '';
   var colHdr = '2. Ürün İndirimli Fiyat'
     + (indP1Fiyat > 0 ? '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(1. ürün: ' + tl(indP1Fiyat) + ')</div>' : '');
   var extra = _indExtraCol()
@@ -2256,7 +2258,8 @@ function _indRow(p, i) {
   var bh = _indBaremHedef();
   if (bh) {
     if (p.total <= bh.target) {
-      baremCell = '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>';
+      baremCell = '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>'
+               + '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>';
     } else {
       var ratio = bh.target / p.total;
       var newKom = (p.kom || 0) * ratio;
@@ -2267,13 +2270,10 @@ function _indRow(p, i) {
       var newKarOrani = p.alis > 0 ? newKar / p.alis * 100 : null;
       var discPct = (p.total - bh.target) / p.total * 100;
       var karClrB = newKarOrani != null && newKarOrani > 0 ? 'var(--grn)' : 'var(--red)';
-      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px">'
-        + '<div style="font-size:13px;font-weight:800;color:var(--red)">−' + discPct.toFixed(1) + '%</div>'
-        + (newKarOrani != null
-            ? '<div style="font-size:11px;font-weight:700;color:' + karClrB + '">'
-              + (newKarOrani > 0 ? '+' : '') + newKarOrani.toFixed(1) + '% kâr</div>'
-            : '')
-        + '</td>';
+      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">−' + discPct.toFixed(1) + '%</td>'
+               + '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:' + karClrB + '">'
+               + (newKarOrani != null ? (newKarOrani > 0 ? '+' : '') + newKarOrani.toFixed(1) + '%' : '—')
+               + '</td>';
     }
   }
 
