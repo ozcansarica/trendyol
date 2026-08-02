@@ -247,7 +247,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span class="hk-lbl">%</span>
     <span id="icount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
     <span style="width:1px;height:20px;background:var(--brd);flex-shrink:0;margin:0 4px"></span>
-    <span class="hk-lbl" id="indIndirimLbl" style="white-space:nowrap;color:var(--blu)">İstediğim Kâr Oranı:</span>
+    <span class="hk-lbl" style="white-space:nowrap;color:var(--blu)">1. Ürün Fiyatı:</span>
+    <input id="indP1FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
+    <span class="hk-lbl" style="color:var(--blu)">₺</span>
+    <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">İstediğim Kâr Oranı:</span>
     <input id="indHedefIndirimInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--blu)">
     <span class="hk-lbl" style="color:var(--blu)">%</span>
     <button class="tbtn" onclick="downloadIndExcel()" style="margin-left:auto">📥 Excel İndir</button>
@@ -1940,14 +1943,17 @@ var indHedefOran = 0;
 var indN = 2;
 var IND_AUTO_LIMIT = {3: 80, 4: 40};
 var indHedefIndirim = 0;
+var indP1Fiyat = 0;
 
 function _indExtraCol() { return indN === 2 && indHedefIndirim > 0; }
 
 function _indUpdateHeader() {
   var el = document.getElementById('ithead');
   if (!el) return;
+  var colHdr = '2. Ürün İndirimli Fiyat'
+    + (indP1Fiyat > 0 ? '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(1. ürün: ' + tl(indP1Fiyat) + ')</div>' : '');
   var extra = _indExtraCol()
-    ? '<th style="text-align:right;color:var(--blu)">2. Ürün İndirimli Fiyat</th>' : '';
+    ? '<th style="text-align:right;color:var(--blu)">' + colHdr + '</th>' : '';
   el.innerHTML = '<tr>'
     + '<th style="width:36px">#</th>'
     + '<th>Ürünler</th>'
@@ -2239,16 +2245,29 @@ function _indRow(p, i) {
 
   var extraCell = '';
   if (_indExtraCol()) {
-    var res = _indIndirimFiyat(p.prods[0], p.prods[1], indHedefIndirim);
-    if (!res) {
-      extraCell = '<td style="text-align:right;font-size:11px;color:var(--red);vertical-align:middle;padding:4px 8px">Mümkün değil</td>';
+    var p1eff = p.prods[0];
+    var skipRow = false;
+    if (indP1Fiyat > 0) {
+      if (p.prods[0].s < indP1Fiyat) {
+        skipRow = true;
+      } else {
+        p1eff = {b: p.prods[0].b, a: p.prods[0].a, s: indP1Fiyat, f: p.prods[0].f, k: p.prods[0].k};
+      }
+    }
+    if (skipRow) {
+      extraCell = '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>';
     } else {
-      var qtyTag2 = res.qty > 1 ? ' <span style="color:var(--acc);font-size:9px;font-weight:700">×' + res.qty + '</span>' : '';
-      var discLine = res.indirim > 0.005
-        ? '<div style="font-size:10px;color:var(--red);margin-top:1px">−' + tl(res.indirim) + '/adet &nbsp;(−' + res.indirimPct.toFixed(1) + '%)</div>'
-        : '<div style="font-size:10px;color:var(--mut);margin-top:1px">İndirim yapılamaz</div>';
-      extraCell = '<td style="text-align:right;font-weight:800;color:var(--blu);vertical-align:middle;padding:4px 8px">'
-        + tl(res.price) + qtyTag2 + discLine + '</td>';
+      var res = _indIndirimFiyat(p1eff, p.prods[1], indHedefIndirim);
+      if (!res) {
+        extraCell = '<td style="text-align:right;font-size:11px;color:var(--red);vertical-align:middle;padding:4px 8px">Mümkün değil</td>';
+      } else {
+        var qtyTag2 = res.qty > 1 ? ' <span style="color:var(--acc);font-size:9px;font-weight:700">×' + res.qty + '</span>' : '';
+        var discLine = res.indirim > 0.005
+          ? '<div style="font-size:10px;color:var(--red);margin-top:1px">−' + tl(res.indirim) + '/adet &nbsp;(−' + res.indirimPct.toFixed(1) + '%)</div>'
+          : '<div style="font-size:10px;color:var(--mut);margin-top:1px">İndirim yapılamaz</div>';
+        extraCell = '<td style="text-align:right;font-weight:800;color:var(--blu);vertical-align:middle;padding:4px 8px">'
+          + tl(res.price) + qtyTag2 + discLine + '</td>';
+      }
     }
   }
 
@@ -2381,6 +2400,13 @@ document.getElementById('indHedefOranInp').addEventListener('input', function() 
 document.getElementById('indHedefIndirimInp').addEventListener('input', function() {
   var v = parseFloat(this.value);
   indHedefIndirim = (!isNaN(v) && v >= 0) ? v : 0;
+  indOffset = 0;
+  if (indData) renderInd();
+});
+
+document.getElementById('indP1FiyatInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indP1Fiyat = (!isNaN(v) && v > 0) ? v : 0;
   indOffset = 0;
   if (indData) renderInd();
 });
