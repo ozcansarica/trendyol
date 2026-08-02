@@ -242,9 +242,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 <div class="ipage" id="ipage">
   <div class="kpage-top">
     <input class="sinput" id="ipageQ" placeholder="Ürün adı veya barkod ara…" oninput="onIndSearch()" autocomplete="off" spellcheck="false" style="max-width:260px">
-    <span class="hk-lbl" style="white-space:nowrap">Hedef Kâr Oranı:</span>
-    <input id="indHedefOranInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield">
-    <span class="hk-lbl">%</span>
     <span id="icount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
     <span style="width:1px;height:20px;background:var(--brd);flex-shrink:0;margin:0 4px"></span>
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu)">1. Ürün Fiyatı:</span>
@@ -2467,14 +2464,6 @@ document.getElementById('itbody').addEventListener('click', function(ev) {
 document.getElementById('itableWrap').addEventListener('scroll', function() {
   if (this.scrollTop + this.clientHeight >= this.scrollHeight - 400) loadMoreInd();
 }, {passive: true});
-
-document.getElementById('indHedefOranInp').addEventListener('input', function() {
-  var v = parseFloat(this.value);
-  indHedefOran = (!isNaN(v) && v >= 0) ? v : 0;
-  indOffset = 0;
-  if (indData) _renderIndTabs();
-  renderInd();
-});
 
 document.getElementById('indHedefIndirimInp').addEventListener('input', function() {
   var v = parseFloat(this.value);
