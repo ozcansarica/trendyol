@@ -207,7 +207,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <input id="kombHedefOranInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield">
     <span class="hk-lbl">%</span>
     <span id="kcount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
-    <button class="tbtn" onclick="toggleKombo()" style="margin-left:auto">✕ Kapat</button>
+    <button class="tbtn" onclick="downloadKombExcel()" style="margin-left:auto">📥 Excel İndir</button>
+    <button class="tbtn" onclick="toggleKombo()">✕ Kapat</button>
   </div>
   <div class="kn-bar" id="knBar">
     <button class="knbtn act" onclick="setKombN(2)">2-li Kombinasyon</button>
@@ -1654,6 +1655,99 @@ function setKombTier(key) {
   kombOffset = 0;
   _renderKombTabs();
   renderKomb();
+}
+
+async function downloadKombExcel() {
+  if (!kombData) return showToast('Önce kombinasyonları hesaplayın.', false);
+  var list = _kombList();
+  if (!list.length) return showToast('İndirilecek kombinasyon yok.', false);
+  if (typeof JSZip === 'undefined') return showToast('JSZip yüklenemedi, sayfayı yenileyip tekrar deneyin.', false);
+
+  var n = kombN;
+  var headers = ['#'];
+  for (var i = 1; i <= n; i++) headers.push('Ürün ' + i, 'Barkod ' + i, 'Adet ' + i);
+  headers.push('Toplam ₺', 'Kargo ₺', 'Kâr ₺', 'Kâr Oranı %');
+
+  var rows = [headers];
+  list.forEach(function(p, idx) {
+    var row = [idx + 1];
+    for (var pi = 0; pi < n; pi++) {
+      var u = p.prods[pi];
+      row.push(u ? u.a : '', u ? u.b : '', u ? minQty(u.s) : '');
+    }
+    row.push(
+      Math.round(p.total * 100) / 100,
+      p.kargo,
+      Math.round(p.kar * 100) / 100,
+      p.karOrani != null ? Math.round(p.karOrani * 10) / 10 : ''
+    );
+    rows.push(row);
+  });
+
+  // Shared strings
+  var ss = [], ssMap = {};
+  function ssi(s) {
+    s = String(s == null ? '' : s);
+    if (ssMap[s] == null) { ssMap[s] = ss.length; ss.push(s); }
+    return ssMap[s];
+  }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function colName(c) {
+    var s = '';
+    do { s = String.fromCharCode(65 + (c % 26)) + s; c = Math.floor(c / 26) - 1; } while (c >= 0);
+    return s;
+  }
+
+  var sheetRows = rows.map(function(row, ri) {
+    return '<row r="' + (ri+1) + '">' + row.map(function(val, ci) {
+      var ref = colName(ci) + (ri+1);
+      if (typeof val === 'number') return '<c r="' + ref + '"><v>' + val + '</v></c>';
+      return '<c r="' + ref + '" t="s"><v>' + ssi(val) + '</v></c>';
+    }).join('') + '</row>';
+  }).join('');
+
+  var zip = new JSZip();
+  zip.file('[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+    '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+    '</Types>');
+  zip.file('_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    '</Relationships>');
+  zip.file('xl/workbook.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheets><sheet name="Kombinasyonlar" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  zip.file('xl/_rels/workbook.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>' +
+    '</Relationships>');
+  zip.file('xl/worksheets/sheet1.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetData>' + sheetRows + '</sheetData></worksheet>');
+  zip.file('xl/sharedStrings.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + ss.length + '" uniqueCount="' + ss.length + '">' +
+    ss.map(function(s){ return '<si><t xml:space="preserve">' + esc(s) + '</t></si>'; }).join('') + '</sst>');
+
+  var blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'kombinasyonlar-' + n + 'li.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(list.length.toLocaleString('tr-TR') + ' kombinasyon Excel\'e aktarıldı', true);
 }
 
 function _kombRow(p, i) {
