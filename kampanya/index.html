@@ -175,6 +175,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .knbtn{background:none;border:none;border-bottom:2px solid transparent;padding:9px 22px;cursor:pointer;color:var(--sub);font-size:13px;font-weight:700;white-space:nowrap;transition:all .12s}
 .knbtn:hover{color:var(--txt)}
 .knbtn.act{color:var(--acc);border-bottom-color:var(--acc)}
+/* İndirimli Ürün Bul sayfası */
+.ipage{position:fixed;inset:50px 0 0 0;background:var(--bg);z-index:20;display:none;flex-direction:column;overflow:hidden}
+.ipage.show{display:flex}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -194,6 +197,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <button class="tbtn" onclick="resetUrunler()" title="Yüklenen Excel'i temizle, varsayılan ürün listesine dön" style="font-size:11px;opacity:.7">↺ Sıfırla</button>
     <button class="tbtn" id="upageBtn" onclick="toggleUrunler()">📋 Ürünler</button>
     <button class="tbtn" id="kpageBtn" onclick="toggleKombo()">🔗 Kombinasyonlar</button>
+    <button class="tbtn" id="ipageBtn" onclick="toggleIndirimli()">🏷️ İndirimli Ürün Bul</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
     <button class="tbtn" onclick="toggleTheme()">◑</button>
   </div>
@@ -231,6 +235,41 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
       <tbody id="ktbody"></tbody>
     </table>
     <button class="kmore-btn" id="kmoreBtn" style="display:none" onclick="loadMoreKomb()">↓ Daha fazla göster</button>
+  </div>
+</div>
+
+<!-- İndirimli Ürün Bul tam sayfa overlay -->
+<div class="ipage" id="ipage">
+  <div class="kpage-top">
+    <input class="sinput" id="ipageQ" placeholder="Ürün adı veya barkod ara…" oninput="onIndSearch()" autocomplete="off" spellcheck="false" style="max-width:260px">
+    <span class="hk-lbl" style="white-space:nowrap">Hedef Kâr Oranı:</span>
+    <input id="indHedefOranInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield">
+    <span class="hk-lbl">%</span>
+    <span id="icount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
+    <button class="tbtn" onclick="downloadIndExcel()" style="margin-left:auto">📥 Excel İndir</button>
+    <button class="tbtn" onclick="toggleIndirimli()">✕ Kapat</button>
+  </div>
+  <div class="kn-bar" id="inBar">
+    <button class="knbtn act" onclick="setIndN(2)">2-li Kombinasyon</button>
+    <button class="knbtn" onclick="setIndN(3)">3-lü Kombinasyon</button>
+    <button class="knbtn" onclick="setIndN(4)">4-lü Kombinasyon</button>
+  </div>
+  <div class="ktier-bar" id="itierBar"></div>
+  <div class="ktable-wrap" id="itableWrap">
+    <table class="utable">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>Ürünler</th>
+          <th style="text-align:right">Toplam ₺</th>
+          <th style="text-align:right">Kargo ₺</th>
+          <th style="text-align:right;color:var(--grn)">Tahmini Kâr</th>
+          <th style="text-align:right;color:var(--grn)">Kâr Oranı</th>
+        </tr>
+      </thead>
+      <tbody id="itbody"></tbody>
+    </table>
+    <button class="kmore-btn" id="imoreBtn" style="display:none" onclick="loadMoreInd()">↓ Daha fazla göster</button>
   </div>
 </div>
 
@@ -862,7 +901,7 @@ function resetUrunler() {
   if (!confirm('Yüklenen Excel silinecek ve varsayılan ürün listesi geri yüklenecek. Emin misiniz?')) return;
   try { localStorage.removeItem('kampanya_urunler_v1'); } catch(e) {}
   URUNLER = URUNLER_DEFAULT.slice();
-  _invalidateKomb();
+  _invalidateKomb(); _invalidateInd();
   anaUrun = null;
   yanMap.clear();
   renderGrid();
@@ -1286,7 +1325,7 @@ document.getElementById('ri').addEventListener('click', function(e) {
   if (platBtn && platBtn.dataset.plat) {
     platMode = platBtn.dataset.plat;
     document.querySelectorAll('.pf-btn').forEach(function(b){ b.classList.toggle('act', b.dataset.plat === platMode); });
-    _invalidateKomb();
+    _invalidateKomb(); _invalidateInd();
     scheduleCalc();
     return;
   }
@@ -1372,7 +1411,7 @@ document.getElementById('urunXlsxIn').addEventListener('change', function(e) {
       // Kayıtlı maliyet varsa onu kullan (daha önce elle girilmiş değer öncelikli)
       urunler.forEach(function(u){ if (maliyetler[u.b]) u.f = maliyetler[u.b]; });
       URUNLER = urunler;
-      _invalidateKomb();
+      _invalidateKomb(); _invalidateInd();
       try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(urunler)); } catch(x) {}
       anaUrun = null;
       yanMap.clear();
@@ -1450,7 +1489,7 @@ function _utSave(b, uf, val) {
     if (anaUrun && anaUrun.b === b && !anaUrun.kom) anaUrun.kom = val;
     else if (yanMap.has(b) && !yanMap.get(b).kom) yanMap.get(b).kom = val;
   }
-  _invalidateKomb();
+  _invalidateKomb(); _invalidateInd();
   try { localStorage.setItem('kampanya_urunler_v1', JSON.stringify(URUNLER)); } catch(x) {}
   renderGrid();
   updateResults();
@@ -1518,6 +1557,7 @@ var kombN = 2;  // 2, 3 veya 4
 var KOMB_AUTO_LIMIT = {3: 80, 4: 40};  // arama yoksa en iyi N ürün seçilir
 
 function _invalidateKomb() { kombData = null; }
+function _invalidateInd() { indData = null; }
 
 function _urunKarOrani(u) {
   var pf = getPF(), rv = 20/120;
@@ -1832,10 +1872,11 @@ function toggleKombo() {
   var page = document.getElementById('kpage');
   var btn  = document.getElementById('kpageBtn');
   var show = !page.classList.contains('show');
-  // Close diğer overlay
   if (show) {
     document.getElementById('upage').classList.remove('show');
     document.getElementById('upageBtn').classList.remove('act');
+    document.getElementById('ipage').classList.remove('show');
+    document.getElementById('ipageBtn').classList.remove('act');
   }
   page.classList.toggle('show', show);
   btn.classList.toggle('act', show);
@@ -1883,6 +1924,368 @@ document.getElementById('kombHedefOranInp').addEventListener('input', function()
   kombOffset = 0;
   if (kombData) _renderKombTabs();
   renderKomb();
+});
+
+// ========== İNDİRİMLİ ÜRÜN BUL SAYFASI ==========
+
+var indData = null;
+var indTier = '79';
+var indOffset = 0;
+var IND_PAGE = 200;
+var indHedefOran = 0;
+var indN = 2;
+var IND_AUTO_LIMIT = {3: 80, 4: 40};
+
+function setIndN(n) {
+  indN = n;
+  _invalidateInd();
+  indOffset = 0;
+  indTier = '79';
+  document.getElementById('ipageQ').value = '';
+  document.querySelectorAll('#inBar .knbtn').forEach(function(b, i){ b.classList.toggle('act', i + 2 === n); });
+  if (document.getElementById('ipage').classList.contains('show')) _buildAndRenderAllInd();
+}
+
+function _buildIndData(searchQuery) {
+  var all = URUNLER.filter(function(u){ return u.s > 0; });
+  var arr = all;
+  var autoNote = '';
+  if (indN > 2) {
+    var lim = IND_AUTO_LIMIT[indN];
+    if (arr.length > lim) {
+      var sortKar = function(a, b){ return _urunKarOrani(b) - _urunKarOrani(a); };
+      var pinned = [];
+      if (searchQuery && searchQuery.trim()) {
+        var ql = searchQuery.trim().toLocaleLowerCase('tr-TR');
+        pinned = arr.filter(function(u){
+          return u.a.toLocaleLowerCase('tr-TR').includes(ql) || u.b.toLocaleLowerCase('tr-TR').includes(ql);
+        });
+      }
+      var rest = arr.filter(function(u){ return pinned.indexOf(u) === -1; });
+      var remaining = Math.max(0, lim - pinned.length);
+      var band41 = rest.filter(function(u){ return u.s < 200; }).sort(sortKar);
+      var band79 = rest.filter(function(u){ return u.s >= 200 && u.s < 350; }).sort(sortKar);
+      var band93 = rest.filter(function(u){ return u.s >= 350; }).sort(sortKar);
+      var perBand = Math.round(remaining / 3);
+      var c = band41.slice(0, perBand);
+      var m = band79.slice(0, perBand);
+      var rem = remaining - c.length - m.length;
+      arr = pinned.concat(c).concat(m).concat(band93.slice(0, rem > 0 ? rem : 0));
+      autoNote = ' · her dilimden en kârlı ' + perBand + ' ürün';
+    }
+  }
+  var t41 = [], t79 = [], t93 = [];
+  var pf = getPF();
+  var rv = 20 / 120;
+  function addCombo(prods) {
+    var total = 0, alis = 0, kom = 0;
+    for (var pi = 0; pi < prods.length; pi++) {
+      var qty = minQty(prods[pi].s);
+      total += prods[pi].s * qty;
+      alis  += (prods[pi].f || 0) * qty;
+      kom   += prods[pi].s * qty * (prods[pi].k || 0);
+    }
+    var kg = kargoFor(total);
+    var stopaj = total / 1.20 * 0.01;
+    var oKdv = Math.max(0, total*rv - (alis*rv + kg*rv + kom*rv + pf*rv));
+    var kar = total - alis - kg - pf - kom - stopaj - oKdv;
+    var karOrani = alis > 0 ? kar / alis * 100 : null;
+    var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani};
+    if (kg === 41) t41.push(combo);
+    else if (kg === 79) t79.push(combo);
+    else t93.push(combo);
+  }
+  var n = arr.length;
+  if (indN === 2) {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        addCombo([arr[i], arr[j]]);
+  } else if (indN === 3) {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        for (var kk = j+1; kk < n; kk++)
+          addCombo([arr[i], arr[j], arr[kk]]);
+  } else {
+    for (var i = 0; i < n; i++)
+      for (var j = i+1; j < n; j++)
+        for (var kk = j+1; kk < n; kk++)
+          for (var ll = kk+1; ll < n; ll++)
+            addCombo([arr[i], arr[j], arr[kk], arr[ll]]);
+  }
+  var byKar = function(x,y){ return (y.karOrani||0) - (x.karOrani||0) || y.total - x.total; };
+  t41.sort(byKar); t79.sort(byKar); t93.sort(byKar);
+  return {t41:t41, t79:t79, t93:t93, note:autoNote};
+}
+
+function _indList() {
+  var key = 't' + indTier;
+  var base = indData[key] || [];
+  var result = base;
+  var q = document.getElementById('ipageQ').value.trim().toLocaleLowerCase('tr-TR');
+  if (q) {
+    result = result.filter(function(p){
+      return p.prods.some(function(u){
+        return u.a.toLocaleLowerCase('tr-TR').includes(q) || u.b.toLocaleLowerCase('tr-TR').includes(q);
+      });
+    });
+  }
+  if (indHedefOran > 0) {
+    result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefOran; });
+  }
+  return result;
+}
+
+function _renderIndTabs() {
+  var d = indData;
+  var label = indN === 2 ? 'çift' : indN === 3 ? 'üçlü' : 'dörtlü';
+  function filtCnt(arr) {
+    if (indHedefOran <= 0) return arr.length;
+    var cnt = 0;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].karOrani !== null && arr[i].karOrani >= indHedefOran) cnt++; }
+    return cnt;
+  }
+  var tabs = [
+    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
+    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
+    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
+  ];
+  document.getElementById('itierBar').innerHTML = tabs.map(function(t){
+    return '<button class="ktab' + (indTier === t.key ? ' act' : '') + '" onclick="setIndTier(\'' + escA(t.key) + '\')">'
+      + t.label + '<small>' + t.sub + '</small><em>' + t.cnt.toLocaleString('tr-TR') + ' ' + label + '</em></button>';
+  }).join('');
+}
+
+function setIndTier(key) {
+  indTier = key;
+  indOffset = 0;
+  _renderIndTabs();
+  renderInd();
+}
+
+async function downloadIndExcel() {
+  if (!indData) return showToast('Önce kombinasyonları hesaplayın.', false);
+  var list = _indList();
+  if (!list.length) return showToast('İndirilecek kombinasyon yok.', false);
+  if (typeof JSZip === 'undefined') return showToast('JSZip yüklenemedi, sayfayı yenileyip tekrar deneyin.', false);
+
+  var n = indN;
+  var headers = ['#'];
+  for (var i = 1; i <= n; i++) headers.push('Ürün ' + i, 'Barkod ' + i, 'Adet ' + i);
+  headers.push('Toplam ₺', 'Kargo ₺', 'Kâr ₺', 'Kâr Oranı %');
+
+  var rows = [headers];
+  list.forEach(function(p, idx) {
+    var row = [idx + 1];
+    for (var pi = 0; pi < n; pi++) {
+      var u = p.prods[pi];
+      row.push(u ? u.a : '', u ? u.b : '', u ? minQty(u.s) : '');
+    }
+    row.push(
+      Math.round(p.total * 100) / 100,
+      p.kargo,
+      Math.round(p.kar * 100) / 100,
+      p.karOrani != null ? Math.round(p.karOrani * 10) / 10 : ''
+    );
+    rows.push(row);
+  });
+
+  var ss = [], ssMap = {};
+  function ssi(s) {
+    s = String(s == null ? '' : s);
+    if (ssMap[s] == null) { ssMap[s] = ss.length; ss.push(s); }
+    return ssMap[s];
+  }
+  function iesc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function icolName(c) {
+    var s = '';
+    do { s = String.fromCharCode(65 + (c % 26)) + s; c = Math.floor(c / 26) - 1; } while (c >= 0);
+    return s;
+  }
+
+  var sheetRows = rows.map(function(row, ri) {
+    return '<row r="' + (ri+1) + '">' + row.map(function(val, ci) {
+      var ref = icolName(ci) + (ri+1);
+      if (typeof val === 'number') return '<c r="' + ref + '"><v>' + val + '</v></c>';
+      return '<c r="' + ref + '" t="s"><v>' + ssi(val) + '</v></c>';
+    }).join('') + '</row>';
+  }).join('');
+
+  var zip = new JSZip();
+  zip.file('[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+    '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+    '</Types>');
+  zip.file('_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    '</Relationships>');
+  zip.file('xl/workbook.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheets><sheet name="İndirimli Ürün Bul" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  zip.file('xl/_rels/workbook.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>' +
+    '</Relationships>');
+  zip.file('xl/worksheets/sheet1.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetData>' + sheetRows + '</sheetData></worksheet>');
+  zip.file('xl/sharedStrings.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + ss.length + '" uniqueCount="' + ss.length + '">' +
+    ss.map(function(s){ return '<si><t xml:space="preserve">' + iesc(s) + '</t></si>'; }).join('') + '</sst>');
+
+  var blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'indirimli-urun-' + n + 'li.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(list.length.toLocaleString('tr-TR') + ' kombinasyon Excel\'e aktarıldı', true);
+}
+
+function _indRow(p, i) {
+  var prodsHtml = p.prods.map(function(u){
+    var nm = u.a.length > 50 ? u.a.substring(0,50) + '…' : u.a;
+    var qty = minQty(u.s);
+    var qtyTag = qty > 1 ? ' <span style="color:var(--acc);font-size:9px;font-weight:700">×' + qty + '</span>' : '';
+    return '<div style="margin-bottom:1px">' + escH(nm) + qtyTag + '<div class="ut-bk">' + escH(u.b) + '</div></div>';
+  }).join('');
+  var bsAttr = escA(JSON.stringify(p.prods.map(function(u){ return u.b; })));
+  var karClr = p.kar > 0 ? 'var(--grn)' : 'var(--red)';
+  var orClr = p.karOrani != null && p.karOrani > 0 ? 'var(--grn)' : (p.karOrani != null ? 'var(--red)' : 'var(--mut)');
+  return '<tr class="krow-sel" data-bs="' + bsAttr + '" title="Tıkla: hesaplayıcıya ekle">'
+    + '<td style="color:var(--mut);font-size:10px;text-align:right;padding-right:8px;vertical-align:top;padding-top:6px">' + (i+1) + '</td>'
+    + '<td style="vertical-align:top;padding:4px 8px">' + prodsHtml + '</td>'
+    + '<td class="ut-price" style="text-align:right;vertical-align:middle">' + tl(p.total) + '</td>'
+    + '<td style="text-align:right;font-weight:700;color:var(--acc);vertical-align:middle">' + tl(p.kargo) + '</td>'
+    + '<td style="text-align:right;font-weight:800;color:' + karClr + ';vertical-align:middle">'
+      + (p.kar > 0 ? '+' + tl(p.kar) : tl(p.kar)) + '</td>'
+    + '<td style="text-align:right;font-weight:800;color:' + orClr + ';vertical-align:middle">'
+      + (p.karOrani != null ? (p.karOrani > 0 ? '+' : '') + p.karOrani.toFixed(1) + '%' : '—') + '</td>'
+    + '</tr>';
+}
+
+function renderInd() {
+  var list = _indList();
+  var first = list.slice(0, IND_PAGE);
+  indOffset = first.length;
+  document.getElementById('icount').textContent = list.length.toLocaleString('tr-TR') + ' kombinasyon';
+  document.getElementById('itbody').innerHTML = first.map(_indRow).join('');
+  document.getElementById('imoreBtn').style.display = indOffset < list.length ? 'block' : 'none';
+}
+
+function onIndSearch() {
+  indOffset = 0;
+  if (indN > 2) {
+    var q = document.getElementById('ipageQ').value.trim();
+    document.getElementById('icount').textContent = 'Hesaplanıyor…';
+    document.getElementById('itbody').innerHTML = '';
+    setTimeout(function(){
+      indData = _buildIndData(q);
+      indOffset = 0;
+      _renderIndTabs();
+      renderInd();
+    }, 0);
+  } else {
+    renderInd();
+  }
+}
+
+function _buildAndRenderAllInd() {
+  document.getElementById('icount').textContent = 'Hesaplanıyor…';
+  document.getElementById('itbody').innerHTML = '';
+  document.getElementById('itierBar').innerHTML = '';
+  setTimeout(function(){
+    indData = _buildIndData();
+    indOffset = 0;
+    if (!indData.t79.length && indData.t41.length) indTier = '41';
+    else if (!indData.t79.length && indData.t93.length) indTier = '93';
+    else indTier = '79';
+    _renderIndTabs();
+    renderInd();
+    if (indData.note) {
+      var el = document.getElementById('icount');
+      el.textContent = el.textContent + indData.note;
+    }
+  }, 0);
+}
+
+function loadMoreInd() {
+  var list = _indList();
+  if (indOffset >= list.length) return;
+  var startIdx = indOffset;
+  var batch = list.slice(startIdx, startIdx + IND_PAGE);
+  indOffset += batch.length;
+  document.getElementById('itbody').insertAdjacentHTML('beforeend',
+    batch.map(function(p, i){ return _indRow(p, startIdx + i); }).join(''));
+  document.getElementById('imoreBtn').style.display = indOffset < list.length ? 'block' : 'none';
+}
+
+function toggleIndirimli() {
+  var page = document.getElementById('ipage');
+  var btn  = document.getElementById('ipageBtn');
+  var show = !page.classList.contains('show');
+  if (show) {
+    document.getElementById('upage').classList.remove('show');
+    document.getElementById('upageBtn').classList.remove('act');
+    document.getElementById('kpage').classList.remove('show');
+    document.getElementById('kpageBtn').classList.remove('act');
+  }
+  page.classList.toggle('show', show);
+  btn.classList.toggle('act', show);
+  if (show) {
+    document.getElementById('ipageQ').value = '';
+    if (!indData) {
+      _buildAndRenderAllInd();
+    } else {
+      indOffset = 0;
+      _renderIndTabs();
+      renderInd();
+    }
+    document.getElementById('ipageQ').focus();
+  }
+}
+
+document.getElementById('itbody').addEventListener('click', function(ev) {
+  var row = ev.target.closest('.krow-sel');
+  if (!row) return;
+  var barkodlar;
+  try { barkodlar = JSON.parse(row.dataset.bs); } catch(e) { return; }
+  var urunler = barkodlar.map(function(b){ return URUNLER.find(function(x){ return x.b === b; }); });
+  if (urunler.some(function(u){ return !u; })) return;
+  var makeEntry = function(u){
+    return {b:u.b, a:u.a, alis:maliyetler[u.b]||u.f||0, satis:u.s||'', indirimli:'', qty:minQty(u.s||0), kom:u.k ? Math.round(u.k*100*10)/10 : '', _qtyManual:false};
+  };
+  anaUrun = makeEntry(urunler[0]);
+  yanMap.clear();
+  for (var xi = 1; xi < urunler.length; xi++) yanMap.set(urunler[xi].b, makeEntry(urunler[xi]));
+  toggleIndirimli();
+  renderGrid();
+  renderRight();
+  showToast(urunler[0].a.substring(0,20) + '… + ' + (urunler.length - 1) + ' ürün eklendi', true);
+});
+
+document.getElementById('itableWrap').addEventListener('scroll', function() {
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 400) loadMoreInd();
+}, {passive: true});
+
+document.getElementById('indHedefOranInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indHedefOran = (!isNaN(v) && v >= 0) ? v : 0;
+  indOffset = 0;
+  if (indData) _renderIndTabs();
+  renderInd();
 });
 
 // URUNLER değişince kombData'yı sıfırla — Excel upload veya fiyat düzenleme
