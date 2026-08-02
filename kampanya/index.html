@@ -1971,7 +1971,8 @@ function _indUpdateHeader() {
   if (!el) return;
   var bh = _indBaremHedef();
   var baremCol = bh
-    ? '<th style="text-align:right;color:var(--red)">' + bh.label + '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">İndirim %</div></th>'
+    ? '<th style="text-align:right;color:var(--red)">' + bh.label + '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">İndirim ₺</div></th>'
+      + '<th style="text-align:right;color:var(--red)">İndirim %<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'ye)</div></th>'
       + '<th style="text-align:right;color:var(--acc)">Yeni Kâr Oranı<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'de)</div></th>'
     : '';
   var colHdr = '2. Ürün İndirimli Fiyat'
@@ -2195,7 +2196,7 @@ async function downloadIndExcel() {
   var headers = ['#'];
   for (var i = 1; i <= n; i++) headers.push('Ürün ' + i, 'Barkod ' + i, 'Adet ' + i, 'Fiyat ' + i + ' ₺ (adetli)');
   headers.push('Toplam ₺', 'Kargo ₺', 'Kâr ₺', 'Kâr Oranı %');
-  if (bh) headers.push('İndirim % (' + bh.target + '₺)', 'Yeni Kâr % (' + bh.target + '₺)');
+  if (bh) headers.push('İndirim ₺ (' + bh.target + '₺\'ye)', 'İndirim % (' + bh.target + '₺\'ye)', 'Yeni Kâr % (' + bh.target + '₺\'de)');
   if (hasExtra) headers.push('2. Ürün İndirimli Fiyat', 'İndirim ₺/adet', 'İndirim %');
 
   var rows = [headers];
@@ -2214,7 +2215,7 @@ async function downloadIndExcel() {
     );
     if (bh) {
       if (p.total <= bh.target) {
-        row.push('', '');
+        row.push('', '', '');
       } else {
         var ratio = bh.target / p.total;
         var newKom = (p.kom || 0) * ratio;
@@ -2223,6 +2224,7 @@ async function downloadIndExcel() {
         var newStopaj = bh.target / 1.20 * 0.01;
         var newKar = bh.target - (p.alis||0) - bh.newKargo - pf2 - newKom - newStopaj - newOKdv;
         row.push(
+          Math.round((p.total - bh.target) * 100) / 100,
           Math.round((p.total - bh.target) / p.total * 1000) / 10,
           p.alis > 0 ? Math.round(newKar / p.alis * 1000) / 10 : ''
         );
@@ -2327,6 +2329,7 @@ function _indRow(p, i) {
   if (bh) {
     if (p.total <= bh.target) {
       baremCell = '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>'
+               + '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>'
                + '<td style="text-align:right;color:var(--mut);font-size:10px;vertical-align:middle;padding:4px 8px">—</td>';
     } else {
       var ratio = bh.target / p.total;
@@ -2339,10 +2342,8 @@ function _indRow(p, i) {
       var discAmt = p.total - bh.target;
       var discPct = discAmt / p.total * 100;
       var karClrB = newKarOrani != null && newKarOrani > 0 ? 'var(--grn)' : 'var(--red)';
-      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">'
-               + '−' + discPct.toFixed(1) + '%'
-               + '<div style="font-size:10px;font-weight:600;color:var(--red);margin-top:1px">−' + tl(discAmt) + '</div>'
-               + '</td>'
+      baremCell = '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">−' + tl(discAmt) + '</td>'
+               + '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:var(--red)">−' + discPct.toFixed(1) + '%</td>'
                + '<td style="text-align:right;vertical-align:middle;padding:4px 8px;font-size:13px;font-weight:800;color:' + karClrB + '">'
                + (newKarOrani != null ? (newKarOrani > 0 ? '+' : '') + newKarOrani.toFixed(1) + '%' : '—')
                + '</td>';
