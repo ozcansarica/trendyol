@@ -2161,16 +2161,22 @@ async function downloadIndExcel() {
   if (typeof JSZip === 'undefined') return showToast('JSZip yüklenemedi, sayfayı yenileyip tekrar deneyin.', false);
 
   var n = indN;
+  var bh = _indBaremHedef();
+  var hasExtra = _indExtraCol();
+
   var headers = ['#'];
-  for (var i = 1; i <= n; i++) headers.push('Ürün ' + i, 'Barkod ' + i, 'Adet ' + i);
+  for (var i = 1; i <= n; i++) headers.push('Ürün ' + i, 'Barkod ' + i, 'Adet ' + i, 'Fiyat ' + i + ' ₺ (adetli)');
   headers.push('Toplam ₺', 'Kargo ₺', 'Kâr ₺', 'Kâr Oranı %');
+  if (bh) headers.push('İndirim % (' + bh.target + '₺)', 'Yeni Kâr % (' + bh.target + '₺)');
+  if (hasExtra) headers.push('2. Ürün İndirimli Fiyat', 'İndirim ₺/adet', 'İndirim %');
 
   var rows = [headers];
   list.forEach(function(p, idx) {
     var row = [idx + 1];
     for (var pi = 0; pi < n; pi++) {
       var u = p.prods[pi];
-      row.push(u ? u.a : '', u ? u.b : '', u ? minQty(u.s) : '');
+      var qty = u ? minQty(u.s) : '';
+      row.push(u ? u.a : '', u ? u.b : '', qty, u ? Math.round(u.s * qty * 100) / 100 : '');
     }
     row.push(
       Math.round(p.total * 100) / 100,
@@ -2178,6 +2184,37 @@ async function downloadIndExcel() {
       Math.round(p.kar * 100) / 100,
       p.karOrani != null ? Math.round(p.karOrani * 10) / 10 : ''
     );
+    if (bh) {
+      if (p.total <= bh.target) {
+        row.push('', '');
+      } else {
+        var ratio = bh.target / p.total;
+        var newKom = (p.kom || 0) * ratio;
+        var pf2 = getPF(), rv2 = 20 / 120;
+        var newOKdv = Math.max(0, bh.target*rv2 - ((p.alis||0)*rv2 + bh.newKargo*rv2 + newKom*rv2 + pf2*rv2));
+        var newStopaj = bh.target / 1.20 * 0.01;
+        var newKar = bh.target - (p.alis||0) - bh.newKargo - pf2 - newKom - newStopaj - newOKdv;
+        row.push(
+          Math.round((p.total - bh.target) / p.total * 1000) / 10,
+          p.alis > 0 ? Math.round(newKar / p.alis * 1000) / 10 : ''
+        );
+      }
+    }
+    if (hasExtra) {
+      var p1eff = p.prods[0];
+      var skip = false;
+      if (indP1Fiyat > 0) {
+        if (p.prods[0].s < indP1Fiyat) { skip = true; }
+        else { p1eff = {b: p.prods[0].b, a: p.prods[0].a, s: indP1Fiyat, f: p.prods[0].f, k: p.prods[0].k}; }
+      }
+      if (skip) {
+        row.push('', '', '');
+      } else {
+        var res = _indIndirimFiyat(p1eff, p.prods[1], indHedefIndirim);
+        if (!res) { row.push('Mümkün değil', '', ''); }
+        else { row.push(Math.round(res.price * 100) / 100, Math.round(res.indirim * 100) / 100, Math.round(res.indirimPct * 10) / 10); }
+      }
+    }
     rows.push(row);
   });
 
