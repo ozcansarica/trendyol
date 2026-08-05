@@ -2148,6 +2148,11 @@ function _indList() {
   if (indSonrakiKar > 0) {
     result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && r >= indSonrakiKar; });
   }
+  if (indN === 2 && indTier === '41') {
+    result = result.filter(function(p) {
+      return p.prods.every(function(pr) { return pr.s <= 100; });
+    });
+  }
   if (indN === 2 && indTier === '79') {
     result = result.filter(function(p) {
       if (p.total < 200 || p.total > 210) return false;
@@ -2174,6 +2179,9 @@ function _renderIndTabs() {
       if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
+      if (indN === 2 && tierKey === '41') {
+        if (!p.prods.every(function(pr) { return pr.s <= 100; })) continue;
+      }
       if (indN === 2 && tierKey === '79') {
         if (p.total < 200 || p.total > 210) continue;
         if (!p.prods.every(function(pr) { return pr.s >= 100; })) continue;
