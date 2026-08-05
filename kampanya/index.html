@@ -2148,13 +2148,19 @@ function _indList() {
   if (indSonrakiKar > 0) {
     result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && r >= indSonrakiKar; });
   }
+  if (indN === 2 && indTier === '79') {
+    result = result.filter(function(p) {
+      if (p.total < 200 || p.total > 210) return false;
+      return p.prods.some(function(pr) { return pr.s * minQty(pr.s) >= 100; });
+    });
+  }
   return result;
 }
 
 function _renderIndTabs() {
   var d = indData;
   var label = indN === 2 ? 'çift' : indN === 3 ? 'üçlü' : 'dörtlü';
-  function filtCnt(arr) {
+  function filtCnt(arr, tierKey) {
     var cnt = 0;
     for (var i = 0; i < arr.length; i++) {
       var p = arr[i];
@@ -2162,14 +2168,18 @@ function _renderIndTabs() {
       if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
+      if (indN === 2 && tierKey === '79') {
+        if (p.total < 200 || p.total > 210) continue;
+        if (!p.prods.some(function(pr) { return pr.s * minQty(pr.s) >= 100; })) continue;
+      }
       cnt++;
     }
     return cnt;
   }
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
+    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41, '41')},
+    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79, '79')},
+    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93, '93')},
   ];
   document.getElementById('itierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (indTier === t.key ? ' act' : '') + '" onclick="setIndTier(\'' + escA(t.key) + '\')">'
