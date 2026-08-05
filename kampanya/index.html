@@ -2156,7 +2156,8 @@ function _indList() {
   }
   if (indN === 2 && indTier === '93') {
     result = result.filter(function(p) {
-      return p.total >= 350 && p.total <= 360;
+      if (p.total < 350 || p.total > 360) return false;
+      return p.prods.every(function(pr) { return pr.s >= 175; });
     });
   }
   return result;
@@ -2179,6 +2180,7 @@ function _renderIndTabs() {
       }
       if (indN === 2 && tierKey === '93') {
         if (p.total < 350 || p.total > 360) continue;
+        if (!p.prods.every(function(pr) { return pr.s >= 175; })) continue;
       }
       cnt++;
     }
