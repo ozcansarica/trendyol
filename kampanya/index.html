@@ -2151,7 +2151,7 @@ function _indList() {
   if (indN === 2 && indTier === '79') {
     result = result.filter(function(p) {
       if (p.total < 200 || p.total > 210) return false;
-      return p.prods.some(function(pr) { return pr.s * minQty(pr.s) >= 100; });
+      return p.prods.some(function(pr) { return pr.s >= 100; });
     });
   }
   return result;
