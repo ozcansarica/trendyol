@@ -245,10 +245,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span id="icount" style="font-size:12px;color:var(--mut);margin-left:4px"></span>
     <span style="width:1px;height:20px;background:var(--brd);flex-shrink:0;margin:0 4px"></span>
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu)">1. Ürün Fiyatı:</span>
-    <input id="indP1FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
+    <input id="indP1FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="min" style="-moz-appearance:textfield;border-color:var(--blu);width:60px">
+    <span class="hk-lbl" style="color:var(--mut)">–</span>
+    <input id="indP1FiyatMaxInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="max" style="-moz-appearance:textfield;border-color:var(--blu);width:60px">
     <span class="hk-lbl" style="color:var(--blu)">₺</span>
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">2. Ürün Fiyatı:</span>
-    <input id="indP2FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
+    <input id="indP2FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="min" style="-moz-appearance:textfield;border-color:var(--blu);width:60px">
+    <span class="hk-lbl" style="color:var(--mut)">–</span>
+    <input id="indP2FiyatMaxInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="max" style="-moz-appearance:textfield;border-color:var(--blu);width:60px">
     <span class="hk-lbl" style="color:var(--blu)">₺</span>
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">Önceki Kâr Oranı:</span>
     <input id="indHedefIndirimInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--blu)">
@@ -1948,7 +1952,9 @@ var IND_AUTO_LIMIT = {3: 80, 4: 40};
 var indHedefIndirim = 0;
 var indSonrakiKar = 0;
 var indP1Fiyat = 0;
+var indP1FiyatMax = 0;
 var indP2Fiyat = 0;
+var indP2FiyatMax = 0;
 
 function _indExtraCol() { return false; }
 
@@ -2146,8 +2152,14 @@ function _indList() {
   if (indP1Fiyat > 0) {
     result = result.filter(function(p){ return p.prods[0] && p.prods[0].s >= indP1Fiyat; });
   }
+  if (indP1FiyatMax > 0) {
+    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s <= indP1FiyatMax; });
+  }
   if (indP2Fiyat > 0) {
     result = result.filter(function(p){ return p.prods[1] && p.prods[1].s >= indP2Fiyat; });
+  }
+  if (indP2FiyatMax > 0) {
+    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s <= indP2FiyatMax; });
   }
   if (indHedefIndirim > 0) {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefIndirim; });
@@ -2167,7 +2179,9 @@ function _renderIndTabs() {
       var p = arr[i];
       if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
       if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
+      if (indP1FiyatMax > 0 && (!p.prods[0] || p.prods[0].s > indP1FiyatMax)) continue;
       if (indP2Fiyat > 0 && (!p.prods[1] || p.prods[1].s < indP2Fiyat)) continue;
+      if (indP2FiyatMax > 0 && (!p.prods[1] || p.prods[1].s > indP2FiyatMax)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
       cnt++;
@@ -2534,9 +2548,21 @@ document.getElementById('indP1FiyatInp').addEventListener('input', function() {
   indOffset = 0;
   if (indData) renderInd();
 });
+document.getElementById('indP1FiyatMaxInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indP1FiyatMax = (!isNaN(v) && v > 0) ? v : 0;
+  indOffset = 0;
+  if (indData) { _renderIndTabs(); renderInd(); }
+});
 document.getElementById('indP2FiyatInp').addEventListener('input', function() {
   var v = parseFloat(this.value);
   indP2Fiyat = (!isNaN(v) && v > 0) ? v : 0;
+  indOffset = 0;
+  if (indData) { _renderIndTabs(); renderInd(); }
+});
+document.getElementById('indP2FiyatMaxInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indP2FiyatMax = (!isNaN(v) && v > 0) ? v : 0;
   indOffset = 0;
   if (indData) { _renderIndTabs(); renderInd(); }
 });
