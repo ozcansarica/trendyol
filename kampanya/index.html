@@ -247,6 +247,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu)">1. Ürün Fiyatı:</span>
     <input id="indP1FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
     <span class="hk-lbl" style="color:var(--blu)">₺</span>
+    <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">2. Ürün Fiyatı:</span>
+    <input id="indP2FiyatInp" class="hk-inp" type="number" min="0" step="0.01" placeholder="—" style="-moz-appearance:textfield;border-color:var(--blu);width:68px">
+    <span class="hk-lbl" style="color:var(--blu)">₺</span>
     <span class="hk-lbl" style="white-space:nowrap;color:var(--blu);margin-left:6px">Önceki Kâr Oranı:</span>
     <input id="indHedefIndirimInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--blu)">
     <span class="hk-lbl" style="color:var(--blu)">%</span>
@@ -1945,6 +1948,7 @@ var IND_AUTO_LIMIT = {3: 80, 4: 40};
 var indHedefIndirim = 0;
 var indSonrakiKar = 0;
 var indP1Fiyat = 0;
+var indP2Fiyat = 0;
 
 function _indExtraCol() { return false; }
 
@@ -2142,6 +2146,9 @@ function _indList() {
   if (indP1Fiyat > 0) {
     result = result.filter(function(p){ return p.prods[0] && p.prods[0].s >= indP1Fiyat; });
   }
+  if (indP2Fiyat > 0) {
+    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s >= indP2Fiyat; });
+  }
   if (indHedefIndirim > 0) {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefIndirim; });
   }
@@ -2160,6 +2167,7 @@ function _renderIndTabs() {
       var p = arr[i];
       if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
       if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
+      if (indP2Fiyat > 0 && (!p.prods[1] || p.prods[1].s < indP2Fiyat)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
       cnt++;
@@ -2525,6 +2533,12 @@ document.getElementById('indP1FiyatInp').addEventListener('input', function() {
   indP1Fiyat = (!isNaN(v) && v > 0) ? v : 0;
   indOffset = 0;
   if (indData) renderInd();
+});
+document.getElementById('indP2FiyatInp').addEventListener('input', function() {
+  var v = parseFloat(this.value);
+  indP2Fiyat = (!isNaN(v) && v > 0) ? v : 0;
+  indOffset = 0;
+  if (indData) { _renderIndTabs(); renderInd(); }
 });
 
 // URUNLER değişince kombData'yı sıfırla — Excel upload veya fiyat düzenleme
