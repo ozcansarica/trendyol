@@ -2125,8 +2125,7 @@ function _buildIndData(searchQuery) {
 }
 
 function _indList() {
-  var key = 't' + indTier;
-  var base = indData[key] || [];
+  var base = (indData.t41 || []).concat(indData.t79 || []).concat(indData.t93 || []);
   var result = base;
   var q = document.getElementById('ipageQ').value.trim().toLocaleLowerCase('tr-TR');
   if (q) {
@@ -2154,34 +2153,18 @@ function _indList() {
 function _renderIndTabs() {
   var d = indData;
   var label = indN === 2 ? 'çift' : indN === 3 ? 'üçlü' : 'dörtlü';
-  function filtCnt(arr, tierKey) {
-    var cnt = 0;
-    for (var i = 0; i < arr.length; i++) {
-      var p = arr[i];
-      if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
-      if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
-      if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
-      if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
-      cnt++;
-    }
-    return cnt;
+  var all = (d.t41 || []).concat(d.t79 || []).concat(d.t93 || []);
+  var cnt = 0;
+  for (var i = 0; i < all.length; i++) {
+    var p = all[i];
+    if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
+    if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
+    if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
+    if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
+    cnt++;
   }
-  var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41, '41')},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79, '79')},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93, '93')},
-  ];
-  document.getElementById('itierBar').innerHTML = tabs.map(function(t){
-    return '<button class="ktab' + (indTier === t.key ? ' act' : '') + '" onclick="setIndTier(\'' + escA(t.key) + '\')">'
-      + t.label + '<small>' + t.sub + '</small><em>' + t.cnt.toLocaleString('tr-TR') + ' ' + label + '</em></button>';
-  }).join('');
-}
-
-function setIndTier(key) {
-  indTier = key;
-  indOffset = 0;
-  _renderIndTabs();
-  renderInd();
+  document.getElementById('itierBar').innerHTML =
+    '<button class="ktab act">Tümü<em>' + cnt.toLocaleString('tr-TR') + ' ' + label + '</em></button>';
 }
 
 async function downloadIndExcel() {
