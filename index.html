@@ -724,9 +724,10 @@ function render() {
 // — Fiyat aralığı seçimi & Excel indirme —
 
 const selectedTiers = new Map(); // anahtar: "urunIdx-tierNum" → tarife string
+const selectedOzelFiyat = new Map(); // idx → {price, komisyon, tierNum, kar, karOrani, zorunluAdet, secilenTarife}
 
 function updateSecimBar() {
-  const n = selectedTiers.size;
+  const n = selectedTiers.size + selectedOzelFiyat.size;
   const btn = document.getElementById('secimIndir');
   btn.style.display = n > 0 ? '' : 'none';
   document.getElementById('secimSayisi').textContent = n;
@@ -741,7 +742,7 @@ window.toggleTierSec = function (idx, tierNum) {
 };
 
 window.exportSecilenlerXlsx = async function () {
-  if (!selectedTiers.size) return;
+  if (!selectedTiers.size && !selectedOzelFiyat.size) return;
 
   const headers = [
     'Ürün', 'Model', 'Barkod', 'Stok', 'Maliyet (₺)',
@@ -766,6 +767,18 @@ window.exportSecilenlerXlsx = async function () {
       secilenTarife ? `${secilenTarife} Günlük` : '', t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
       Math.round(t.kar * 100) / 100,
       Math.round(t.karOrani * 10) / 10,
+    ]);
+  }
+
+  for (const [idxStr, d] of selectedOzelFiyat.entries()) {
+    const u = activeUrunler[+idxStr];
+    if (!u) continue;
+    rows.push([
+      u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
+      d.secilenTarife ? `${d.secilenTarife} Günlük` : '', `Özel Fiyat (${d.tierNum}. Aralık)`,
+      d.komisyon, d.price, d.zorunluAdet,
+      Math.round(d.kar * 100) / 100,
+      Math.round(d.karOrani * 10) / 10,
     ]);
   }
 
@@ -824,6 +837,7 @@ window.ozelFiyatHesapla = function (input) {
   const price = parseFloat(input.value);
   if (!price || price <= 0) {
     resultEl.innerHTML = '';
+    if (selectedOzelFiyat.has(idx)) { selectedOzelFiyat.delete(idx); updateSecimBar(); }
     return;
   }
 
@@ -837,11 +851,39 @@ window.ozelFiyatHesapla = function (input) {
   const kargo = kargoIcin(price);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
+  const isSel = selectedOzelFiyat.has(idx) && selectedOzelFiyat.get(idx).price === price;
   resultEl.innerHTML = `
     <div class="kv-line small">${t.num}. Fiyat Aralığı · %${t.komisyon} komisyon${zorunluAdet > 1 ? ` · Zorunlu Sipariş: ${zorunluAdet} adet` : ''}</div>
     <div class="kv-line">${zorunluAdet > 1 ? `Kâr (${zorunluAdet} adet):` : 'Kâr:'} <span class="kv ${karCls}">${tl(c.kar)}</span></div>
     <div class="kv-line small">Kâr Oranı: <span class="${karCls}">${pc(c.karOrani)}</span></div>
+    <button id="ozelSecBtn-${idx}" class="ozel-sec-btn${isSel ? ' selected' : ''}"
+      data-idx="${idx}" data-price="${price}" data-komisyon="${t.komisyon}" data-tiernum="${t.num}"
+      data-kar="${c.kar}" data-karorani="${c.karOrani}" data-adet="${zorunluAdet}"
+      onclick="toggleOzelFiyatSec(this)">${isSel ? '✓ Seçildi' : '📌 Seç'}</button>
   `;
+};
+
+window.toggleOzelFiyatSec = function (btn) {
+  const idx = btn.dataset.idx;
+  const price = parseFloat(btn.dataset.price);
+  const isSel = selectedOzelFiyat.has(idx) && selectedOzelFiyat.get(idx).price === price;
+  if (isSel) {
+    selectedOzelFiyat.delete(idx);
+  } else {
+    selectedOzelFiyat.set(idx, {
+      price,
+      komisyon: parseFloat(btn.dataset.komisyon),
+      tierNum: parseInt(btn.dataset.tiernum),
+      kar: parseFloat(btn.dataset.kar),
+      karOrani: parseFloat(btn.dataset.karorani),
+      zorunluAdet: parseInt(btn.dataset.adet),
+      secilenTarife: tarife,
+    });
+  }
+  const nowSel = selectedOzelFiyat.has(idx);
+  btn.classList.toggle('selected', nowSel);
+  btn.textContent = nowSel ? '✓ Seçildi' : '📌 Seç';
+  updateSecimBar();
 };
 
 window.openMaliyetModal = function () {
