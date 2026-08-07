@@ -53,8 +53,10 @@
   .modal-search { padding: 12px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
   .modal-search input[type="text"] { flex: 1; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px; }
   .modal-search input[type="text"]:focus { outline: none; border-color: var(--orange); }
-  .modal-upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .modal-upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; border: none; }
   .modal-upload-btn:hover { background: #2b3a52; }
+  .modal-upload-btn.secondary { background: #fff; color: var(--navy); border: 1.5px solid var(--line); }
+  .modal-upload-btn.secondary:hover { border-color: var(--orange); color: var(--orange); background: #fff; }
   .modal-body { overflow: auto; flex: 1; }
   .modal-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .modal-table thead th { position: sticky; top: 0; background: #f8f9fb; color: var(--muted); font-weight: 700; text-align: left; padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
@@ -204,6 +206,9 @@
       <input type="text" id="maliyetSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderMaliyetModal()">
       <label class="modal-upload-btn" for="maliyetFileInput">📤 Excel ile Toplu Yükle</label>
       <input type="file" id="maliyetFileInput" accept=".xlsx" style="display:none">
+      <button class="modal-upload-btn secondary" onclick="exportMaliyetJson()">⬇️ JSON İndir</button>
+      <label class="modal-upload-btn secondary" for="maliyetJsonInput">⬆️ JSON Yükle</label>
+      <input type="file" id="maliyetJsonInput" accept=".json" style="display:none">
     </div>
     <div class="upload-msg error" id="maliyetUploadError" style="display:none"></div>
     <div class="upload-msg info" id="maliyetUploadInfo" style="display:none"></div>
@@ -549,6 +554,46 @@ document.getElementById('maliyetFileInput').addEventListener('change', async (e)
     renderMaliyetModal();
   } catch (err) {
     showMsg('maliyetUploadError', `Excel okunamadı: ${err.message}`);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+window.exportMaliyetJson = function () {
+  const kayitlar = loadMaliyetKayitlari();
+  const json = JSON.stringify(kayitlar, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'trendyol-maliyet.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+document.getElementById('maliyetJsonInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showMsg('maliyetUploadError', '');
+  showMsg('maliyetUploadInfo', '');
+  try {
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if (typeof imported !== 'object' || Array.isArray(imported)) throw new Error('Geçersiz format — beklenen: barkod → maliyet nesnesi');
+    const kayitlar = loadMaliyetKayitlari();
+    Object.assign(kayitlar, imported);
+    localStorage.setItem(MALIYET_KEY, JSON.stringify(kayitlar));
+    applyMaliyetKayitlari(activeUrunler);
+    persistActiveUrunler();
+    let eslesen = 0;
+    for (const u of activeUrunler) {
+      const anahtar = maliyetAnahtari(u);
+      if (anahtar && imported[anahtar] != null) eslesen++;
+    }
+    render();
+    renderMaliyetModal();
+    showMsg('maliyetUploadInfo', `${Object.keys(imported).length} maliyet kaydı içe aktarıldı; ${eslesen} tanesi mevcut ürün listesiyle eşleşti.`);
+  } catch (err) {
+    showMsg('maliyetUploadError', `JSON okunamadı: ${err.message}`);
   } finally {
     e.target.value = '';
   }
