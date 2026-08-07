@@ -626,7 +626,7 @@ window.exportSecilenlerXlsx = async function () {
     if (!t || t.karOrani === null) continue;
     rows.push([
       u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
-      secilenTarife, t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
+      secilenTarife ? `${secilenTarife} Günlük` : '', t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
       Math.round(t.kar * 100) / 100,
       Math.round(t.karOrani * 10) / 10,
     ]);
