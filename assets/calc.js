@@ -38,7 +38,7 @@ export function computeMaliyet(p) {
   const kargoMaliyet = saticiyaAit ? kargo : 0;
 
   const komisyon = satis * komPct / 100;   // KDV dahil
-  const hizmet = hizmetBedeli(satis);      // KDV dahil
+  const hizmet = p.hizmet !== undefined ? +p.hizmet : hizmetBedeli(satis); // KDV dahil
 
   const satisKdv = ihracat ? 0 : satis * r; // ihracatta KDV istisnası
   const alisKdv = alis * r;

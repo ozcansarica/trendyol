@@ -126,6 +126,20 @@
   td.yildiz-sec.selected { outline: 2px solid var(--orange); outline-offset: -2px; background: #fff7ee; }
   .indir-btn { background: var(--green); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .indir-btn:hover { opacity: .88; }
+  .kargo-form { display:flex; flex-direction:column; gap:18px; }
+  .kargo-section { background:#f8f9fb; border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kargo-section-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:10px; }
+  .kargo-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
+  .kargo-lbl { font-size:13px; color:#374151; flex:1; }
+  .kargo-input-group { display:flex; align-items:center; gap:4px; }
+  .kargo-input { width:80px; padding:6px 8px; border:1.5px solid var(--line); border-radius:7px; font-size:13px; font-weight:700; text-align:right; }
+  .kargo-input:focus { outline:none; border-color:var(--orange); }
+  .kargo-esik { width:65px; display:inline-block; vertical-align:middle; margin:0 2px; padding:4px 6px; }
+  .kargo-unit { font-size:13px; color:var(--muted); font-weight:600; }
+  .kargo-save-btn { padding:9px 18px; background:var(--green); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+  .kargo-save-btn:hover { opacity:.88; }
+  .kargo-reset-btn { padding:9px 14px; background:#fff; color:var(--muted); border:1.5px solid var(--line); border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+  .kargo-reset-btn:hover { border-color:var(--orange); color:var(--orange); }
   .ozel-sec-btn { margin-top: 5px; width: 100%; background: #aaa; color: #fff; border: none; border-radius: 6px; padding: 3px 0; font-size: 11px; font-weight: 600; cursor: pointer; }
   .ozel-sec-btn.selected { background: var(--orange); }
   .ozel-sec-btn:hover { opacity: .85; }
@@ -147,6 +161,7 @@
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
     <button class="maliyet-btn" onclick="openYildizModal()">⭐ Yıldızlı Ürün Fiyatları</button>
+    <button class="maliyet-btn" onclick="openKargoModal()">📦 Kargo/Hizmet Tanımı</button>
     <button id="secimIndir" class="indir-btn" onclick="exportSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="secimSayisi">0</span>)</button>
     <span class="status" id="dataStatus"></span>
   </div>
@@ -156,7 +171,7 @@
   <div class="settings">
     <span class="lbl">Tarife:</span>
     <div class="tarife-toggle" id="tarifeToggle"></div>
-    <span class="hint">KDV %20 sabit. Kargo satış fiyatına göre otomatik: &lt;200₺ → 42₺, 200–350₺ → 78₺, &gt;350₺ → 98₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.</span>
+    <span class="hint" id="settingsHint"></span>
   </div>
 
   <div class="tablewrap">
@@ -235,6 +250,49 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="kargoModal">
+  <div class="modal-panel" style="max-width:480px">
+    <div class="modal-head">
+      <div>
+        <h2>📦 Kargo/Hizmet Bedeli Tanımı</h2>
+        <p>Kargo kademeleri ve hizmet bedelini düzenleyin; değişiklikler anında tüm hesaplamalara yansır.</p>
+      </div>
+      <button class="modal-close" onclick="closeKargoModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;overflow:auto">
+      <div class="kargo-form">
+        <div class="kargo-section">
+          <div class="kargo-section-title">Hizmet Bedeli</div>
+          <div class="kargo-row">
+            <span class="kargo-lbl">Sabit hizmet bedeli (tüm siparişlerde)</span>
+            <div class="kargo-input-group"><input type="number" id="khHizmet" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+        </div>
+        <div class="kargo-section">
+          <div class="kargo-section-title">Kargo Kademeleri</div>
+          <div class="kargo-row">
+            <span class="kargo-lbl">Satış &lt; <input type="number" id="khEsik1" step="1" min="1" class="kargo-input kargo-esik"> ₺ → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo1" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+          <div class="kargo-row">
+            <span class="kargo-lbl"><span id="khEsik1Label">200</span> – <input type="number" id="khEsik2" step="1" min="1" class="kargo-input kargo-esik"> ₺ → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo2" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+          <div class="kargo-row">
+            <span class="kargo-lbl">&gt; <span id="khEsik2Label">350</span> ₺ → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo3" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+        </div>
+        <div style="margin-top:20px;display:flex;gap:10px;align-items:center">
+          <button class="kargo-save-btn" onclick="saveKargoModal()">💾 Kaydet ve Uygula</button>
+          <button class="kargo-reset-btn" onclick="resetKargoModal()">↩ Varsayılana Dön</button>
+          <span id="kargoKayitMsg" style="font-size:12px;color:var(--green);display:none">✓ Kaydedildi</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
 import { computeMaliyet } from './assets/calc.js?v=__BUILD_VERSION__';
@@ -253,11 +311,29 @@ const CAT_EMOJI = {
 
 const KDV_PCT = 20; // Trendyol satışlarında sabit %20 KDV
 
+// Kargo / Hizmet Bedeli — kullanıcı tarafından özelleştirilebilir, localStorage'da saklanır
+const KARGO_HIZMET_KEY = 'trendyol_kargo_hizmet_v1';
+let kargoAyar = { esik1: 200, esik2: 350, kargo1: 42, kargo2: 78, kargo3: 98 };
+let hizmetAyar = 13.19;
+
+function loadKargoHizmet() {
+  try {
+    const raw = localStorage.getItem(KARGO_HIZMET_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.kargoAyar) kargoAyar = { ...kargoAyar, ...d.kargoAyar };
+    if (d.hizmetAyar != null) hizmetAyar = +d.hizmetAyar;
+  } catch (e) {}
+}
+function saveKargoHizmetStorage() {
+  localStorage.setItem(KARGO_HIZMET_KEY, JSON.stringify({ kargoAyar, hizmetAyar }));
+}
+
 // Kargo: satış fiyatına göre otomatik kademe
 function kargoIcin(satisFiyati) {
-  if (satisFiyati < 200) return 42;
-  if (satisFiyati <= 350) return 78;
-  return 98;
+  if (satisFiyati < kargoAyar.esik1) return kargoAyar.kargo1;
+  if (satisFiyati <= kargoAyar.esik2) return kargoAyar.kargo2;
+  return kargoAyar.kargo3;
 }
 
 // Zorunlu sipariş adedi: düşük fiyatlı ürünlerde Trendyol tek adet siparişe
@@ -345,6 +421,12 @@ function persistActiveUrunler() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, urunler: activeUrunler }));
     }
   } catch { /* yoksay */ }
+}
+
+function updateHint() {
+  const el = document.getElementById('settingsHint');
+  if (!el) return;
+  el.textContent = `KDV %20 sabit. Hizmet bedeli: ${hizmetAyar.toFixed(2)}₺. Kargo: <${kargoAyar.esik1}₺→${kargoAyar.kargo1}₺, ${kargoAyar.esik1}–${kargoAyar.esik2}₺→${kargoAyar.kargo2}₺, >${kargoAyar.esik2}₺→${kargoAyar.kargo3}₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.`;
 }
 
 function updateStatusUI() {
@@ -518,7 +600,7 @@ function tierInfo(u, tarifeKey) {
     const kargo = kargoIcin(sellPrice); // kargo gönderi başına sabit, adede bölünmez
     // Zorunlu sipariş adedi kadar ürün aynı siparişte satıldığından, maliyet
     // ve satış tutarı bu adetle çarpılarak siparişin gerçek kârı hesaplanır.
-    const c = computeMaliyet({ satis: sellPrice * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+    const c = computeMaliyet({ satis: sellPrice * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
     return { ...t, sellPrice, kar: c.kar, karOrani: c.karOrani, zorunluAdet };
   });
 
@@ -549,7 +631,7 @@ function render() {
     let guncelKarHtml = '';
     if (u.guncel_tsf && u.guncel_komisyon && u.maliyet) {
       const gAdet = zorunluSiparisAdedi(u.guncel_tsf);
-      const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf) });
+      const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf), hizmet: hizmetAyar });
       const gCls = gC.karOrani >= 0 ? 'pos' : 'neg';
       guncelKarHtml = `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${gCls}">${tl(gC.kar)}</span></div>
         <div class="row"><span class="k">Kâr Oranı</span><span class="v ${gCls}">${pc(gC.karOrani)}</span></div>`;
@@ -708,7 +790,7 @@ window.ozelFiyatHesapla = function (input) {
 
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
-  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo });
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
   resultEl.innerHTML = `
     <div class="kv-line small">${t.num}. Fiyat Aralığı · %${t.komisyon} komisyon${zorunluAdet > 1 ? ` · Zorunlu Sipariş: ${zorunluAdet} adet` : ''}</div>
@@ -817,8 +899,50 @@ function saveResimlerToStorage(resimler) {
   } catch { /* kritik değil */ }
 }
 
-// Sayfa yüklenince kalıcı resimleri belleğe yükle
+// Sayfa yüklenince kalıcı resimleri ve kargo/hizmet ayarlarını belleğe yükle
 Object.assign(maliyetResimler, loadResimlerFromStorage());
+loadKargoHizmet();
+
+// Kargo/Hizmet modal
+window.openKargoModal = function () {
+  const el = id => document.getElementById(id);
+  el('khHizmet').value = hizmetAyar;
+  el('khEsik1').value = kargoAyar.esik1;
+  el('khEsik2').value = kargoAyar.esik2;
+  el('khKargo1').value = kargoAyar.kargo1;
+  el('khKargo2').value = kargoAyar.kargo2;
+  el('khKargo3').value = kargoAyar.kargo3;
+  el('khEsik1Label').textContent = kargoAyar.esik1;
+  el('khEsik2Label').textContent = kargoAyar.esik2;
+  el('kargoKayitMsg').style.display = 'none';
+  document.getElementById('kargoModal').classList.remove('hidden');
+};
+window.closeKargoModal = function () {
+  document.getElementById('kargoModal').classList.add('hidden');
+};
+window.saveKargoModal = function () {
+  const val = id => parseFloat(document.getElementById(id).value) || 0;
+  const esik1 = val('khEsik1'); const esik2 = val('khEsik2');
+  if (esik1 >= esik2) { alert('1. eşik 2. eşikten küçük olmalıdır.'); return; }
+  kargoAyar = { esik1, esik2, kargo1: val('khKargo1'), kargo2: val('khKargo2'), kargo3: val('khKargo3') };
+  hizmetAyar = val('khHizmet');
+  saveKargoHizmetStorage();
+  document.getElementById('khEsik1Label').textContent = esik1;
+  document.getElementById('khEsik2Label').textContent = esik2;
+  updateHint();
+  render();
+  const msg = document.getElementById('kargoKayitMsg');
+  msg.style.display = '';
+  setTimeout(() => { msg.style.display = 'none'; }, 2000);
+};
+window.resetKargoModal = function () {
+  kargoAyar = { esik1: 200, esik2: 350, kargo1: 42, kargo2: 78, kargo3: 98 };
+  hizmetAyar = 13.19;
+  saveKargoHizmetStorage();
+  openKargoModal();
+  updateHint();
+  render();
+};
 
 function loadYildizFromStorage() {
   try {
@@ -893,7 +1017,7 @@ function yildizKarHesapla(barkod, u, veri, price) {
 
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
-  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   return { durum: 'ok', price, kar: c.kar, karOrani: c.karOrani, zorunluAdet, komisyon };
 }
 
@@ -930,7 +1054,7 @@ function yildizFiyatCell(barkod, u, veri) {
     const mal = yildizMaliyetBul(barkod, u);
     if (mal == null) return '';
     const adet = zorunluSiparisAdedi(price);
-    const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price) });
+    const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price), hizmet: hizmetAyar });
     const cls = c.karOrani >= 0 ? 'pos' : 'neg';
     return `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${cls}">${tl(c.kar)}</span></div>
     <div class="row"><span class="k">Kâr Oranı</span><span class="v ${cls}">${pc(c.karOrani)}</span></div>`;
@@ -997,7 +1121,7 @@ window.ozelFiyatHesaplaYildizModal = function (input) {
   }
   const zorunluAdet = zorunluSiparisAdedi(price);
   const kargo = kargoIcin(price);
-  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo });
+  const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
   const bEsc = String(barkod).replace(/"/g, '&quot;');
   const veriObj = yildizVeri?.veriler?.[barkod];
@@ -1189,6 +1313,7 @@ window.renderYildizModal = function () {
 loadFromStorage();
 loadYildizFromStorage();
 applyMaliyetKayitlari(activeUrunler);
+updateHint();
 updateStatusUI();
 updateTarifeAvailability();
 setTarife(tarife);
