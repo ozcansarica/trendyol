@@ -546,11 +546,21 @@ function render() {
         </div>
       </div>`;
 
+    let guncelKarHtml = '';
+    if (u.guncel_tsf && u.guncel_komisyon && u.maliyet) {
+      const gAdet = zorunluSiparisAdedi(u.guncel_tsf);
+      const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf) });
+      const gCls = gC.karOrani >= 0 ? 'pos' : 'neg';
+      guncelKarHtml = `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${gCls}">${tl(gC.kar)}</span></div>
+        <div class="row"><span class="k">Kâr Oranı</span><span class="v ${gCls}">${pc(gC.karOrani)}</span></div>`;
+    }
+
     const fiyatCell = `
       <div class="fiyat-cell">
         <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
         <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
         <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
+        ${guncelKarHtml}
         <div class="ozel-fiyat">
           <input type="number" class="ozel-fiyat-input" placeholder="Satış fiyatı gir (₺)" min="0" step="0.01" data-idx="${idx}" oninput="ozelFiyatHesapla(this)">
           <div class="ozel-fiyat-sonuc" id="ozelSonuc-${idx}"></div>
