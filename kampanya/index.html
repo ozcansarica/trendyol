@@ -1571,7 +1571,7 @@ var kombN = 2;  // 2, 3 veya 4
 var KOMB_AUTO_LIMIT = {3: 80, 4: 40};  // arama yoksa en iyi N ürün seçilir
 
 function _invalidateKomb() { kombData = null; }
-function _invalidateInd() { indData = null; }
+function _invalidateInd() { indData = null; indSortCol = null; indSortDir = 1; }
 
 function _urunKarOrani(u) {
   var pf = getPF(), rv = 20/120;
@@ -1955,6 +1955,8 @@ var indP1Fiyat = 0;
 var indP1FiyatMax = 0;
 var indP2Fiyat = 0;
 var indP2FiyatMax = 0;
+var indSortCol = null;
+var indSortDir = 1;
 
 function _indExtraCol() { return false; }
 
@@ -1980,26 +1982,37 @@ function _indUpdateHeader() {
   var el = document.getElementById('ithead');
   if (!el) return;
   var bh = _indBaremHedef();
+  function sth(col, mainLabel, subLabel, extraStyle) {
+    var active = indSortCol === col;
+    var ind = active
+      ? '<span style="margin-left:3px;font-size:10px">' + (indSortDir === 1 ? '▲' : '▼') + '</span>'
+      : '<span style="margin-left:3px;font-size:10px;opacity:.3">⇅</span>';
+    var sub = subLabel ? '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">' + subLabel + '</div>' : '';
+    return '<th style="cursor:pointer;user-select:none;' + (extraStyle || '') + '" onclick="setIndSort(\'' + escA(col) + '\')">'
+      + mainLabel + ind + sub + '</th>';
+  }
   var baremCol = bh
-    ? '<th style="text-align:right;color:var(--red)">' + bh.label + '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">İndirim ₺</div></th>'
-      + '<th style="text-align:right;color:var(--red)">İndirim %<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'ye)</div></th>'
-      + '<th style="text-align:right;color:var(--grn)">Kâr ₺<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'de)</div></th>'
-      + '<th style="text-align:right;color:var(--acc)">Yeni Kâr Oranı<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(' + bh.target + '₺\'de)</div></th>'
+    ? sth('discAmt', bh.label, 'İndirim ₺', 'text-align:right;color:var(--red)')
+      + sth('discPct', 'İndirim %', '(' + bh.target + '₺\'ye)', 'text-align:right;color:var(--red)')
+      + sth('baremKar', 'Kâr ₺', '(' + bh.target + '₺\'de)', 'text-align:right;color:var(--grn)')
+      + sth('baremKarOrani', 'Yeni Kâr Oranı', '(' + bh.target + '₺\'de)', 'text-align:right;color:var(--acc)')
     : '';
   var colHdr = '2. Ürün İndirimli Fiyat'
     + (indP1Fiyat > 0 ? '<div style="font-size:9.5px;font-weight:400;color:var(--mut)">(1. ürün: ' + tl(indP1Fiyat) + ')</div>' : '');
   var extra = _indExtraCol()
     ? '<th style="text-align:right;color:var(--blu)">' + colHdr + '</th>' : '';
   var prodCols = '';
-  for (var pi = 0; pi < indN; pi++) prodCols += '<th style="text-align:right;color:var(--mut)">' + (pi+1) + '. Ürün ₺</th>';
+  for (var pi = 0; pi < indN; pi++) {
+    prodCols += sth('p' + pi, (pi+1) + '. Ürün ₺', null, 'text-align:right;color:var(--mut)');
+  }
   el.innerHTML = '<tr>'
     + '<th style="width:36px">#</th>'
     + '<th>Ürünler</th>'
     + prodCols
-    + '<th style="text-align:right">Toplam ₺</th>'
-    + '<th style="text-align:right">Kargo ₺</th>'
-    + '<th style="text-align:right;color:var(--grn)">Tahmini Kâr</th>'
-    + '<th style="text-align:right;color:var(--grn)">Kâr Oranı</th>'
+    + sth('total', 'Toplam ₺', null, 'text-align:right')
+    + sth('kargo', 'Kargo ₺', null, 'text-align:right')
+    + sth('kar', 'Tahmini Kâr', null, 'text-align:right;color:var(--grn)')
+    + sth('karOrani', 'Kâr Oranı', null, 'text-align:right;color:var(--grn)')
     + baremCol + extra + '</tr>';
 }
 
@@ -2167,6 +2180,13 @@ function _indList() {
   if (indSonrakiKar > 0) {
     result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && r >= indSonrakiKar; });
   }
+  if (indSortCol) {
+    result = result.slice().sort(function(a, b) {
+      var av = _indSortVal(a, indSortCol);
+      var bv = _indSortVal(b, indSortCol);
+      return av < bv ? -indSortDir : av > bv ? indSortDir : 0;
+    });
+  }
   return result;
 }
 
@@ -2204,6 +2224,51 @@ function setIndTier(key) {
   indOffset = 0;
   _renderIndTabs();
   renderInd();
+}
+
+function setIndSort(col) {
+  if (indSortCol === col) {
+    indSortDir = -indSortDir;
+  } else {
+    indSortCol = col;
+    indSortDir = 1;
+  }
+  indOffset = 0;
+  _indUpdateHeader();
+  renderInd();
+}
+
+function _indSortVal(p, col) {
+  var bh, ratio, newKom, pf, rv, newOKdv, newStopaj, r;
+  switch (col) {
+    case 'p0': return p.prods[0] ? p.prods[0].s * minQty(p.prods[0].s) : 0;
+    case 'p1': return p.prods[1] ? p.prods[1].s * minQty(p.prods[1].s) : 0;
+    case 'p2': return p.prods[2] ? p.prods[2].s * minQty(p.prods[2].s) : 0;
+    case 'p3': return p.prods[3] ? p.prods[3].s * minQty(p.prods[3].s) : 0;
+    case 'total': return p.total;
+    case 'kargo': return p.kargo;
+    case 'kar': return p.kar;
+    case 'karOrani': return p.karOrani !== null ? p.karOrani : -1e9;
+    case 'discAmt':
+      bh = _indBaremHedef();
+      return bh && p.total > bh.target ? p.total - bh.target : 0;
+    case 'discPct':
+      bh = _indBaremHedef();
+      return bh && p.total > bh.target ? (p.total - bh.target) / p.total : 0;
+    case 'baremKar':
+      bh = _indBaremHedef();
+      if (!bh || p.total <= bh.target) return p.kar;
+      ratio = bh.target / p.total;
+      newKom = (p.kom || 0) * ratio;
+      pf = getPF(); rv = 20 / 120;
+      newOKdv = Math.max(0, bh.target*rv - ((p.alis||0)*rv + bh.newKargo*rv + newKom*rv + pf*rv));
+      newStopaj = bh.target / 1.20 * 0.01;
+      return bh.target - (p.alis||0) - bh.newKargo - pf - newKom - newStopaj - newOKdv;
+    case 'baremKarOrani':
+      r = _indBaremKarOraniFor(p);
+      return r !== null ? r : -1e9;
+    default: return 0;
+  }
 }
 
 async function downloadIndExcel() {
