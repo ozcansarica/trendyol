@@ -484,8 +484,8 @@ window.setTarife = function (t) {
 
 // Bir ürünün 4 fiyat aralığının sınırlarını ve seçili tarifedeki komisyon
 // oranlarını döner (kâr hesabı içermez — tierInfo() ve tierForPrice() ortak kullanır).
-function tierTanimlari(u) {
-  const grup = u.tarifeler && u.tarifeler[tarife];
+function tierTanimlari(u, tarifeKey) {
+  const grup = u.tarifeler && u.tarifeler[tarifeKey !== undefined ? tarifeKey : tarife];
   const k = grup ? grup.k : [0, 0, 0, 0];
   return [
     { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
@@ -506,8 +506,8 @@ function tierForPrice(u, price) {
   return tiers[tiers.length - 1]; // en düşük aralığın da altındaysa yine en düşük aralık kullanılır
 }
 
-function tierInfo(u) {
-  const tiers = tierTanimlari(u);
+function tierInfo(u, tarifeKey) {
+  const tiers = tierTanimlari(u, tarifeKey);
 
   const results = tiers.map((t, i) => {
     if (!t.komisyon) return { ...t, sellPrice: null, kar: null, karOrani: null }; // komisyon 0/tanımsız → bu aralık geçersiz
@@ -586,7 +586,7 @@ function render() {
 
 // — Fiyat aralığı seçimi & Excel indirme —
 
-const selectedTiers = new Set(); // anahtar: "urunIdx-tierNum"
+const selectedTiers = new Map(); // anahtar: "urunIdx-tierNum" → tarife string
 
 function updateSecimBar() {
   const n = selectedTiers.size;
@@ -597,7 +597,7 @@ function updateSecimBar() {
 
 window.toggleTierSec = function (idx, tierNum) {
   const key = `${idx}-${tierNum}`;
-  if (selectedTiers.has(key)) selectedTiers.delete(key); else selectedTiers.add(key);
+  if (selectedTiers.has(key)) selectedTiers.delete(key); else selectedTiers.set(key, tarife);
   const el = document.getElementById(`aralik-${idx}-${tierNum}`);
   if (el) el.classList.toggle('selected', selectedTiers.has(key));
   updateSecimBar();
@@ -608,11 +608,11 @@ window.exportSecilenlerXlsx = async function () {
 
   const headers = [
     'Ürün', 'Model', 'Barkod', 'Stok', 'Maliyet (₺)',
-    'Fiyat Aralığı', 'Komisyon (%)', 'Satış Fiyatı (₺)', 'Zorunlu Adet', 'Kâr (₺)', 'Kâr Oranı (%)',
+    'Tarife', 'Fiyat Aralığı', 'Komisyon (%)', 'Satış Fiyatı (₺)', 'Zorunlu Adet', 'Kâr (₺)', 'Kâr Oranı (%)',
   ];
 
   const rows = [headers];
-  const keys = [...selectedTiers].sort((a, b) => {
+  const keys = [...selectedTiers.keys()].sort((a, b) => {
     const [ai, at] = a.split('-').map(Number);
     const [bi, bt] = b.split('-').map(Number);
     return ai !== bi ? ai - bi : at - bt;
@@ -621,11 +621,12 @@ window.exportSecilenlerXlsx = async function () {
     const [idx, tierNum] = key.split('-').map(Number);
     const u = activeUrunler[idx];
     if (!u) continue;
-    const t = tierInfo(u).find(x => x.num === tierNum);
+    const secilenTarife = selectedTiers.get(key) || tarife;
+    const t = tierInfo(u, secilenTarife).find(x => x.num === tierNum);
     if (!t || t.karOrani === null) continue;
     rows.push([
       u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
-      t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
+      secilenTarife, t.rangeText, t.komisyon, t.sellPrice, t.zorunluAdet,
       Math.round(t.kar * 100) / 100,
       Math.round(t.karOrani * 10) / 10,
     ]);
