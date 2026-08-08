@@ -1789,8 +1789,8 @@ function _buildKombData(searchQuery) {
     var kar = total - alis - kg - pf - kom - stopaj - oKdv;
     var karOrani = alis > 0 ? kar / alis * 100 : null;
     var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani};
-    if (kg === 41) t41.push(combo);
-    else if (kg === 79) t79.push(combo);
+    if (total < _cfg.kargo1Limit) t41.push(combo);
+    else if (total < _cfg.kargo2Limit) t79.push(combo);
     else t93.push(combo);
   }
   var n = arr.length;
@@ -1843,9 +1843,9 @@ function _renderKombTabs() {
     return cnt;
   }
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41)},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79)},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93)},
+    {key:'41', label:'< ' + _cfg.kargo1Limit + ' ₺', sub: tl(_cfg.kargo1Fee) + ' kargo', cnt:filtCnt(d.t41)},
+    {key:'79', label:_cfg.kargo1Limit + ' – ' + _cfg.kargo2Limit + ' ₺', sub: tl(_cfg.kargo2Fee) + ' kargo', cnt:filtCnt(d.t79)},
+    {key:'93', label:'≥ ' + _cfg.kargo2Limit + ' ₺', sub: tl(_cfg.kargo3Fee) + ' kargo', cnt:filtCnt(d.t93)},
   ];
   document.getElementById('ktierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (kombTier === t.key ? ' act' : '') + '" onclick="setKombTier(\'' + escA(t.key) + '\')">'
@@ -2122,8 +2122,9 @@ function _indBaremKarOraniFor(p) {
 }
 
 function _indBaremHedef() {
-  if (indTier === '79') return {target: 199, newKargo: 41, label: '199₺\'ye İndirim'};
-  if (indTier === '93') return {target: 349, newKargo: 79, label: '349₺\'ye İndirim'};
+  var t1 = _cfg.kargo1Limit - 1, t2 = _cfg.kargo2Limit - 1;
+  if (indTier === '79') return {target: t1, newKargo: _cfg.kargo1Fee, label: t1 + '₺\'ye İndirim'};
+  if (indTier === '93') return {target: t2, newKargo: _cfg.kargo2Fee, label: t2 + '₺\'ye İndirim'};
   return null;
 }
 
@@ -2270,8 +2271,8 @@ function _buildIndData(searchQuery) {
     var kar = total - alis - kg - pf - kom - stopaj - oKdv;
     var karOrani = alis > 0 ? kar / alis * 100 : null;
     var combo = {prods: prods, total: total, kargo: kg, kar: kar, karOrani: karOrani, alis: alis, kom: kom};
-    if (kg === 41) t41.push(combo);
-    else if (kg === 79) t79.push(combo);
+    if (total < _cfg.kargo1Limit) t41.push(combo);
+    else if (total < _cfg.kargo2Limit) t79.push(combo);
     else t93.push(combo);
   }
   var n = arr.length;
@@ -2358,9 +2359,9 @@ function _renderIndTabs() {
     return cnt;
   }
   var tabs = [
-    {key:'41', label:'< 200 ₺', sub:'41 ₺ kargo', cnt:filtCnt(d.t41 || [])},
-    {key:'79', label:'200 – 350 ₺', sub:'79 ₺ kargo', cnt:filtCnt(d.t79 || [])},
-    {key:'93', label:'≥ 350 ₺', sub:'93 ₺ kargo', cnt:filtCnt(d.t93 || [])},
+    {key:'41', label:'< ' + _cfg.kargo1Limit + ' ₺', sub: tl(_cfg.kargo1Fee) + ' kargo', cnt:filtCnt(d.t41 || [])},
+    {key:'79', label:_cfg.kargo1Limit + ' – ' + _cfg.kargo2Limit + ' ₺', sub: tl(_cfg.kargo2Fee) + ' kargo', cnt:filtCnt(d.t79 || [])},
+    {key:'93', label:'≥ ' + _cfg.kargo2Limit + ' ₺', sub: tl(_cfg.kargo3Fee) + ' kargo', cnt:filtCnt(d.t93 || [])},
   ];
   document.getElementById('itierBar').innerHTML = tabs.map(function(t){
     return '<button class="ktab' + (indTier === t.key ? ' act' : '') + '" onclick="setIndTier(\'' + escA(t.key) + '\')">'
