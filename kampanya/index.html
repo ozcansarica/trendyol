@@ -2313,16 +2313,16 @@ function _indList() {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefOran; });
   }
   if (indP1Fiyat > 0) {
-    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s * minQty(p.prods[0].s) >= indP1Fiyat; });
+    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s >= indP1Fiyat; });
   }
   if (indP1FiyatMax > 0) {
-    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s * minQty(p.prods[0].s) <= indP1FiyatMax; });
+    result = result.filter(function(p){ return p.prods[0] && p.prods[0].s <= indP1FiyatMax; });
   }
   if (indP2Fiyat > 0) {
-    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s * minQty(p.prods[1].s) >= indP2Fiyat; });
+    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s >= indP2Fiyat; });
   }
   if (indP2FiyatMax > 0) {
-    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s * minQty(p.prods[1].s) <= indP2FiyatMax; });
+    result = result.filter(function(p){ return p.prods[1] && p.prods[1].s <= indP2FiyatMax; });
   }
   if (indHedefIndirim > 0) {
     result = result.filter(function(p){ return p.karOrani !== null && p.karOrani >= indHedefIndirim; });
@@ -2348,10 +2348,10 @@ function _renderIndTabs() {
     for (var i = 0; i < arr.length; i++) {
       var p = arr[i];
       if (indHedefOran > 0 && (p.karOrani === null || p.karOrani < indHedefOran)) continue;
-      if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s * minQty(p.prods[0].s) < indP1Fiyat)) continue;
-      if (indP1FiyatMax > 0 && (!p.prods[0] || p.prods[0].s * minQty(p.prods[0].s) > indP1FiyatMax)) continue;
-      if (indP2Fiyat > 0 && (!p.prods[1] || p.prods[1].s * minQty(p.prods[1].s) < indP2Fiyat)) continue;
-      if (indP2FiyatMax > 0 && (!p.prods[1] || p.prods[1].s * minQty(p.prods[1].s) > indP2FiyatMax)) continue;
+      if (indP1Fiyat > 0 && (!p.prods[0] || p.prods[0].s < indP1Fiyat)) continue;
+      if (indP1FiyatMax > 0 && (!p.prods[0] || p.prods[0].s > indP1FiyatMax)) continue;
+      if (indP2Fiyat > 0 && (!p.prods[1] || p.prods[1].s < indP2Fiyat)) continue;
+      if (indP2FiyatMax > 0 && (!p.prods[1] || p.prods[1].s > indP2FiyatMax)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
       cnt++;
