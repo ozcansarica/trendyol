@@ -178,6 +178,25 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* İndirimli Ürün Bul sayfası */
 .ipage{position:fixed;inset:50px 0 0 0;background:var(--bg);z-index:20;display:none;flex-direction:column;overflow:hidden}
 .ipage.show{display:flex}
+/* Kargo/Hizmet config modal */
+.cfg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:none;align-items:center;justify-content:center}
+.cfg-overlay.show{display:flex}
+.cfg-card{background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:22px 24px;width:440px;max-width:calc(100vw - 32px);max-height:calc(100vh - 80px);overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.cfg-title{font-size:14px;font-weight:800;color:var(--txt);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.cfg-section{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px}
+.cfg-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.cfg-table th{text-align:left;font-size:10.5px;font-weight:700;color:var(--mut);padding:3px 6px}
+.cfg-table td{padding:4px 6px;vertical-align:middle}
+.cfg-inp{background:var(--card);border:1.5px solid var(--brd);border-radius:6px;color:var(--txt);font-size:13px;font-weight:700;padding:4px 8px;width:80px;outline:none;text-align:right;-moz-appearance:textfield}
+.cfg-inp:focus{border-color:var(--acc)}
+.cfg-inp::-webkit-outer-spin-button,.cfg-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+.cfg-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cfg-lbl{font-size:12.5px;color:var(--sub);flex:1}
+.cfg-sep{font-size:11px;color:var(--mut)}
+.cfg-save{background:var(--acc);color:#000;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:800;cursor:pointer;width:100%;margin-top:16px}
+.cfg-save:hover{opacity:.88}
+.cfg-rst{background:var(--card);color:var(--sub);border:1.5px solid var(--brd);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px;width:100%}
+.cfg-rst:hover{border-color:var(--acc);color:var(--acc)}
 /* Responsive */
 @media(max-width:720px){
   body{height:auto;overflow:auto}
@@ -196,6 +215,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <button class="tbtn" onclick="document.getElementById('urunXlsxIn').click()" title="Barkod No + Ürün Adı + Alış Tutarı (KDV) + Satış Tutarı (KDV) + Komisyon Oranı kolonlu Excel yükle">📂 Ürün Yükle</button>
     <button class="tbtn" onclick="resetUrunler()" title="Yüklenen Excel'i temizle, varsayılan ürün listesine dön" style="font-size:11px;opacity:.7">↺ Sıfırla</button>
     <button class="tbtn" id="upageBtn" onclick="toggleUrunler()">📋 Ürünler</button>
+    <button class="tbtn" id="cfgBtn" onclick="toggleCfg()">🚚 Kargo/Hizmet</button>
     <button class="tbtn" id="kpageBtn" onclick="toggleKombo()">🔗 Kombinasyonlar</button>
     <button class="tbtn" id="ipageBtn" onclick="toggleIndirimli()">🏷️ İndirimli Ürün Bul</button>
     <span id="selcnt" style="font-size:12px;color:var(--sub)">0 seçili</span>
@@ -284,6 +304,65 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
       <tbody id="itbody"></tbody>
     </table>
     <button class="kmore-btn" id="imoreBtn" style="display:none" onclick="loadMoreInd()">↓ Daha fazla göster</button>
+  </div>
+</div>
+
+<!-- Kargo/Hizmet Bedeli Tanımlama modal -->
+<div class="cfg-overlay" id="cfgOverlay" onclick="if(event.target===this)toggleCfg()">
+  <div class="cfg-card">
+    <div class="cfg-title">
+      <span>🚚 Kargo / Hizmet Bedeli Tanımlama</span>
+      <button class="tbtn" onclick="toggleCfg()" style="padding:3px 9px;font-size:12px">✕</button>
+    </div>
+
+    <div class="cfg-section">Kargo Kademeleri</div>
+    <table class="cfg-table">
+      <thead>
+        <tr>
+          <th>Sepet Toplamı</th>
+          <th style="text-align:right">Üst Sınır (₺)</th>
+          <th style="text-align:right">Kargo Ücreti (₺)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--sub)">1. Kademe</td>
+          <td style="text-align:right">
+            <span style="font-size:11px;color:var(--mut)">0 – </span>
+            <input class="cfg-inp" id="cfgKargo1Limit" type="number" min="1" step="1" value="200">
+            <span style="font-size:11px;color:var(--mut)"> ₺ altı</span>
+          </td>
+          <td style="text-align:right"><input class="cfg-inp" id="cfgKargo1Fee" type="number" min="0" step="0.01" value="41"> ₺</td>
+        </tr>
+        <tr>
+          <td style="color:var(--sub)">2. Kademe</td>
+          <td style="text-align:right">
+            <span style="font-size:11px;color:var(--mut)">– </span>
+            <input class="cfg-inp" id="cfgKargo2Limit" type="number" min="1" step="1" value="350">
+            <span style="font-size:11px;color:var(--mut)"> ₺ altı</span>
+          </td>
+          <td style="text-align:right"><input class="cfg-inp" id="cfgKargo2Fee" type="number" min="0" step="0.01" value="79"> ₺</td>
+        </tr>
+        <tr>
+          <td style="color:var(--sub)">3. Kademe</td>
+          <td style="text-align:right;color:var(--mut);font-size:11px">üst sınır yok</td>
+          <td style="text-align:right"><input class="cfg-inp" id="cfgKargo3Fee" type="number" min="0" step="0.01" value="93"> ₺</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="cfg-section">Platform / Hizmet Bedeli</div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Normal (00:00 – 14:59)</span>
+      <input class="cfg-inp" id="cfgPlatNormal" type="number" min="0" step="0.01" value="8.19"> ₺
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Peak (15:00 – 23:59)</span>
+      <input class="cfg-inp" id="cfgPlatPeak" type="number" min="0" step="0.01" value="13.19"> ₺
+    </div>
+
+    <button class="cfg-save" onclick="saveCfg()">💾 Kaydet ve Uygula</button>
+    <button class="cfg-rst" onclick="resetCfg()">↺ Varsayılanlara Dön</button>
   </div>
 </div>
 
@@ -923,6 +1002,83 @@ function resetUrunler() {
   showToast(URUNLER.length + ' varsayılan ürün yüklendi', true);
 }
 
+// ========== KARGO/HİZMET CONFIG ==========
+
+var CFG_LS_KEY = 'kargo_hizmet_ayarlari_v1';
+var CFG_DEFAULTS = {kargo1Limit:200, kargo1Fee:41, kargo2Limit:350, kargo2Fee:79, kargo3Fee:93, platNormal:8.19, platPeak:13.19};
+
+var _cfg = (function() {
+  try { var s = localStorage.getItem(CFG_LS_KEY); return s ? Object.assign({}, CFG_DEFAULTS, JSON.parse(s)) : Object.assign({}, CFG_DEFAULTS); }
+  catch(e) { return Object.assign({}, CFG_DEFAULTS); }
+})();
+
+function kargoFor(b) {
+  b = +b;
+  if (b < _cfg.kargo1Limit) return _cfg.kargo1Fee;
+  if (b < _cfg.kargo2Limit) return _cfg.kargo2Fee;
+  return _cfg.kargo3Fee;
+}
+
+function toggleCfg() {
+  var ov = document.getElementById('cfgOverlay');
+  var btn = document.getElementById('cfgBtn');
+  var show = !ov.classList.contains('show');
+  ov.classList.toggle('show', show);
+  btn.classList.toggle('act', show);
+  if (show) _cfgPopulate();
+}
+
+function _cfgPopulate() {
+  document.getElementById('cfgKargo1Limit').value = _cfg.kargo1Limit;
+  document.getElementById('cfgKargo1Fee').value   = _cfg.kargo1Fee;
+  document.getElementById('cfgKargo2Limit').value = _cfg.kargo2Limit;
+  document.getElementById('cfgKargo2Fee').value   = _cfg.kargo2Fee;
+  document.getElementById('cfgKargo3Fee').value   = _cfg.kargo3Fee;
+  document.getElementById('cfgPlatNormal').value  = _cfg.platNormal;
+  document.getElementById('cfgPlatPeak').value    = _cfg.platPeak;
+}
+
+function _cfgRead() {
+  return {
+    kargo1Limit: +document.getElementById('cfgKargo1Limit').value || CFG_DEFAULTS.kargo1Limit,
+    kargo1Fee:   +document.getElementById('cfgKargo1Fee').value   || 0,
+    kargo2Limit: +document.getElementById('cfgKargo2Limit').value || CFG_DEFAULTS.kargo2Limit,
+    kargo2Fee:   +document.getElementById('cfgKargo2Fee').value   || 0,
+    kargo3Fee:   +document.getElementById('cfgKargo3Fee').value   || 0,
+    platNormal:  +document.getElementById('cfgPlatNormal').value  || 0,
+    platPeak:    +document.getElementById('cfgPlatPeak').value    || 0
+  };
+}
+
+function saveCfg() {
+  _cfg = _cfgRead();
+  try { localStorage.setItem(CFG_LS_KEY, JSON.stringify(_cfg)); } catch(e) {}
+  _applyPlatButtons();
+  _invalidateKomb(); _invalidateInd();
+  scheduleCalc();
+  toggleCfg();
+  showToast('Kargo/Hizmet ayarları kaydedildi', 'grn');
+}
+
+function resetCfg() {
+  _cfg = Object.assign({}, CFG_DEFAULTS);
+  try { localStorage.removeItem(CFG_LS_KEY); } catch(e) {}
+  _cfgPopulate();
+  _applyPlatButtons();
+  _invalidateKomb(); _invalidateInd();
+  scheduleCalc();
+  showToast('Varsayılan değerlere döndü', 'acc');
+}
+
+function _applyPlatButtons() {
+  var n = document.querySelectorAll('.pf-btn[data-plat="normal"]');
+  var p = document.querySelectorAll('.pf-btn[data-plat="peak"]');
+  var nTxt = _cfg.platNormal.toFixed(2).replace('.', ',') + ' ₺ (00:00–14:59)';
+  var pTxt = _cfg.platPeak.toFixed(2).replace('.', ',') + ' ₺ (15:00–23:59)';
+  n.forEach(function(b){ b.textContent = nTxt; });
+  p.forEach(function(b){ b.textContent = pTxt; });
+}
+
 // ========== STATE ==========
 
 let anaUrun = null;
@@ -944,7 +1100,7 @@ function toggleEditMode() {
 
 // ========== CORE FUNCTIONS ==========
 
-function getPF() { return platMode === 'normal' ? 8.19 : 13.19; }
+function getPF() { return platMode === 'normal' ? _cfg.platNormal : _cfg.platPeak; }
 
 function minQty(s) {
   s = +s;
@@ -953,13 +1109,6 @@ function minQty(s) {
   if (s < 50) return 3;
   if (s < 75) return 2;
   return 1;
-}
-
-function kargoFor(b) {
-  b = +b;
-  if (b < 200) return 41;
-  if (b < 350) return 79;
-  return 93;
 }
 
 function calcSingleProfit(e, pf) {
@@ -1136,8 +1285,8 @@ function renderRight() {
 
   html += '<div class="pf-row">'
     + '<span class="pf-lbl">Platform Ücreti:</span>'
-    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">8,19 ₺ (00:00–14:59)</button>'
-    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">13,19 ₺ (15:00–23:59)</button>'
+    + '<button class="pf-btn' + (platMode==='normal' ? ' act' : '') + '" data-plat="normal">' + _cfg.platNormal.toFixed(2).replace('.', ',') + ' ₺ (00:00–14:59)</button>'
+    + '<button class="pf-btn' + (platMode==='peak' ? ' act' : '') + '" data-plat="peak">' + _cfg.platPeak.toFixed(2).replace('.', ',') + ' ₺ (15:00–23:59)</button>'
     + '</div>'
     + '<div class="hk-row">'
     + '<span class="hk-lbl">Hedef Kâr Oranı:</span>'
