@@ -317,3 +317,56 @@ CREATE TABLE IF NOT EXISTS `odeme_detay` (
     INDEX `idx_donem`     (`donem_tagi`),
     FOREIGN KEY (`magaza_id`) REFERENCES `magazalar`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------
+--  Müşteri Talepleri / İadeler (Claims API) — Faz 2
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `talepler` (
+    `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `magaza_id`       INT UNSIGNED NOT NULL DEFAULT 1,
+    `claim_id`        VARCHAR(80),
+    `siparis_no`      VARCHAR(50),
+    `line_item_id`    VARCHAR(80),
+    `barcode`         VARCHAR(100),
+    `urun_adi`        VARCHAR(300),
+    `talep_tipi`      VARCHAR(60),
+    `talep_statusu`   VARCHAR(60),
+    `talep_tarihi`    DATETIME,
+    `iade_tutari`     DECIMAL(12,2) DEFAULT 0,
+    `musteri`         VARCHAR(150),
+    `kargo_takip_no`  VARCHAR(80),
+    `neden`           TEXT,
+    `ty_urun_id`      VARCHAR(60) NULL,
+    `raw_json`        TEXT,
+    `yukleme_tarihi`  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_claim` (`magaza_id`, `claim_id`),
+    INDEX `idx_magaza`  (`magaza_id`),
+    INDEX `idx_sipno`   (`siparis_no`),
+    INDEX `idx_barcode` (`barcode`),
+    INDEX `idx_tip`     (`talep_tipi`),
+    INDEX `idx_status`  (`talep_statusu`),
+    FOREIGN KEY (`magaza_id`) REFERENCES `magazalar`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------
+--  Müşteri Soruları (Questions API) — Faz 2
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `musteri_sorulari` (
+    `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `magaza_id`      INT UNSIGNED NOT NULL DEFAULT 1,
+    `question_id`    VARCHAR(80),
+    `barcode`        VARCHAR(100),
+    `urun_adi`       VARCHAR(300),
+    `soru_metni`     TEXT,
+    `cevap_metni`    TEXT,
+    `soru_tarihi`    DATETIME,
+    `cevap_tarihi`   DATETIME,
+    `cevap_durumu`   VARCHAR(30) DEFAULT 'Cevaplanmadı',
+    `ty_urun_id`     VARCHAR(60) NULL,
+    `yukleme_tarihi` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_question` (`magaza_id`, `question_id`),
+    INDEX `idx_magaza`  (`magaza_id`),
+    INDEX `idx_barcode` (`barcode`),
+    INDEX `idx_durum`   (`cevap_durumu`),
+    FOREIGN KEY (`magaza_id`) REFERENCES `magazalar`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

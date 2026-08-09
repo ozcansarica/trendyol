@@ -770,6 +770,282 @@ class TrendyolApi {
         return [$ins, $upd];
     }
 
+    /**
+     * Müşteri taleplerini (iade, hasar, kayıp) API'den çekip talepler tablosuna yazar.
+     *
+     * @param string $startDate  'Y-m-d' formatı
+     * @param string $endDate    'Y-m-d' formatı
+     * @return array ['inserted'=>int, 'updated'=>int, 'errors'=>[]]
+     */
+    public function syncClaims(string $startDate, string $endDate): array {
+        if (!$this->isConfigured()) {
+            return ['error' => 'API bilgileri eksik.'];
+        }
+
+        $inserted = 0;
+        $updated  = 0;
+        $errors   = [];
+        $now      = date('Y-m-d H:i:s');
+
+        $chunks = $this->splitDateRange($startDate, $endDate, 15);
+
+        foreach ($chunks as [$chunkStart, $chunkEnd]) {
+            $startTs = strtotime($chunkStart) * 1000;
+            $endTs   = (strtotime($chunkEnd) + 86399) * 1000;
+
+            $page = 0;
+            do {
+                $data = $this->request(
+                    "/integration/claim/sellers/{$this->sellerId}/claims",
+                    ['startDate' => $startTs, 'endDate' => $endTs,
+                     'page' => $page, 'size' => 200]
+                );
+
+                if (isset($data['error'])) {
+                    $errors[] = "claims chunk $chunkStart p$page: " . $data['error'];
+                    break;
+                }
+
+                $items      = $data['content'] ?? $data['claims'] ?? [];
+                $totalPages = (int)($data['totalPages'] ?? 1);
+
+                foreach ($items as $item) {
+                    $r = $this->upsertClaim($item, $now);
+                    $inserted += $r[0];
+                    $updated  += $r[1];
+                }
+
+                $page++;
+                usleep(200_000);
+            } while ($page < $totalPages && $page < 200);
+        }
+
+        return ['inserted' => $inserted, 'updated' => $updated, 'errors' => $errors];
+    }
+
+    /** Tek claim kaydını talepler tablosuna upsert et */
+    private function upsertClaim(array $item, string $now): array {
+        $claimId = (string)($item['id']            ?? $item['claimId'] ?? '');
+        if (!$claimId) return [0, 0];
+
+        $siparisNo    = (string)($item['orderNumber']       ?? $item['orderId']       ?? '');
+        $lineItemId   = (string)($item['lineItemId']        ?? '');
+        $barcode      = (string)($item['barcode']           ?? '');
+        $urunAdi      = (string)($item['productName']       ?? $item['title']         ?? '');
+        $talep        = (string)($item['claimType']         ?? $item['reason']        ?? '');
+        $status       = (string)($item['claimStatus']       ?? $item['status']        ?? '');
+        $musteri      = (string)($item['customerName']      ?? '');
+        $kargoTakip   = (string)($item['cargoTrackingNumber'] ?? '');
+        $neden        = (string)($item['reasonDescription'] ?? $item['description']   ?? '');
+        $iadeTutar    = (float)($item['refundAmount']       ?? $item['amount']        ?? 0);
+
+        $tarihTs   = isset($item['claimDate']) ? (int)($item['claimDate'] / 1000) : null;
+        $talep_t   = $tarihTs ? date('Y-m-d H:i:s', $tarihTs) : null;
+
+        // Barkodla ürün eşleştir
+        $tyId = null;
+        if ($barcode) {
+            $tyId = DB::scalar(
+                "SELECT ty_id FROM trendyol_urunler WHERE magaza_id=? AND barcode=? LIMIT 1",
+                [$this->magazaId, $barcode]
+            );
+        }
+
+        $rawJson = json_encode($item, JSON_UNESCAPED_UNICODE);
+
+        $existing = DB::scalar(
+            "SELECT id FROM talepler WHERE magaza_id=? AND claim_id=?",
+            [$this->magazaId, $claimId]
+        );
+
+        if ($existing) {
+            DB::exec(
+                "UPDATE talepler SET siparis_no=?,barcode=?,urun_adi=?,talep_tipi=?,
+                 talep_statusu=?,talep_tarihi=?,iade_tutari=?,musteri=?,
+                 kargo_takip_no=?,neden=?,ty_urun_id=?,raw_json=?,yukleme_tarihi=?
+                 WHERE magaza_id=? AND claim_id=?",
+                [$siparisNo,$barcode,$urunAdi,$talep,$status,$talep_t,
+                 $iadeTutar,$musteri,$kargoTakip,$neden,$tyId,$rawJson,$now,
+                 $this->magazaId,$claimId]
+            );
+            return [0, 1];
+        }
+
+        try {
+            DB::exec(
+                "INSERT INTO talepler
+                 (magaza_id,claim_id,siparis_no,line_item_id,barcode,urun_adi,
+                  talep_tipi,talep_statusu,talep_tarihi,iade_tutari,musteri,
+                  kargo_takip_no,neden,ty_urun_id,raw_json,yukleme_tarihi)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                [$this->magazaId,$claimId,$siparisNo,$lineItemId,$barcode,$urunAdi,
+                 $talep,$status,$talep_t,$iadeTutar,$musteri,
+                 $kargoTakip,$neden,$tyId,$rawJson,$now]
+            );
+            return [1, 0];
+        } catch (PDOException $e) {
+            return [0, 0];
+        }
+    }
+
+    /**
+     * Müşteri ürün sorularını API'den çekip musteri_sorulari tablosuna yazar.
+     * Cevaplanmamış sorular öncelikli gelir (status=WaitingForAnswer).
+     *
+     * @return array ['inserted'=>int, 'updated'=>int, 'unanswered'=>int, 'errors'=>[]]
+     */
+    public function syncQuestions(): array {
+        if (!$this->isConfigured()) {
+            return ['error' => 'API bilgileri eksik.'];
+        }
+
+        $inserted   = 0;
+        $updated    = 0;
+        $unanswered = 0;
+        $errors     = [];
+        $now        = date('Y-m-d H:i:s');
+
+        $page = 0;
+        do {
+            $data = $this->request(
+                "/integration/claim/sellers/{$this->sellerId}/questions",
+                ['page' => $page, 'size' => 200]
+            );
+
+            if (isset($data['error'])) {
+                $errors[] = "questions p$page: " . $data['error'];
+                break;
+            }
+
+            $items      = $data['content'] ?? $data['productQuestions'] ?? [];
+            $totalPages = (int)($data['totalPages'] ?? 1);
+
+            foreach ($items as $item) {
+                $r = $this->upsertQuestion($item, $now);
+                $inserted   += $r[0];
+                $updated    += $r[1];
+                $unanswered += $r[2];
+            }
+
+            $page++;
+            usleep(200_000);
+        } while ($page < $totalPages && $page < 100);
+
+        return [
+            'inserted'   => $inserted,
+            'updated'    => $updated,
+            'unanswered' => $unanswered,
+            'errors'     => $errors,
+        ];
+    }
+
+    /** Tek soru kaydını musteri_sorulari tablosuna upsert et */
+    private function upsertQuestion(array $item, string $now): array {
+        $questionId = (string)($item['id']             ?? $item['questionId'] ?? '');
+        if (!$questionId) return [0, 0, 0];
+
+        $barcode    = (string)($item['barcode']         ?? '');
+        $urunAdi    = (string)($item['productName']     ?? $item['title']   ?? '');
+        $soruMetni  = (string)($item['text']            ?? $item['question'] ?? '');
+        $cevapMetni = (string)($item['answer']          ?? $item['answerText'] ?? '');
+        $durum      = empty($cevapMetni) ? 'Cevaplanmadı' : 'Cevaplandı';
+
+        $soruTs   = isset($item['creationDate'])  ? (int)($item['creationDate'] / 1000)  : null;
+        $cevapTs  = isset($item['lastModifiedDate']) ? (int)($item['lastModifiedDate'] / 1000) : null;
+        $soruT    = $soruTs  ? date('Y-m-d H:i:s', $soruTs)  : null;
+        $cevapT   = $cevapTs ? date('Y-m-d H:i:s', $cevapTs) : null;
+
+        $tyId = null;
+        if ($barcode) {
+            $tyId = DB::scalar(
+                "SELECT ty_id FROM trendyol_urunler WHERE magaza_id=? AND barcode=? LIMIT 1",
+                [$this->magazaId, $barcode]
+            );
+        }
+
+        $existing = DB::scalar(
+            "SELECT id FROM musteri_sorulari WHERE magaza_id=? AND question_id=?",
+            [$this->magazaId, $questionId]
+        );
+
+        $isUnanswered = ($durum === 'Cevaplanmadı') ? 1 : 0;
+
+        if ($existing) {
+            DB::exec(
+                "UPDATE musteri_sorulari SET barcode=?,urun_adi=?,soru_metni=?,
+                 cevap_metni=?,soru_tarihi=?,cevap_tarihi=?,cevap_durumu=?,
+                 ty_urun_id=?,yukleme_tarihi=?
+                 WHERE magaza_id=? AND question_id=?",
+                [$barcode,$urunAdi,$soruMetni,$cevapMetni,$soruT,$cevapT,
+                 $durum,$tyId,$now,
+                 $this->magazaId,$questionId]
+            );
+            return [0, 1, $isUnanswered];
+        }
+
+        try {
+            DB::exec(
+                "INSERT INTO musteri_sorulari
+                 (magaza_id,question_id,barcode,urun_adi,soru_metni,cevap_metni,
+                  soru_tarihi,cevap_tarihi,cevap_durumu,ty_urun_id,yukleme_tarihi)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                [$this->magazaId,$questionId,$barcode,$urunAdi,$soruMetni,$cevapMetni,
+                 $soruT,$cevapT,$durum,$tyId,$now]
+            );
+            return [1, 0, $isUnanswered];
+        } catch (PDOException $e) {
+            return [0, 0, 0];
+        }
+    }
+
+    /**
+     * Müşteri sorusuna yanıt gönder.
+     *
+     * @param string $questionId  Trendyol question ID
+     * @param string $cevap       Yanıt metni
+     */
+    public function answerQuestion(string $questionId, string $cevap): array {
+        return $this->requestPost(
+            "/integration/claim/sellers/{$this->sellerId}/questions",
+            ['id' => $questionId, 'text' => $cevap]
+        );
+    }
+
+    /** POST isteği gönder (JSON body) */
+    private function requestPost(string $endpoint, array $payload): array {
+        if (!$this->isConfigured()) {
+            return ['error' => 'API bilgileri eksik.'];
+        }
+
+        $url  = $this->baseUrl . $endpoint;
+        $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CUSTOMREQUEST  => 'PUT',
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'User-Agent: ' . $this->userAgent,
+            ],
+            CURLOPT_USERPWD        => $this->apiKey . ':' . $this->apiSecret,
+            CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+
+        $resp     = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err      = curl_error($ch);
+        curl_close($ch);
+
+        if ($err) return ['error' => 'cURL hatası: ' . $err];
+        if ($httpCode >= 400) return ['error' => "HTTP $httpCode", 'body' => $resp];
+
+        return ['ok' => true, 'status' => $httpCode];
+    }
+
     private function migrateOrderColumns(): void {
         $cols = DB::rows("SHOW COLUMNS FROM siparisler");
         $names = array_column($cols, 'Field');

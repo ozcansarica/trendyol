@@ -414,10 +414,86 @@ try {
             echo json_encode(['ok'=>true, 'updated'=>$total]);
             break;
 
+        // ------ Talepleri senkronize et (Claims API) ------
+        case 'sync_claims':
+            $startDate = $_POST['start_date'] ?? date('Y-m-d', strtotime('-30 days'));
+            $endDate   = $_POST['end_date']   ?? date('Y-m-d');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) $startDate = date('Y-m-d', strtotime('-30 days'));
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate))   $endDate   = date('Y-m-d');
+            if ($startDate > $endDate) { echo json_encode(['error' => 'Başlangıç tarihi bitiş tarihinden büyük olamaz']); break; }
+            $api    = new TrendyolApi($magaza);
+            $result = $api->syncClaims($startDate, $endDate);
+            echo json_encode($result);
+            break;
+
+        // ------ Müşteri sorularını çek (Questions API) ------
+        case 'sync_questions':
+            $api    = new TrendyolApi($magaza);
+            $result = $api->syncQuestions();
+            echo json_encode($result);
+            break;
+
+        // ------ Soruya yanıt gönder ------
+        case 'answer_question':
+            $questionId = trim($_POST['question_id'] ?? '');
+            $cevap      = trim($_POST['cevap']       ?? '');
+            if (!$questionId || !$cevap) {
+                http_response_code(400);
+                echo json_encode(['error' => 'question_id ve cevap zorunlu']);
+                break;
+            }
+            $api    = new TrendyolApi($magaza);
+            $result = $api->answerQuestion($questionId, $cevap);
+            if (!isset($result['error'])) {
+                // DB'yi güncelle
+                DB::exec(
+                    "UPDATE musteri_sorulari SET cevap_metni=?, cevap_tarihi=?, cevap_durumu='Cevaplandı'
+                     WHERE magaza_id=? AND question_id=?",
+                    [$cevap, date('Y-m-d H:i:s'), $magazaId, $questionId]
+                );
+            }
+            echo json_encode($result);
+            break;
+
+        // ------ Talep / soru listeleri ------
+        case 'list_claims':
+            $status = $_GET['status'] ?? '';
+            $tip    = $_GET['tip']    ?? '';
+            $where  = 'magaza_id=?';
+            $prms   = [$magazaId];
+            if ($status) { $where .= ' AND talep_statusu=?'; $prms[] = $status; }
+            if ($tip)    { $where .= ' AND talep_tipi=?';    $prms[] = $tip; }
+            $rows = DB::rows(
+                "SELECT claim_id,siparis_no,barcode,urun_adi,talep_tipi,talep_statusu,
+                        talep_tarihi,iade_tutari,musteri,neden
+                 FROM talepler WHERE $where ORDER BY talep_tarihi DESC LIMIT 200",
+                $prms
+            );
+            echo json_encode(['claims' => $rows, 'total' => count($rows)]);
+            break;
+
+        case 'list_questions':
+            $durum = $_GET['durum'] ?? '';
+            $where = 'magaza_id=?';
+            $prms  = [$magazaId];
+            if ($durum) { $where .= ' AND cevap_durumu=?'; $prms[] = $durum; }
+            $rows = DB::rows(
+                "SELECT question_id,barcode,urun_adi,soru_metni,cevap_metni,
+                        soru_tarihi,cevap_durumu
+                 FROM musteri_sorulari WHERE $where ORDER BY soru_tarihi DESC LIMIT 200",
+                $prms
+            );
+            $unanswered = DB::scalar(
+                "SELECT COUNT(*) FROM musteri_sorulari WHERE magaza_id=? AND cevap_durumu='Cevaplanmadı'",
+                [$magazaId]
+            );
+            echo json_encode(['questions' => $rows, 'total' => count($rows), 'unanswered' => (int)$unanswered]);
+            break;
+
         // ------ Tabloyu temizle ------
         case 'clear_table':
             $tbl = $_POST['table'] ?? '';
-            $allowed = ['siparisler', 'urun_satis', 'trendyol_urunler', 'maliyetler', 'reklamlar', 'komisyon_tarifeleri', 'odeme_detay'];
+            $allowed = ['siparisler', 'urun_satis', 'trendyol_urunler', 'maliyetler', 'reklamlar', 'komisyon_tarifeleri', 'odeme_detay', 'talepler', 'musteri_sorulari'];
             if (in_array($tbl, $allowed, true)) {
                 DB::exec("DELETE FROM `$tbl` WHERE magaza_id=?", [$magazaId]);
                 echo json_encode(['ok' => true]);

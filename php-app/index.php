@@ -140,6 +140,56 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch(PDOException $e) {}
 
+    // talepler tablosu — Faz 2
+    try {
+        DB::get()->exec("CREATE TABLE IF NOT EXISTS `talepler` (
+            `id`              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `magaza_id`       INT UNSIGNED NOT NULL DEFAULT 1,
+            `claim_id`        VARCHAR(80),
+            `siparis_no`      VARCHAR(50),
+            `line_item_id`    VARCHAR(80),
+            `barcode`         VARCHAR(100),
+            `urun_adi`        VARCHAR(300),
+            `talep_tipi`      VARCHAR(60),
+            `talep_statusu`   VARCHAR(60),
+            `talep_tarihi`    DATETIME,
+            `iade_tutari`     DECIMAL(12,2) DEFAULT 0,
+            `musteri`         VARCHAR(150),
+            `kargo_takip_no`  VARCHAR(80),
+            `neden`           TEXT,
+            `ty_urun_id`      VARCHAR(60) NULL,
+            `raw_json`        TEXT,
+            `yukleme_tarihi`  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY `uk_claim` (`magaza_id`, `claim_id`),
+            INDEX `idx_magaza`  (`magaza_id`),
+            INDEX `idx_sipno`   (`siparis_no`),
+            INDEX `idx_barcode` (`barcode`),
+            INDEX `idx_tip`     (`talep_tipi`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(PDOException $e) {}
+
+    // musteri_sorulari tablosu — Faz 2
+    try {
+        DB::get()->exec("CREATE TABLE IF NOT EXISTS `musteri_sorulari` (
+            `id`             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `magaza_id`      INT UNSIGNED NOT NULL DEFAULT 1,
+            `question_id`    VARCHAR(80),
+            `barcode`        VARCHAR(100),
+            `urun_adi`       VARCHAR(300),
+            `soru_metni`     TEXT,
+            `cevap_metni`    TEXT,
+            `soru_tarihi`    DATETIME,
+            `cevap_tarihi`   DATETIME,
+            `cevap_durumu`   VARCHAR(30) DEFAULT 'Cevaplanmadı',
+            `ty_urun_id`     VARCHAR(60) NULL,
+            `yukleme_tarihi` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY `uk_question` (`magaza_id`, `question_id`),
+            INDEX `idx_magaza`  (`magaza_id`),
+            INDEX `idx_barcode` (`barcode`),
+            INDEX `idx_durum`   (`cevap_durumu`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(PDOException $e) {}
+
     // reklamlar tablosu
     try {
         DB::get()->exec("CREATE TABLE IF NOT EXISTS `reklamlar` (
@@ -682,6 +732,7 @@ input[type="file"]{display:none;}
     <a href="?action=kar_zarar" class="<?= $action==='kar_zarar'?'active':'' ?>"><span>📈</span> Kar/Zarar</a>
     <a href="?action=reklamlar" class="<?= $action==='reklamlar'?'active':'' ?>"><span>📣</span> Reklamlar</a>
     <a href="?action=odemeler" class="<?= $action==='odemeler'?'active':'' ?>"><span>💰</span> Ödemeler</a>
+    <a href="?action=talepler" class="<?= $action==='talepler'?'active':'' ?>"><span>↩️</span> Talepler &amp; Sorular</a>
     <a href="?action=ai_analiz" class="<?= $action==='ai_analiz'?'active':'' ?>"><span>🤖</span> AI Analiz</a>
     <a href="?action=komisyon" class="<?= $action==='komisyon'?'active':'' ?>"><span>🏷️</span> Komisyon Tarifeleri</a>
     <div class="sep">Yönetim</div>
@@ -3355,6 +3406,182 @@ $digerKalemler = DB::rows("
 <?php endif; ?>
 
 <?php endif; // odemeDetaySayisi > 0 ?>
+
+<?php elseif ($action === 'talepler'): ?>
+<?php
+// Talepler (Claims) ve Müşteri Soruları sayfası
+$claimSayisi    = 0;
+$soruSayisi     = 0;
+$cevaplanmamis  = 0;
+try {
+    $claimSayisi   = (int)DB::scalar("SELECT COUNT(*) FROM talepler WHERE magaza_id=?", [$magazaId]);
+    $soruSayisi    = (int)DB::scalar("SELECT COUNT(*) FROM musteri_sorulari WHERE magaza_id=?", [$magazaId]);
+    $cevaplanmamis = (int)DB::scalar("SELECT COUNT(*) FROM musteri_sorulari WHERE magaza_id=? AND cevap_durumu='Cevaplanmadı'", [$magazaId]);
+} catch(Exception $e) {}
+$subTab = $_GET['tab'] ?? 'talepler';
+?>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+    <h2 style="margin:0">↩️ Talepler &amp; Sorular</h2>
+    <a href="?action=talepler&tab=talepler" class="tab-btn <?= $subTab==='talepler'?'active':'' ?>">İadeler / Talepler (<?= $claimSayisi ?>)</a>
+    <a href="?action=talepler&tab=sorular"  class="tab-btn <?= $subTab==='sorular'?'active':'' ?>">
+        Müşteri Soruları (<?= $soruSayisi ?>)
+        <?php if ($cevaplanmamis > 0): ?><span style="background:#e74c3c;color:#fff;border-radius:99px;padding:1px 7px;font-size:11px;margin-left:4px"><?= $cevaplanmamis ?></span><?php endif; ?>
+    </a>
+</div>
+
+<?php if ($subTab === 'talepler'): ?>
+<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <div>
+        <label style="font-size:12px;color:var(--text2)">Başlangıç</label>
+        <input type="date" id="claimStart" value="<?= date('Y-m-d', strtotime('-30 days')) ?>" style="border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px">
+    </div>
+    <div>
+        <label style="font-size:12px;color:var(--text2)">Bitiş</label>
+        <input type="date" id="claimEnd" value="<?= date('Y-m-d') ?>" style="border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:6px;padding:5px 8px;font-size:13px">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="syncClaims()">📡 API'den Senkronize Et</button>
+    <span id="claimStatus" style="font-size:12px;color:var(--text2)"></span>
+</div>
+
+<?php
+$claimRows = [];
+try {
+    $claimRows = DB::rows(
+        "SELECT claim_id,siparis_no,barcode,urun_adi,talep_tipi,talep_statusu,
+                talep_tarihi,iade_tutari,musteri,neden
+         FROM talepler WHERE magaza_id=? ORDER BY talep_tarihi DESC LIMIT 200",
+        [$magazaId]
+    );
+} catch(Exception $e) {}
+?>
+
+<?php if (empty($claimRows)): ?>
+<div class="alert alert-warning">Henüz talep verisi yok. API'den senkronize edin veya tarih aralığını genişletin.</div>
+<?php else: ?>
+<div style="overflow-x:auto"><table>
+<thead><tr>
+    <th>Talep ID</th><th>Sipariş No</th><th>Barkod</th><th>Ürün</th>
+    <th>Tip</th><th>Durum</th><th>Tarih</th><th style="text-align:right">İade Tutarı</th><th>Müşteri</th>
+</tr></thead>
+<tbody>
+<?php foreach ($claimRows as $c): ?>
+<tr>
+    <td style="font-size:11px;color:var(--text2)"><?= htmlspecialchars($c['claim_id']) ?></td>
+    <td style="font-size:12px"><?= htmlspecialchars($c['siparis_no']) ?></td>
+    <td style="font-size:11px"><?= htmlspecialchars($c['barcode']) ?></td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="<?= htmlspecialchars($c['urun_adi']) ?>"><?= htmlspecialchars($c['urun_adi']) ?></td>
+    <td><span style="font-size:11px;background:rgba(52,152,219,.15);color:#3498db;border-radius:4px;padding:2px 7px"><?= htmlspecialchars($c['talep_tipi']) ?></span></td>
+    <td><span style="font-size:11px;padding:2px 7px;border-radius:4px;<?= str_contains($c['talep_statusu'],'Onay')? 'background:rgba(46,204,113,.15);color:#2ecc71' : 'background:rgba(231,76,60,.12);color:#e74c3c' ?>"><?= htmlspecialchars($c['talep_statusu']) ?></span></td>
+    <td style="font-size:12px;white-space:nowrap"><?= $c['talep_tarihi'] ? date('d.m.Y', strtotime($c['talep_tarihi'])) : '—' ?></td>
+    <td style="text-align:right;font-size:13px;color:<?= $c['iade_tutari'] > 0 ? '#e74c3c' : 'var(--text2)' ?>;font-weight:600"><?= $c['iade_tutari'] > 0 ? number_format($c['iade_tutari'],2,',','.') . ' ₺' : '—' ?></td>
+    <td style="font-size:12px"><?= htmlspecialchars($c['musteri']) ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table></div>
+<?php endif; ?>
+
+<?php else: // sorular tab ?>
+<div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-primary btn-sm" onclick="syncQuestions()">📡 Soruları Güncelle</button>
+    <a href="?action=talepler&tab=sorular&durum=Cevaplanmadı" class="tab-btn <?= ($_GET['durum']??'')==='Cevaplanmadı'?'active':'' ?>" style="font-size:12px">
+        Cevaplanmayanlar<?= $cevaplanmamis > 0 ? " ($cevaplanmamis)" : '' ?>
+    </a>
+    <a href="?action=talepler&tab=sorular" class="tab-btn <?= !isset($_GET['durum'])?'active':'' ?>" style="font-size:12px">Tümü</a>
+    <span id="qStatus" style="font-size:12px;color:var(--text2)"></span>
+</div>
+
+<?php
+$durum = $_GET['durum'] ?? '';
+$qRows = [];
+try {
+    $qWhere = 'magaza_id=?';
+    $qPrms  = [$magazaId];
+    if ($durum) { $qWhere .= ' AND cevap_durumu=?'; $qPrms[] = $durum; }
+    $qRows = DB::rows(
+        "SELECT question_id,barcode,urun_adi,soru_metni,cevap_metni,soru_tarihi,cevap_durumu
+         FROM musteri_sorulari WHERE $qWhere ORDER BY soru_tarihi DESC LIMIT 200",
+        $qPrms
+    );
+} catch(Exception $e) {}
+?>
+
+<?php if (empty($qRows)): ?>
+<div class="alert alert-warning">Henüz soru verisi yok. API'den güncelle butonuna basın.</div>
+<?php else: ?>
+<div style="display:flex;flex-direction:column;gap:10px">
+<?php foreach ($qRows as $q): ?>
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div>
+            <span style="font-size:11px;font-weight:600;color:var(--text2)"><?= htmlspecialchars($q['barcode']) ?></span>
+            <span style="margin-left:8px;font-size:12px;color:var(--text2)"><?= htmlspecialchars($q['urun_adi']) ?></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--text2)"><?= $q['soru_tarihi'] ? date('d.m.Y H:i', strtotime($q['soru_tarihi'])) : '' ?></span>
+            <?php if ($q['cevap_durumu']==='Cevaplanmadı'): ?>
+            <span style="background:rgba(231,76,60,.15);color:#e74c3c;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600">Cevaplanmadı</span>
+            <?php else: ?>
+            <span style="background:rgba(46,204,113,.15);color:#2ecc71;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600">✓ Cevaplandı</span>
+            <?php endif; ?>
+        </div>
+    </div>
+    <div style="font-size:13px;margin-bottom:8px"><strong>❓</strong> <?= nl2br(htmlspecialchars($q['soru_metni'])) ?></div>
+    <?php if ($q['cevap_metni']): ?>
+    <div style="font-size:13px;color:var(--text2);border-left:3px solid var(--primary);padding-left:10px"><strong>💬</strong> <?= nl2br(htmlspecialchars($q['cevap_metni'])) ?></div>
+    <?php else: ?>
+    <div style="margin-top:8px;display:flex;gap:6px">
+        <textarea id="ans_<?= htmlspecialchars($q['question_id'],ENT_QUOTES) ?>" rows="2"
+            style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:13px;resize:vertical"
+            placeholder="Yanıtınızı yazın..."></textarea>
+        <button class="btn btn-primary btn-sm" style="align-self:flex-end"
+            onclick="answerQuestion('<?= htmlspecialchars($q['question_id'],ENT_QUOTES) ?>', this)">Gönder</button>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endforeach; ?>
+</div>
+<?php endif; ?>
+<?php endif; // tab ?>
+
+<script>
+function syncClaims() {
+    const s = document.getElementById('claimStart').value;
+    const e = document.getElementById('claimEnd').value;
+    document.getElementById('claimStatus').textContent = '⏳ Senkronize ediliyor…';
+    fetch('ajax.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: `action=sync_claims&start_date=${s}&end_date=${e}`})
+    .then(r=>r.json()).then(d=>{
+        if (d.error) { document.getElementById('claimStatus').textContent = '❌ ' + d.error; return; }
+        document.getElementById('claimStatus').textContent =
+            `✅ ${d.inserted} yeni, ${d.updated} güncellendi`;
+        setTimeout(() => location.reload(), 1200);
+    }).catch(()=>{ document.getElementById('claimStatus').textContent = '❌ Bağlantı hatası'; });
+}
+function syncQuestions() {
+    document.getElementById('qStatus').textContent = '⏳ Sorular alınıyor…';
+    fetch('ajax.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: 'action=sync_questions'})
+    .then(r=>r.json()).then(d=>{
+        if (d.error) { document.getElementById('qStatus').textContent = '❌ ' + d.error; return; }
+        document.getElementById('qStatus').textContent =
+            `✅ ${d.inserted} yeni, ${d.updated} güncellendi, ${d.unanswered} cevaplanmamış`;
+        setTimeout(() => location.reload(), 1200);
+    }).catch(()=>{ document.getElementById('qStatus').textContent = '❌ Bağlantı hatası'; });
+}
+function answerQuestion(qId, btn) {
+    const ta = document.getElementById('ans_' + qId);
+    const cevap = ta.value.trim();
+    if (!cevap) { alert('Yanıt boş olamaz'); return; }
+    btn.disabled = true; btn.textContent = '⏳';
+    const fd = new URLSearchParams({action:'answer_question', question_id:qId, cevap});
+    fetch('ajax.php', {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd.toString()})
+    .then(r=>r.json()).then(d=>{
+        if (d.error) { alert('Hata: ' + d.error); btn.disabled=false; btn.textContent='Gönder'; return; }
+        location.reload();
+    });
+}
+</script>
 
 <?php elseif ($action === 'ai_analiz'): ?>
 <?php
