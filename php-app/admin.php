@@ -56,6 +56,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Kullanıcı silindi.";
         } else $error = "Kendinizi silemezsiniz.";
     }
+    // Yeni kullanıcı ekle
+    elseif ($act === 'add_user') {
+        $email    = trim($_POST['email'] ?? '');
+        $adSoyad  = trim($_POST['ad_soyad'] ?? '');
+        $sifre    = $_POST['sifre'] ?? '';
+        $rol      = in_array($_POST['rol'] ?? '', ['admin','uye']) ? $_POST['rol'] : 'uye';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = "Geçersiz e-posta adresi.";
+        } elseif (strlen($sifre) < 6) {
+            $error = "Şifre en az 6 karakter olmalıdır.";
+        } elseif (DB::scalar("SELECT COUNT(*) FROM kullanicilar WHERE email=?", [$email]) > 0) {
+            $error = "Bu e-posta zaten kayıtlı.";
+        } else {
+            DB::exec("INSERT INTO kullanicilar (email,sifre_hash,ad_soyad,rol,aktif) VALUES (?,?,?,?,1)",
+                [$email, password_hash($sifre, PASSWORD_DEFAULT), $adSoyad, $rol]);
+            $message = "Kullanıcı eklendi: $email";
+        }
+    }
+    // Şifre sıfırla
+    elseif ($act === 'reset_password') {
+        $uid      = (int)$_POST['uid'];
+        $yeniSifre = $_POST['yeni_sifre'] ?? '';
+        if (strlen($yeniSifre) < 6) {
+            $error = "Şifre en az 6 karakter olmalıdır.";
+        } else {
+            DB::exec("UPDATE kullanicilar SET sifre_hash=? WHERE id=?",
+                [password_hash($yeniSifre, PASSWORD_DEFAULT), $uid]);
+            $message = "Şifre güncellendi.";
+        }
+    }
 }
 
 // ---- Veri ----
@@ -72,6 +102,16 @@ $magazalar = DB::rows("SELECT m.*, k.email, k.ad_soyad,
 
 $toplamSiparis = (int)DB::scalar("SELECT COUNT(*) FROM siparisler");
 $toplamUrun    = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler");
+$toplamTalep   = 0; $toplamSoru = 0; $toplamReklam = 0;
+try { $toplamTalep  = (int)DB::scalar("SELECT COUNT(*) FROM talepler"); } catch(Exception $e) {}
+try { $toplamSoru   = (int)DB::scalar("SELECT COUNT(*) FROM musteri_sorulari"); } catch(Exception $e) {}
+try { $toplamReklam = (int)DB::scalar("SELECT COUNT(*) FROM reklamlar"); } catch(Exception $e) {}
+
+$sysStats = [];
+$statTables = ['kullanicilar','magazalar','siparisler','trendyol_urunler','maliyetler','talepler','musteri_sorulari','reklamlar'];
+foreach ($statTables as $tbl) {
+    try { $sysStats[$tbl] = (int)DB::scalar("SELECT COUNT(*) FROM `$tbl`"); } catch(Exception $e) { $sysStats[$tbl] = null; }
+}
 
 function fmt2($n,$d=2){return number_format((float)$n,$d,',','.');}
 ?>
@@ -143,11 +183,17 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <div class="kpi"><div class="kpi-label">Toplam Mağaza</div><div class="kpi-value"><?= count($magazalar) ?></div></div>
         <div class="kpi"><div class="kpi-label">Toplam Sipariş</div><div class="kpi-value"><?= number_format($toplamSiparis,0,',','.') ?></div></div>
         <div class="kpi"><div class="kpi-label">Toplam API Ürünü</div><div class="kpi-value"><?= number_format($toplamUrun,0,',','.') ?></div></div>
+        <div class="kpi"><div class="kpi-label">Toplam Talep</div><div class="kpi-value"><?= number_format($toplamTalep,0,',','.') ?></div></div>
+        <div class="kpi"><div class="kpi-label">Müşteri Soruları</div><div class="kpi-value"><?= number_format($toplamSoru,0,',','.') ?></div></div>
+        <div class="kpi"><div class="kpi-label">Reklam Kayıtları</div><div class="kpi-value"><?= number_format($toplamReklam,0,',','.') ?></div></div>
     </div>
 
     <!-- Kullanıcılar -->
     <div class="card">
-        <div class="card-title">👥 Kullanıcılar (<?= count($kullanicilar) ?>)</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="card-title" style="margin:0">👥 Kullanıcılar (<?= count($kullanicilar) ?>)</div>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('addUserModal').style.display='flex'">+ Yeni Kullanıcı</button>
+        </div>
         <div style="overflow-x:auto"><table>
         <thead><tr><th>#</th><th>Ad Soyad / E-posta</th><th>Rol</th><th>Mağaza</th><th>Kayıt Tarihi</th><th>Durum</th><th>İşlem</th></tr></thead>
         <tbody>
@@ -178,15 +224,18 @@ tr:hover td{background:rgba(255,255,255,.02);}
                 <form method="POST" style="display:inline">
                     <input type="hidden" name="act" value="toggle_user">
                     <input type="hidden" name="uid" value="<?= $k['id'] ?>">
-                    <button class="btn btn-sm <?= $k['aktif']?'btn-danger':'btn-success' ?>"><?= $k['aktif']?'Pasif Et':'Aktif Et' ?></button>
+                    <button class="btn btn-sm <?= $k['aktif']?'btn-danger':'btn-success' ?>"><?= $k['aktif']?'Pasif':'Aktif' ?></button>
                 </form>
+                <button class="btn btn-sm" style="background:rgba(52,152,219,.2);color:var(--blue);border:1px solid rgba(52,152,219,.3)"
+                    onclick="resetPw(<?= $k['id'] ?>, <?= htmlspecialchars(json_encode($k['email'])) ?>)">🔑</button>
                 <form method="POST" style="display:inline" onsubmit="return confirm('Bu kullanıcıyı ve tüm mağaza verilerini sil?')">
                     <input type="hidden" name="act" value="del_user">
                     <input type="hidden" name="uid" value="<?= $k['id'] ?>">
                     <button class="btn btn-sm btn-danger">🗑</button>
                 </form>
                 <?php else: ?>
-                <span style="font-size:11px;color:var(--text2)">(siz)</span>
+                <button class="btn btn-sm" style="background:rgba(52,152,219,.2);color:var(--blue);border:1px solid rgba(52,152,219,.3)"
+                    onclick="resetPw(<?= $k['id'] ?>, <?= htmlspecialchars(json_encode($k['email'])) ?>)">🔑 Şifrem</button>
                 <?php endif; ?>
             </td>
         </tr>
@@ -196,7 +245,9 @@ tr:hover td{background:rgba(255,255,255,.02);}
 
     <!-- Mağazalar -->
     <div class="card">
-        <div class="card-title">🏪 Mağazalar (<?= count($magazalar) ?>)</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="card-title" style="margin:0">🏪 Mağazalar (<?= count($magazalar) ?>)</div>
+        </div>
         <div style="overflow-x:auto"><table>
         <thead><tr><th>#</th><th>Mağaza</th><th>Sahibi</th><th>Seller ID</th><th>API</th><th>Sipariş</th><th>Ürün</th><th>Oluşturma</th><th>İşlem</th></tr></thead>
         <tbody>
@@ -225,6 +276,27 @@ tr:hover td{background:rgba(255,255,255,.02);}
         <?php endforeach; ?>
         </tbody></table></div>
     </div>
+
+    <!-- Sistem İstatistikleri -->
+    <div class="card">
+        <div class="card-title">🗄️ Veritabanı İstatistikleri</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+        <?php
+        $tblLabels = [
+            'kullanicilar'=>'Kullanıcılar','magazalar'=>'Mağazalar',
+            'siparisler'=>'Siparişler','trendyol_urunler'=>'API Ürünleri',
+            'maliyetler'=>'Maliyet Kayıtları','talepler'=>'Talepler',
+            'musteri_sorulari'=>'Müşteri Soruları','reklamlar'=>'Reklam Kayıtları',
+        ];
+        foreach ($sysStats as $tbl => $cnt): ?>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+            <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px"><?= $tblLabels[$tbl] ?? $tbl ?></div>
+            <div style="font-size:20px;font-weight:700;color:var(--text)"><?= $cnt === null ? '<span style="color:var(--text2);font-size:13px">—</span>' : number_format($cnt,0,',','.') ?></div>
+            <div style="font-size:10px;color:var(--text2);margin-top:2px;font-family:monospace"><?= $tbl ?></div>
+        </div>
+        <?php endforeach; ?>
+        </div>
+    </div>
 </div>
 
 <!-- Mağaza Düzenle Modal -->
@@ -246,6 +318,46 @@ tr:hover td{background:rgba(255,255,255,.02);}
 </div>
 </div>
 
+<!-- Yeni Kullanıcı Modal -->
+<div id="addUserModal" class="modal" style="display:none">
+<div class="modal-box">
+    <h3 style="margin-bottom:16px">➕ Yeni Kullanıcı Ekle</h3>
+    <form method="POST">
+        <input type="hidden" name="act" value="add_user">
+        <div class="form-group"><label>Ad Soyad</label><input type="text" name="ad_soyad" placeholder="Ad Soyad"></div>
+        <div class="form-group"><label>E-posta *</label><input type="email" name="email" required placeholder="ornek@mail.com"></div>
+        <div class="form-group"><label>Şifre * (min. 6 karakter)</label><input type="password" name="sifre" required placeholder="••••••••"></div>
+        <div class="form-group"><label>Rol</label>
+            <select name="rol" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:7px;font-size:13px">
+                <option value="uye">Üye</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+            <button type="submit" class="btn btn-primary">➕ Ekle</button>
+            <button type="button" class="btn" style="background:var(--bg3);color:var(--text2)" onclick="document.getElementById('addUserModal').style.display='none'">İptal</button>
+        </div>
+    </form>
+</div>
+</div>
+
+<!-- Şifre Sıfırla Modal -->
+<div id="resetPwModal" class="modal" style="display:none">
+<div class="modal-box">
+    <h3 style="margin-bottom:4px">🔑 Şifre Sıfırla</h3>
+    <p id="resetPwEmail" style="font-size:12px;color:var(--text2);margin-bottom:16px"></p>
+    <form method="POST">
+        <input type="hidden" name="act" value="reset_password">
+        <input type="hidden" name="uid" id="reset_uid">
+        <div class="form-group"><label>Yeni Şifre * (min. 6 karakter)</label><input type="password" name="yeni_sifre" id="reset_pw_input" required placeholder="••••••••"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+            <button type="submit" class="btn btn-primary">💾 Güncelle</button>
+            <button type="button" class="btn" style="background:var(--bg3);color:var(--text2)" onclick="document.getElementById('resetPwModal').style.display='none'">İptal</button>
+        </div>
+    </form>
+</div>
+</div>
+
 <script>
 function editMagaza(m) {
     document.getElementById('edit_mid').value = m.id;
@@ -255,6 +367,18 @@ function editMagaza(m) {
     document.getElementById('edit_sec').value = '';
     document.getElementById('editModal').style.display = 'flex';
 }
+function resetPw(uid, email) {
+    document.getElementById('reset_uid').value = uid;
+    document.getElementById('resetPwEmail').textContent = email;
+    document.getElementById('reset_pw_input').value = '';
+    document.getElementById('resetPwModal').style.display = 'flex';
+}
+// Close modals on backdrop click
+['editModal','addUserModal','resetPwModal'].forEach(function(id) {
+    document.getElementById(id).addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+});
 </script>
 </body>
 </html>

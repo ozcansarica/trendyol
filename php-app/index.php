@@ -1174,6 +1174,98 @@ $ayIsimleri = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
     </div>
 </div>
 
+<!-- ═══ TREND GRAFİĞİ ═══ -->
+<?php
+$dcAylar  = array_reverse($aylar); // eskiden yeniye
+$dcLabels = []; $dcCiro = []; $dcNet = []; $dcKar = []; $dcReklam = [];
+foreach ($dcAylar as $a) {
+    $dcLabels[] = ($ayIsimleri[$a['ay']] ?? $a['ay']) . ' ' . $a['yil'];
+    $dcCiro[]   = round((float)$a['brut_ciro'], 2);
+    $dcNet[]    = round((float)$a['net_tutar'], 2);
+    $aaKey = $a['yil'].'-'.$a['ay'];
+    $mali  = $ayMaliyetMap[$aaKey] ?? 0;
+    $rek   = $ayReklamMap[$aaKey]  ?? 0;
+    $dcKar[]    = $mali > 0 ? round((float)$a['net_tutar'] - $mali - $rek, 2) : null;
+    $dcReklam[] = round($rek, 2);
+}
+?>
+<?php if (count($dcLabels) >= 2): ?>
+<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:13px;font-weight:500;color:var(--text)">
+        📈 Trend Grafiği (<?= count($dcLabels) ?> ay)
+    </div>
+    <div style="padding:16px"><div class="chart-wrap" style="height:240px"><canvas id="dashTrendChart"></canvas></div></div>
+</div>
+<script>
+(function(){
+var ctx = document.getElementById('dashTrendChart');
+if (!ctx) return;
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: <?= json_encode($dcLabels) ?>,
+        datasets: [
+            {
+                label: 'Brüt Ciro',
+                type: 'bar',
+                data: <?= json_encode($dcCiro) ?>,
+                backgroundColor: 'rgba(249,115,22,.35)',
+                borderColor: 'rgba(249,115,22,.8)',
+                borderWidth: 1,
+                yAxisID: 'yLeft',
+                order: 3
+            },
+            {
+                label: 'Net Tutar',
+                type: 'bar',
+                data: <?= json_encode($dcNet) ?>,
+                backgroundColor: 'rgba(96,165,250,.35)',
+                borderColor: 'rgba(96,165,250,.8)',
+                borderWidth: 1,
+                yAxisID: 'yLeft',
+                order: 2
+            },
+            {
+                label: 'Net Kar (reklamlı)',
+                type: 'line',
+                data: <?= json_encode($dcKar) ?>,
+                borderColor: '#4ade80',
+                backgroundColor: 'rgba(74,222,128,.1)',
+                borderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: false,
+                spanGaps: true,
+                yAxisID: 'yLeft',
+                order: 1
+            }
+        ]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { position: 'top', labels: { color: '#9099c4', font: { size: 11 }, boxWidth: 12 } },
+            tooltip: {
+                callbacks: {
+                    label: function(c) {
+                        if (c.parsed.y === null) return c.dataset.label + ': —';
+                        var v = c.parsed.y;
+                        return c.dataset.label + ': ' + v.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:0}) + ' ₺';
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { ticks: { color: '#9099c4', font: { size: 10 } }, grid: { color: 'rgba(46,49,80,.5)' } },
+            yLeft: { type: 'linear', position: 'left', ticks: { color: '#9099c4', font: { size: 10 }, callback: v => (v/1000).toFixed(0)+'K ₺' }, grid: { color: 'rgba(46,49,80,.5)' } }
+        }
+    }
+});
+})();
+</script>
+<?php endif; ?>
+
 <!-- ═══ ALT KISIM: Top ürünler + Sipariş statüsü ═══ -->
 <?php
 $topUrunler = [];
@@ -3770,18 +3862,25 @@ $subTab = $_GET['tab'] ?? 'talepler';
 </div>
 
 <?php
-$claimRows = [];
+$claimPerPage = 25;
+$claimPage    = max(1, (int)($_GET['p'] ?? 1));
+$claimTotal   = 0;
+$claimPages   = 1;
+$claimRows    = [];
 try {
-    $claimRows = DB::rows(
+    $claimTotal = (int)DB::scalar("SELECT COUNT(*) FROM talepler WHERE magaza_id=?", [$magazaId]);
+    $claimPages = max(1, (int)ceil($claimTotal / $claimPerPage));
+    $claimPage  = min($claimPage, $claimPages);
+    $claimRows  = DB::rows(
         "SELECT claim_id,siparis_no,barcode,urun_adi,talep_tipi,talep_statusu,
                 talep_tarihi,iade_tutari,musteri,neden
-         FROM talepler WHERE magaza_id=? ORDER BY talep_tarihi DESC LIMIT 200",
-        [$magazaId]
+         FROM talepler WHERE magaza_id=? ORDER BY talep_tarihi DESC LIMIT ? OFFSET ?",
+        [$magazaId, $claimPerPage, ($claimPage - 1) * $claimPerPage]
     );
 } catch(Exception $e) {}
 ?>
 
-<?php if (empty($claimRows)): ?>
+<?php if ($claimTotal === 0): ?>
 <div class="alert alert-warning">Henüz talep verisi yok. API'den senkronize edin veya tarih aralığını genişletin.</div>
 <?php else: ?>
 <div style="overflow-x:auto"><table>
@@ -3805,6 +3904,31 @@ try {
 <?php endforeach; ?>
 </tbody>
 </table></div>
+<?php if ($claimPages > 1): ?>
+<?php
+$claimWin = 2; $claimFirst = max(1,$claimPage-$claimWin); $claimLast = min($claimPages,$claimPage+$claimWin);
+?>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">
+    <span style="font-size:12px;color:var(--text2)"><?= $claimTotal ?> talep · sayfa <?= $claimPage ?>/<?= $claimPages ?></span>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+    <?php if ($claimFirst > 1): ?>
+        <a href="?action=talepler&tab=talepler&p=1" style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;background:var(--bg3);color:var(--text2);border:1px solid var(--border)">1</a>
+        <?php if ($claimFirst > 2): ?><span style="padding:4px 4px;font-size:12px;color:var(--text2)">…</span><?php endif; ?>
+    <?php endif; ?>
+    <?php for ($pi = $claimFirst; $pi <= $claimLast; $pi++): ?>
+    <a href="?action=talepler&tab=talepler&p=<?= $pi ?>"
+       style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;
+              background:<?= $pi===$claimPage?'var(--primary)':'var(--bg3)' ?>;
+              color:<?= $pi===$claimPage?'#fff':'var(--text2)' ?>;
+              border:1px solid <?= $pi===$claimPage?'var(--primary)':'var(--border)' ?>"><?= $pi ?></a>
+    <?php endfor; ?>
+    <?php if ($claimLast < $claimPages): ?>
+        <?php if ($claimLast < $claimPages - 1): ?><span style="padding:4px 4px;font-size:12px;color:var(--text2)">…</span><?php endif; ?>
+        <a href="?action=talepler&tab=talepler&p=<?= $claimPages ?>" style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;background:var(--bg3);color:var(--text2);border:1px solid var(--border)"><?= $claimPages ?></a>
+    <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php else: // sorular tab ?>
@@ -3818,16 +3942,23 @@ try {
 </div>
 
 <?php
-$durum = $_GET['durum'] ?? '';
-$qRows = [];
+$durum     = $_GET['durum'] ?? '';
+$qPerPage  = 20;
+$qPage     = max(1, (int)($_GET['p'] ?? 1));
+$qTotal    = 0;
+$qPages    = 1;
+$qRows     = [];
 try {
     $qWhere = 'magaza_id=?';
     $qPrms  = [$magazaId];
     if ($durum) { $qWhere .= ' AND cevap_durumu=?'; $qPrms[] = $durum; }
-    $qRows = DB::rows(
+    $qTotal = (int)DB::scalar("SELECT COUNT(*) FROM musteri_sorulari WHERE $qWhere", $qPrms);
+    $qPages = max(1, (int)ceil($qTotal / $qPerPage));
+    $qPage  = min($qPage, $qPages);
+    $qRows  = DB::rows(
         "SELECT question_id,barcode,urun_adi,soru_metni,cevap_metni,soru_tarihi,cevap_durumu
-         FROM musteri_sorulari WHERE $qWhere ORDER BY soru_tarihi DESC LIMIT 200",
-        $qPrms
+         FROM musteri_sorulari WHERE $qWhere ORDER BY soru_tarihi DESC LIMIT ? OFFSET ?",
+        array_merge($qPrms, [$qPerPage, ($qPage - 1) * $qPerPage])
     );
 } catch(Exception $e) {}
 ?>
@@ -3867,6 +3998,32 @@ try {
 </div>
 <?php endforeach; ?>
 </div>
+<?php if ($qPages > 1): ?>
+<?php
+$qWin = 2; $qFirst = max(1,$qPage-$qWin); $qLast = min($qPages,$qPage+$qWin);
+$qDurumParam = $durum ? '&durum=' . urlencode($durum) : '';
+?>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:8px">
+    <span style="font-size:12px;color:var(--text2)"><?= $qTotal ?> soru · sayfa <?= $qPage ?>/<?= $qPages ?></span>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+    <?php if ($qFirst > 1): ?>
+        <a href="?action=talepler&tab=sorular<?= $qDurumParam ?>&p=1" style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;background:var(--bg3);color:var(--text2);border:1px solid var(--border)">1</a>
+        <?php if ($qFirst > 2): ?><span style="padding:4px 4px;font-size:12px;color:var(--text2)">…</span><?php endif; ?>
+    <?php endif; ?>
+    <?php for ($qi = $qFirst; $qi <= $qLast; $qi++): ?>
+    <a href="?action=talepler&tab=sorular<?= $qDurumParam ?>&p=<?= $qi ?>"
+       style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;
+              background:<?= $qi===$qPage?'var(--primary)':'var(--bg3)' ?>;
+              color:<?= $qi===$qPage?'#fff':'var(--text2)' ?>;
+              border:1px solid <?= $qi===$qPage?'var(--primary)':'var(--border)' ?>"><?= $qi ?></a>
+    <?php endfor; ?>
+    <?php if ($qLast < $qPages): ?>
+        <?php if ($qLast < $qPages - 1): ?><span style="padding:4px 4px;font-size:12px;color:var(--text2)">…</span><?php endif; ?>
+        <a href="?action=talepler&tab=sorular<?= $qDurumParam ?>&p=<?= $qPages ?>" style="padding:4px 9px;border-radius:6px;font-size:12px;text-decoration:none;background:var(--bg3);color:var(--text2);border:1px solid var(--border)"><?= $qPages ?></a>
+    <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 <?php endif; // tab ?>
 
