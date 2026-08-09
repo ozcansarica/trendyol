@@ -2502,6 +2502,13 @@ try { $komSayisi = (int)DB::scalar("SELECT COUNT(*) FROM komisyon_tarifeleri WHE
         <span><strong style="color:var(--text)"><?= $reklamSayisi ?></strong> kampanya</span>
         <?php if ($reklamSayisi>0): ?><a href="#" onclick="clearTable('reklamlar')" style="color:var(--red);text-decoration:none;font-size:11px">🗑 Temizle</a><?php endif; ?>
     </div>
+    <?php if ($apiOk): ?>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600">📡 Trendyol API'den Otomatik Çek</div>
+        <button class="btn btn-primary" style="width:100%;font-size:12px;padding:7px 12px" onclick="syncAdsCard(this)">📡 Kampanyaları API'den Çek</button>
+        <div style="font-size:10px;color:var(--text2);margin-top:6px">Tüm aktif ve tamamlanan kampanyalar çekilir, mevcut kayıtlar güncellenir.</div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Komisyon Tarifeleri -->
@@ -4351,6 +4358,16 @@ function normalizeStatus() {
         toast(`✅ ${d.updated||0} sipariş statüsü Türkçeye çevrildi`);
         setTimeout(()=>location.reload(),1000);
     });
+}
+
+function syncAdsCard(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Çekiliyor...';
+    post({action:'sync_ads'}).then(d => {
+        if (d.error) { toast('❌ ' + d.error, false); }
+        else { toast(`✅ ${d.total} kampanya güncellendi (${d.inserted} yeni, ${d.updated} güncellendi)`); setTimeout(()=>location.reload(),1500); }
+        btn.disabled = false; btn.textContent = '📡 Kampanyaları API\'den Çek';
+    }).catch(()=>{ toast('❌ Bağlantı hatası', false); btn.disabled=false; btn.textContent='📡 Kampanyaları API\'den Çek'; });
 }
 
 function syncOrdersCard(btn) {
