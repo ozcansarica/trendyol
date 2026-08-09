@@ -514,6 +514,65 @@ try {
             echo json_encode(['questions' => $rows, 'total' => count($rows), 'unanswered' => (int)$unanswered]);
             break;
 
+        // ------ Reklam API senkronizasyonu ------
+        case 'sync_ads':
+            $api    = new TrendyolApi($magaza);
+            $result = $api->syncAds();
+            echo json_encode($result);
+            break;
+
+        // ------ Çok mağaza karşılaştırma ------
+        case 'magaza_karsilastir':
+            $user = authUser();
+            if (!$user) { http_response_code(403); echo json_encode(['error' => 'Oturum yok']); break; }
+            $magazalar = DB::rows(
+                "SELECT id, magaza_adi, ty_seller_id FROM magazalar WHERE kullanici_id=? AND aktif=1 ORDER BY id",
+                [$user['id']]
+            );
+            $sonuc = [];
+            $donem = $_POST['donem'] ?? '';
+            $donemSql = $donem ? " AND LEFT(siparis_tarihi,7)=?" : "";
+            foreach ($magazalar as $m) {
+                $mid = (int)$m['id'];
+                $params = $donem ? [$mid, $donem] : [$mid];
+                $s = DB::row(
+                    "SELECT COUNT(*) AS siparis_sayisi,
+                            COALESCE(SUM(siparis_tutari),0) AS ciro,
+                            COALESCE(SUM(net_tutar),0) AS net,
+                            COALESCE(SUM(komisyon),0) AS komisyon,
+                            COALESCE(SUM(iade),0) AS iade_tutari,
+                            COALESCE(SUM(iptal),0) AS iptal_tutari,
+                            COALESCE(AVG(NULLIF(siparis_tutari,0)),0) AS ort_siparis
+                     FROM siparisler WHERE magaza_id=?" . $donemSql,
+                    $params
+                ) ?? [];
+                $urun = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler WHERE magaza_id=? AND approved=1", [$mid]);
+                $r = DB::row("SELECT COALESCE(SUM(harcama),0) AS h, COALESCE(SUM(toplam_ciro),0) AS c FROM reklamlar WHERE magaza_id=?", [$mid]) ?? [];
+                $talep = (int)DB::scalar("SELECT COUNT(*) FROM talepler WHERE magaza_id=?", [$mid]);
+                $ciro = (float)($s['ciro'] ?? 0);
+                $harcama = (float)($r['h'] ?? 0);
+                $sonuc[] = [
+                    'magaza_id'      => $mid,
+                    'magaza_adi'     => $m['magaza_adi'],
+                    'seller_id'      => $m['ty_seller_id'],
+                    'siparis_sayisi' => (int)($s['siparis_sayisi'] ?? 0),
+                    'ciro'           => $ciro,
+                    'net'            => (float)($s['net'] ?? 0),
+                    'komisyon'       => (float)($s['komisyon'] ?? 0),
+                    'komisyon_oran'  => $ciro > 0 ? round((float)($s['komisyon'] ?? 0) / $ciro * 100, 1) : 0,
+                    'ort_siparis'    => round((float)($s['ort_siparis'] ?? 0), 2),
+                    'iade_tutari'    => (float)($s['iade_tutari'] ?? 0),
+                    'iptal_tutari'   => (float)($s['iptal_tutari'] ?? 0),
+                    'aktif_urun'     => $urun,
+                    'reklam_harcama' => $harcama,
+                    'reklam_ciro'    => (float)($r['c'] ?? 0),
+                    'roas'           => $harcama > 0 ? round((float)($r['c'] ?? 0) / $harcama, 2) : 0,
+                    'talep_sayisi'   => $talep,
+                ];
+            }
+            echo json_encode(['magazalar' => $sonuc, 'donem' => $donem]);
+            break;
+
         // ------ Tabloyu temizle ------
         case 'clear_table':
             $tbl = $_POST['table'] ?? '';

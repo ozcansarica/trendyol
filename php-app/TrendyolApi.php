@@ -1192,6 +1192,116 @@ class TrendyolApi {
         return ['ok' => true, 'status' => $httpCode];
     }
 
+    /**
+     * Reklam kampanyalarını Trendyol API'den çekip reklamlar tablosuna kaydeder.
+     * Endpoint: GET /sapigw/sellers/{sellerId}/advertisements
+     */
+    public function syncAds(): array {
+        if (!$this->isConfigured()) {
+            return ['error' => 'API bilgileri eksik.'];
+        }
+
+        $inserted = 0;
+        $updated  = 0;
+        $now      = date('Y-m-d H:i:s');
+        $page     = 0;
+        $statusMap = [
+            'ACTIVE' => 'Yayında', 'PAUSED' => 'Duraklatıldı',
+            'COMPLETED' => 'Tamamlandı', 'DRAFT' => 'Taslak',
+            'SUSPENDED' => 'Askıya Alındı', 'PENDING' => 'Beklemede',
+        ];
+
+        do {
+            $data = $this->request(
+                "/sapigw/sellers/{$this->sellerId}/advertisements",
+                ['page' => $page, 'size' => 200]
+            );
+
+            if (isset($data['error'])) {
+                return ['error' => $data['error'], 'inserted' => $inserted, 'updated' => $updated];
+            }
+
+            $items      = $data['content'] ?? $data['advertisements'] ?? (isset($data[0]) ? $data : []);
+            $totalPages = (int)($data['totalPages'] ?? $data['totalPage'] ?? 1);
+
+            if (!is_array($items) || empty($items)) break;
+
+            foreach ($items as $item) {
+                $kampId = (string)($item['id'] ?? '');
+                $adi    = (string)($item['name'] ?? $item['campaignName'] ?? '');
+                if (!$kampId && !$adi) continue;
+                if (!$kampId) $kampId = md5($adi);
+
+                $statuRaw = (string)($item['status'] ?? $item['campaignStatus'] ?? '');
+                $statuTR  = $statusMap[$statuRaw] ?? $statuRaw;
+
+                $basT   = (string)($item['startDate']       ?? $item['startTime']       ?? '');
+                $bitT   = (string)($item['endDate']         ?? $item['endTime']         ?? '');
+                $urunAd = (int)($item['productCount']       ?? $item['productSize']     ?? 0);
+                $butce  = (float)($item['budget']           ?? $item['totalBudget']     ?? 0);
+                $kalan  = (float)($item['remainingBudget']  ?? 0);
+                $harcama= (float)($item['spend']            ?? $item['totalSpend']      ?? 0);
+                $tbm    = (string)($item['bid']             ?? '');
+                $gcTbm  = (float)($item['realBid']         ?? $item['avgBid']           ?? 0);
+                $tikl   = (int)($item['clicks']             ?? 0);
+                $gorum  = (int)($item['impressions']        ?? 0);
+                $dSatis = (int)($item['directSales']        ?? $item['directOrderCount'] ?? 0);
+                $iSatis = (int)($item['indirectSales']      ?? $item['indirectOrderCount'] ?? 0);
+                $tSatis = (int)($item['totalSales']         ?? ($dSatis + $iSatis));
+                $dCiro  = (float)($item['directRevenue']    ?? $item['directAmount']    ?? 0);
+                $iCiro  = (float)($item['indirectRevenue']  ?? $item['indirectAmount']  ?? 0);
+                $tCiro  = (float)($item['totalRevenue']     ?? ($dCiro + $iCiro));
+                $roas   = $harcama > 0 ? round($tCiro / $harcama, 2) : 0.0;
+
+                $exists = DB::scalar(
+                    "SELECT id FROM reklamlar WHERE magaza_id=? AND kampanya_id=?",
+                    [$this->magazaId, $kampId]
+                );
+
+                if ($exists) {
+                    DB::exec(
+                        "UPDATE reklamlar
+                         SET reklam_adi=?, statu=?, baslangic_tarihi=?, bitis_tarihi=?,
+                             urun_adedi=?, toplam_butce=?, kalan_butce=?, harcama=?,
+                             tbm_teklif=?, gerceklesen_tbm=?, tiklanma=?, goruntulenme=?,
+                             dogrudan_satis=?, dolayli_satis=?, toplam_satis=?,
+                             dogrudan_ciro=?, dolayli_ciro=?, toplam_ciro=?, roas=?,
+                             yukleme_tarihi=?
+                         WHERE magaza_id=? AND kampanya_id=?",
+                        [$adi, $statuTR, $basT, $bitT, $urunAd, $butce, $kalan, $harcama,
+                         $tbm, $gcTbm, $tikl, $gorum, $dSatis, $iSatis, $tSatis,
+                         $dCiro, $iCiro, $tCiro, $roas, $now,
+                         $this->magazaId, $kampId]
+                    );
+                    $updated++;
+                } else {
+                    try {
+                        DB::exec(
+                            "INSERT INTO reklamlar
+                             (magaza_id, kampanya_id, reklam_adi, statu,
+                              baslangic_tarihi, bitis_tarihi, urun_adedi,
+                              toplam_butce, kalan_butce, harcama, tbm_teklif, gerceklesen_tbm,
+                              tiklanma, goruntulenme, dogrudan_satis, dolayli_satis, toplam_satis,
+                              dogrudan_ciro, dolayli_ciro, toplam_ciro, roas, yukleme_tarihi)
+                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            [$this->magazaId, $kampId, $adi, $statuTR,
+                             $basT, $bitT, $urunAd,
+                             $butce, $kalan, $harcama, $tbm, $gcTbm,
+                             $tikl, $gorum, $dSatis, $iSatis, $tSatis,
+                             $dCiro, $iCiro, $tCiro, $roas, $now]
+                        );
+                        $inserted++;
+                    } catch (PDOException $e) {}
+                }
+            }
+
+            $page++;
+            if (count($items) < 200) break;
+        } while ($page < $totalPages && $page < 20);
+
+        return ['inserted' => $inserted, 'updated' => $updated, 'total' => $inserted + $updated];
+    }
+
     private function migrateOrderColumns(): void {
         $cols = DB::rows("SHOW COLUMNS FROM siparisler");
         $names = array_column($cols, 'Field');
