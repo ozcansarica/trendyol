@@ -1,0 +1,78 @@
+name: PHP App Deploy
+
+# main'e push + php-app/ değişikliği → sunucuya deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'php-app/**'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Değişiklik olmasa da deploy et'
+        type: boolean
+        default: false
+
+# Aynı anda tek deploy
+concurrency:
+  group: php-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Sunucuya Deploy (rsync + SSH)
+    runs-on: ubuntu-latest
+
+    # Gerekli GitHub Secrets:
+    #   SSH_HOST       — sunucu IP veya domain (ör. 123.45.67.89 veya example.com)
+    #   SSH_USER       — SSH kullanıcı adı (ör. deploy)
+    #   SSH_PRIVATE_KEY — SSH özel anahtarı (-----BEGIN OPENSSH PRIVATE KEY----- …)
+    #   SSH_PORT       — SSH portu (varsayılan 22, opsiyonel)
+    #   DEPLOY_PATH    — sunucudaki hedef klasör (ör. /var/www/trendyol-analiz)
+    #
+    # Secrets ayarlamak için:
+    #   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP kurulumu (8.2)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, mbstring, json, zip
+          coverage: none
+
+      - name: Composer bağımlılıklarını yükle (production)
+        working-directory: php-app
+        run: composer install --no-interaction --no-progress --prefer-dist --no-dev --optimize-autoloader
+
+      - name: SSH anahtarını ayarla
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SSH_PORT || '22' }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: rsync ile dosyaları gönder
+        run: |
+          rsync -avz --delete \
+            --exclude='.env' \
+            --exclude='uploads/' \
+            --exclude='*.log' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=no" \
+            php-app/ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      - name: Composer autoload'u uzaktan optimize et
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -p "${{ secrets.SSH_PORT || 22 }}" \
+            -o StrictHostKeyChecking=no \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd ${{ secrets.DEPLOY_PATH }} && composer dump-autoload --optimize --no-dev 2>/dev/null || true"
+
+      - name: Anahtarı temizle
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
