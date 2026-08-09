@@ -38,46 +38,39 @@ try {
             }
             $tip    = $_POST['tip']   ?? '';
             $donem  = $_POST['donem'] ?? 'bu_ay';
-            if (!in_array($donem, ['bu_ay','gecen_ay','son_3_ay'])) $donem = 'bu_ay';
+            if (!in_array($donem, ['bu_ay','gecen_ay','son_3_ay','son_6_ay'])) $donem = 'bu_ay';
 
-            // Dönem filtresini DD.MM.YYYY formatına göre hesapla
-            // siparis_tarihi kolonu "28.04.2026" formatında
             $buYil  = (int)date('Y');
             $buAy   = (int)date('n');
 
-            // Her dönem için BETWEEN koşulu oluştur (string karşılaştırma için MM.YYYY)
             $donemLabel = '';
             $aiWhere = "s.magaza_id=? AND s.siparis_statusu NOT LIKE '%İptal%' AND s.siparis_statusu NOT LIKE '%Cancel%'";
             $aiPrms  = [$magazaId];
 
             if ($donem === 'bu_ay') {
-                $mm = sprintf('%02d', $buAy);
-                $yyyy = $buYil;
                 $aiWhere .= " AND SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?";
-                $aiPrms[] = $mm;
-                $aiPrms[] = (string)$yyyy;
+                $aiPrms[] = sprintf('%02d', $buAy);
+                $aiPrms[] = (string)$buYil;
                 $donemLabel = date('F Y');
             } elseif ($donem === 'gecen_ay') {
-                $gecenAy = $buAy === 1 ? 12 : $buAy - 1;
+                $gecenAy  = $buAy === 1 ? 12 : $buAy - 1;
                 $gecenYil = $buAy === 1 ? $buYil - 1 : $buYil;
-                $mm = sprintf('%02d', $gecenAy);
                 $aiWhere .= " AND SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?";
-                $aiPrms[] = $mm;
+                $aiPrms[] = sprintf('%02d', $gecenAy);
                 $aiPrms[] = (string)$gecenYil;
                 $donemLabel = date('F Y', mktime(0,0,0,$gecenAy,1,$gecenYil));
-            } elseif ($donem === 'son_3_ay') {
-                // Son 3 ayın MM.YYYY çiftlerini oluştur ve OR ile birleştir
+            } elseif ($donem === 'son_3_ay' || $donem === 'son_6_ay') {
+                $nAy = $donem === 'son_6_ay' ? 6 : 3;
                 $ayKosullari = [];
-                for ($i = 0; $i < 3; $i++) {
-                    $a = $buAy - $i;
-                    $y = $buYil;
+                for ($i = 0; $i < $nAy; $i++) {
+                    $a = $buAy - $i; $y = $buYil;
                     if ($a <= 0) { $a += 12; $y--; }
                     $ayKosullari[] = "(SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?)";
                     $aiPrms[] = sprintf('%02d', $a);
                     $aiPrms[] = (string)$y;
                 }
                 $aiWhere .= " AND (" . implode(' OR ', $ayKosullari) . ")";
-                $donemLabel = 'Son 3 Ay';
+                $donemLabel = $donem === 'son_6_ay' ? 'Son 6 Ay' : 'Son 3 Ay';
             }
 
             // Veri hazırla
@@ -100,14 +93,15 @@ try {
                     // reklamlar.baslangic_tarihi formatına göre filtre
                     // Reklam tarihi hem DD.MM.YYYY hem YYYY-MM-DD formatında olabilir
                     // Her iki formattan ay ve yıl çıkar, karşılaştır
-                    $reklamAyList = []; // [['ay'=>'05','yil'=>'2026'], ...]
+                    $reklamAyList = [];
                     if ($donem === 'bu_ay') {
                         $reklamAyList[] = ['ay'=>sprintf('%02d',$buAy),'yil'=>(string)$buYil];
                     } elseif ($donem === 'gecen_ay') {
                         $ga=$buAy===1?12:$buAy-1; $gy=$buAy===1?$buYil-1:$buYil;
                         $reklamAyList[] = ['ay'=>sprintf('%02d',$ga),'yil'=>(string)$gy];
-                    } elseif ($donem === 'son_3_ay') {
-                        for ($i=0;$i<3;$i++) {
+                    } elseif ($donem === 'son_3_ay' || $donem === 'son_6_ay') {
+                        $nAy2 = $donem === 'son_6_ay' ? 6 : 3;
+                        for ($i=0;$i<$nAy2;$i++) {
                             $a=$buAy-$i; $y=$buYil; if($a<=0){$a+=12;$y--;}
                             $reklamAyList[] = ['ay'=>sprintf('%02d',$a),'yil'=>(string)$y];
                         }
@@ -186,13 +180,33 @@ try {
                     break;
 
                 case 'odeme':
+                    // Dönem filtresi: islem_tarihi YYYY-MM-DD HH:MM:SS formatında
+                    $odDateConds = []; $odPrmsBase = [$magazaId];
+                    if ($donem === 'bu_ay') {
+                        $odDateConds[] = "DATE_FORMAT(islem_tarihi,'%Y-%m')=?";
+                        $odPrmsBase[] = sprintf('%04d-%02d', $buYil, $buAy);
+                    } elseif ($donem === 'gecen_ay') {
+                        $ga=$buAy===1?12:$buAy-1; $gy=$buAy===1?$buYil-1:$buYil;
+                        $odDateConds[] = "DATE_FORMAT(islem_tarihi,'%Y-%m')=?";
+                        $odPrmsBase[] = sprintf('%04d-%02d', $gy, $ga);
+                    } elseif ($donem === 'son_3_ay' || $donem === 'son_6_ay') {
+                        $nAy3 = $donem === 'son_6_ay' ? 6 : 3;
+                        $odAyList = [];
+                        for ($i=0; $i<$nAy3; $i++) {
+                            $a=$buAy-$i; $y=$buYil; if($a<=0){$a+=12;$y--;}
+                            $odAyList[] = "DATE_FORMAT(islem_tarihi,'%Y-%m')=?";
+                            $odPrmsBase[] = sprintf('%04d-%02d', $y, $a);
+                        }
+                        $odDateConds[] = "(" . implode(' OR ', $odAyList) . ")";
+                    }
+                    $odWhere = "magaza_id=?" . ($odDateConds ? " AND " . implode(" AND ", $odDateConds) : "");
                     $odRows = DB::rows("
                         SELECT islem_tipi, COUNT(*) AS adet,
                                SUM(satici_hakedis) AS toplam_hakedis,
                                SUM(toplam_tutar) AS toplam_tutar
-                        FROM odeme_detay WHERE magaza_id=?
-                        GROUP BY islem_tipi ORDER BY ABS(SUM(satici_hakedis)) DESC", [$magazaId]);
-                    $netHakedis = (float)DB::scalar("SELECT COALESCE(SUM(satici_hakedis),0) FROM odeme_detay WHERE magaza_id=?", [$magazaId]);
+                        FROM odeme_detay WHERE $odWhere
+                        GROUP BY islem_tipi ORDER BY ABS(SUM(satici_hakedis)) DESC", $odPrmsBase);
+                    $netHakedis = (float)DB::scalar("SELECT COALESCE(SUM(satici_hakedis),0) FROM odeme_detay WHERE $odWhere", $odPrmsBase);
                     $bekleyen = DB::rows("
                         SELECT siparis_no, satici_hakedis, vade_tarihi
                         FROM odeme_detay WHERE magaza_id=? AND islem_tipi='Satış'
@@ -217,21 +231,24 @@ try {
                         LEFT JOIN maliyetler m ON m.ty_urun_id=tu.ty_id AND m.magaza_id=tu.magaza_id
                         WHERE tu.magaza_id=? AND m.ty_urun_id IS NULL", [$magazaId]);
                     // Operasyonel reklam da dönem filtreli
-                    $opReklamWhere = "magaza_id=?"; $opRekPrms = [$magazaId];
+                    // Reklam filtresi: hem DD.MM.YYYY hem YYYY-MM-DD formatını destekler
+                    $opAyList = [];
                     if ($donem==='bu_ay') {
-                        $opReklamWhere .= " AND SUBSTRING(baslangic_tarihi,4,2)=? AND SUBSTRING(baslangic_tarihi,7,4)=?";
-                        $opRekPrms[]   = sprintf('%02d',$buAy); $opRekPrms[] = (string)$buYil;
+                        $opAyList[] = ['ay'=>sprintf('%02d',$buAy),'yil'=>(string)$buYil];
                     } elseif ($donem==='gecen_ay') {
                         $ga=$buAy===1?12:$buAy-1; $gy=$buAy===1?$buYil-1:$buYil;
-                        $opReklamWhere .= " AND SUBSTRING(baslangic_tarihi,4,2)=? AND SUBSTRING(baslangic_tarihi,7,4)=?";
-                        $opRekPrms[]   = sprintf('%02d',$ga); $opRekPrms[] = (string)$gy;
-                    } elseif ($donem==='son_3_ay') {
-                        $rk2=[];
-                        for($i=0;$i<3;$i++){$a=$buAy-$i;$y=$buYil;if($a<=0){$a+=12;$y--;}
-                            $rk2[]="(SUBSTRING(baslangic_tarihi,4,2)=? AND SUBSTRING(baslangic_tarihi,7,4)=?)";
-                            $opRekPrms[]=sprintf('%02d',$a);$opRekPrms[]=(string)$y;}
-                        $opReklamWhere.=" AND (".implode(' OR ',$rk2).")";
+                        $opAyList[] = ['ay'=>sprintf('%02d',$ga),'yil'=>(string)$gy];
+                    } elseif ($donem==='son_3_ay' || $donem==='son_6_ay') {
+                        $nAy4 = $donem==='son_6_ay' ? 6 : 3;
+                        for($i=0;$i<$nAy4;$i++){$a=$buAy-$i;$y=$buYil;if($a<=0){$a+=12;$y--;}
+                            $opAyList[]=['ay'=>sprintf('%02d',$a),'yil'=>(string)$y];}
                     }
+                    $opRk=[]; $opRekPrms=[$magazaId];
+                    foreach ($opAyList as $ral) {
+                        $opRk[]="((baslangic_tarihi REGEXP '^[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}' AND SUBSTRING(baslangic_tarihi,4,2)=? AND SUBSTRING(baslangic_tarihi,7,4)=?) OR (baslangic_tarihi REGEXP '^[0-9]{4}-[0-9]{2}' AND SUBSTRING(baslangic_tarihi,6,2)=? AND SUBSTRING(baslangic_tarihi,1,4)=?))";
+                        $opRekPrms[]=$ral['ay'];$opRekPrms[]=$ral['yil'];$opRekPrms[]=$ral['ay'];$opRekPrms[]=$ral['yil'];
+                    }
+                    $opReklamWhere = "magaza_id=?" . ($opRk ? " AND (".implode(' OR ',$opRk).")" : "");
                     $topReklam = DB::rows("SELECT reklam_adi, harcama, tiklanma, goruntulenme FROM reklamlar WHERE $opReklamWhere ORDER BY harcama DESC LIMIT 5", $opRekPrms);
                     $veri = [
                         'toplam_sipariş' => (int)$iadeOran['toplam'],
@@ -250,8 +267,8 @@ try {
 
             // Anthropic API çağrısı
             $payload = json_encode([
-                'model' => 'claude-opus-4-5',
-                'max_tokens' => 1024,
+                'model' => 'claude-haiku-4-5-20251001',
+                'max_tokens' => 2000,
                 'messages' => [['role' => 'user', 'content' => $prompt]]
             ]);
 

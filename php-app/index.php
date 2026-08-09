@@ -3873,7 +3873,7 @@ $digerKalemler = DB::rows("
 $anthropicOk = !empty($magaza['anthropic_api_key'] ?? '') && strlen($magaza['anthropic_api_key']) > 20;
 // Dönem: bu_ay | gecen_ay | son_3_ay (default: bu_ay)
 $aiDonem = $_GET['donem'] ?? 'bu_ay';
-if (!in_array($aiDonem, ['bu_ay','gecen_ay','son_3_ay'])) $aiDonem = 'bu_ay';
+if (!in_array($aiDonem, ['bu_ay','gecen_ay','son_3_ay','son_6_ay'])) $aiDonem = 'bu_ay';
 
 // Kayıtlı yorumları çek
 $kayitliYorumlar = [];
@@ -3902,13 +3902,13 @@ try {
 <!-- Dönem seçici -->
 <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
     <div style="display:flex;gap:6px">
-        <?php foreach(['bu_ay'=>'Bu Ay','gecen_ay'=>'Geçen Ay','son_3_ay'=>'Son 3 Ay'] as $dk=>$dl): ?>
+        <?php foreach(['bu_ay'=>'Bu Ay','gecen_ay'=>'Geçen Ay','son_3_ay'=>'Son 3 Ay','son_6_ay'=>'Son 6 Ay'] as $dk=>$dl): ?>
         <a href="?action=ai_analiz&donem=<?= $dk ?>"
            class="tab-btn <?= $aiDonem===$dk?'active':'' ?>"
            style="font-size:13px;padding:7px 16px"><?= $dl ?></a>
         <?php endforeach; ?>
     </div>
-    <button class="btn btn-primary" onclick="tumunuAnalizeEt()" style="margin-left:auto;font-size:13px;padding:8px 18px">
+    <button class="btn btn-primary" id="btnTumunuAnaliz" onclick="tumunuAnalizeEt()" style="margin-left:auto;font-size:13px;padding:8px 18px">
         ⚡ Tümünü Analiz Et
     </button>
 </div>
@@ -3977,10 +3977,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function renderAiMetin(text) {
     if (!text) return '';
-    text = text.replace(/^#{1,3}\s*/gm, '');
-    text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
-    text = text.replace(/\*([^*]+)\*/g, '$1');
+    // Başlık satırlarını kalın metne çevir (## Başlık)
+    text = text.replace(/^#{1,3}\s+(.+)$/gm, '**$1**');
+    // Liste ön eklerini kaldır
     text = text.replace(/^[-•]\s*/gm, '');
+    // XSS escape
+    var esc = function(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
     var lines = text.split('\n').filter(function(l){ return l.trim(); });
     var html = '';
     lines.forEach(function(line) {
@@ -3990,7 +3992,11 @@ function renderAiMetin(text) {
         if (t.startsWith('🔴'))      s = 'border-left:3px solid var(--red);padding-left:12px;';
         else if (t.startsWith('🟡')) s = 'border-left:3px solid var(--yellow);padding-left:12px;';
         else if (t.startsWith('🟢')) s = 'border-left:3px solid var(--green);padding-left:12px;';
-        html += '<p style="margin:0 0 10px;line-height:1.9;'+s+'">' + t + '</p>';
+        // **bold** → <strong>
+        var formatted = esc(t).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        // *italic* → <em>
+        formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        html += '<p style="margin:0 0 10px;line-height:1.9;'+s+'">' + formatted + '</p>';
     });
     return html || '<p style="color:var(--text2)">Analiz tamamlandı.</p>';
 }
@@ -4027,9 +4033,50 @@ function analizeEt(tip) {
 }
 
 function tumunuAnalizeEt() {
-    ['stratejik','kategori','urun','odeme','operasyonel'].forEach(function(tip, i) {
-        setTimeout(function(){ analizeEt(tip); }, i * 1500);
-    });
+    var tipler = ['stratejik','kategori','urun','odeme','operasyonel'];
+    var tamam = 0;
+    var btnTumunu = document.getElementById('btnTumunuAnaliz');
+    btnTumunu.disabled = true;
+
+    function analizSiradaki(i) {
+        if (i >= tipler.length) {
+            btnTumunu.disabled = false;
+            btnTumunu.textContent = '⚡ Tümünü Analiz Et';
+            return;
+        }
+        btnTumunu.textContent = '⏳ ' + (i+1) + ' / ' + tipler.length + ' analiz ediliyor...';
+        var tip = tipler[i];
+        var btn     = document.getElementById('btn-'+tip);
+        var sonuc   = document.getElementById('sonuc-'+tip);
+        var loading = sonuc.querySelector('.ai-loading');
+        var metin   = sonuc.querySelector('.ai-metin');
+        btn.disabled = true;
+        btn.textContent = '⏳ Analiz ediliyor...';
+        sonuc.style.display = 'block';
+        loading.style.display = 'block';
+        metin.innerHTML = '';
+        post({ action:'ai_analiz', tip:tip, donem:AI_DONEM })
+        .then(function(d) {
+            btn.disabled = false;
+            btn.textContent = '🔄 Yenile';
+            loading.style.display = 'none';
+            if (d.error) {
+                metin.innerHTML = '<div style="color:var(--red);padding:8px 0">❌ ' + d.error + '</div>';
+            } else {
+                metin.innerHTML = renderAiMetin(d.analiz||'');
+            }
+            analizSiradaki(i + 1);
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.textContent = '🤖 Analiz Et';
+            loading.style.display = 'none';
+            metin.innerHTML = '<div style="color:var(--red)">❌ Bağlantı hatası</div>';
+            analizSiradaki(i + 1);
+        });
+    }
+
+    analizSiradaki(0);
 }
 </script>
 
