@@ -1371,6 +1371,19 @@ $page        = max(1, (int)($_GET['p'] ?? 1));
 $perPage     = 30;
 $offset      = ($page - 1) * $perPage;
 
+$sortAllowed = [
+    'title'         => 'tu.title',
+    'category_name' => 'tu.category_name',
+    'brand'         => 'tu.brand',
+    'list_price'    => 'tu.list_price',
+    'sale_price'    => 'tu.sale_price',
+    'quantity'      => 'tu.quantity',
+    'approved'      => 'tu.approved',
+];
+$sortCol = isset($_GET['sort']) && array_key_exists($_GET['sort'], $sortAllowed) ? $_GET['sort'] : 'title';
+$sortDir = ($_GET['dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+$sortSql = $sortAllowed[$sortCol] . ' ' . strtoupper($sortDir);
+
 $conds  = ["tu.magaza_id = ?"]; 
 $params = [$magazaId];
 
@@ -1393,7 +1406,7 @@ $tyUrunler= DB::rows(
     "SELECT tu.*, m.birim_maliyet, m.kargo_maliyeti, m.paket_maliyeti, m.diger_maliyet, m.id as m_id
      FROM trendyol_urunler tu
      LEFT JOIN maliyetler m ON tu.ty_id=m.ty_urun_id AND m.magaza_id=tu.magaza_id
-     $where ORDER BY tu.title LIMIT $perPage OFFSET $offset", $params);
+     $where ORDER BY $sortSql LIMIT $perPage OFFSET $offset", $params);
 $pages    = (int)ceil($total / $perPage);
 $lastSync = DB::scalar("SELECT MAX(cekme_tarihi) FROM trendyol_urunler WHERE magaza_id=?",[$magazaId]);
 
@@ -1417,9 +1430,15 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 <div class="alert alert-warning">⚠️ Trendyol API bilgileri <a href="?action=ayarlar" style="color:var(--primary)">config.php</a>'ye girilmemiş. Ürünleri görmek için API bilgilerini ekleyin.</div>
 <?php endif; ?>
 
+<?php
+$sortUrl   = fn($col) => '?action=ty_urunler&p=1&q='.urlencode($search).'&maliyet='.urlencode($maliyetFilt).'&sort='.$col.'&dir='.($sortCol===$col && $sortDir==='asc' ? 'desc' : 'asc');
+$sortArrow = fn($col) => $sortCol===$col ? ($sortDir==='asc' ? ' <span style="color:var(--primary)">↑</span>' : ' <span style="color:var(--primary)">↓</span>') : ' <span style="color:var(--border);font-size:10px">⇅</span>';
+?>
 <div class="card" style="padding:15px 20px;margin-bottom:15px">
 <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <input type="hidden" name="action" value="ty_urunler">
+    <input type="hidden" name="sort" value="<?= htmlspecialchars($sortCol) ?>">
+    <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir) ?>">
     <div class="form-group" style="flex:1;min-width:200px;margin:0">
         <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Ürün adı, barkod, stok kodu...">
     </div>
@@ -1433,16 +1452,16 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 <!-- Maliyet filtre butonları -->
 <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--text2);align-self:center">Maliyet:</span>
-    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>"
+    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>&sort=<?= $sortCol ?>&dir=<?= $sortDir ?>"
        class="tab-btn <?= $maliyetFilt==='' ? 'active' : '' ?>" style="padding:5px 12px;font-size:12px">
        Tümü (<?= $cntVar+$cntYok ?>)
     </a>
-    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>&maliyet=yok"
+    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>&maliyet=yok&sort=<?= $sortCol ?>&dir=<?= $sortDir ?>"
        class="tab-btn <?= $maliyetFilt==='yok' ? 'active' : '' ?>"
        style="padding:5px 12px;font-size:12px;<?= $maliyetFilt==='yok'?'':'border-color:var(--red);color:var(--red)' ?>">
        ❌ Maliyetsiz (<?= $cntYok ?>)
     </a>
-    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>&maliyet=var"
+    <a href="?action=ty_urunler&q=<?= urlencode($search) ?>&maliyet=var&sort=<?= $sortCol ?>&dir=<?= $sortDir ?>"
        class="tab-btn <?= $maliyetFilt==='var' ? 'active' : '' ?>"
        style="padding:5px 12px;font-size:12px;<?= $maliyetFilt==='var'?'':'border-color:var(--green);color:var(--green)' ?>">
        ✅ Maliyetli (<?= $cntVar ?>)
@@ -1457,12 +1476,15 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 <?php else: ?>
 <div style="overflow-x:auto"><table>
 <thead><tr>
-    <th>Görsel</th><th>Ürün Adı / Barkod</th><th>Kategori</th><th>Marka</th>
+    <th>Görsel</th>
+    <th><a href="<?= $sortUrl('title') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Ürün Adı / Barkod<?= $sortArrow('title') ?></a></th>
+    <th><a href="<?= $sortUrl('category_name') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Kategori<?= $sortArrow('category_name') ?></a></th>
+    <th><a href="<?= $sortUrl('brand') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Marka<?= $sortArrow('brand') ?></a></th>
     <th>Renk / Beden</th>
-    <th style="text-align:right">Liste Fiyatı</th>
-    <th style="text-align:right">Satış Fiyatı</th>
-    <th style="text-align:right">Stok</th>
-    <th>Durum</th>
+    <th style="text-align:right"><a href="<?= $sortUrl('list_price') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Liste Fiyatı<?= $sortArrow('list_price') ?></a></th>
+    <th style="text-align:right"><a href="<?= $sortUrl('sale_price') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Satış Fiyatı<?= $sortArrow('sale_price') ?></a></th>
+    <th style="text-align:right"><a href="<?= $sortUrl('quantity') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Stok<?= $sortArrow('quantity') ?></a></th>
+    <th><a href="<?= $sortUrl('approved') ?>" style="color:inherit;text-decoration:none;white-space:nowrap">Durum<?= $sortArrow('approved') ?></a></th>
     <th style="text-align:right">Birim Maliyet</th>
     <th>Eşleşme</th>
 </tr></thead>
@@ -1511,7 +1533,7 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 <?php if ($pages > 1): ?>
 <div style="padding:15px 20px;display:flex;gap:8px;flex-wrap:wrap">
     <?php for ($i=1;$i<=$pages;$i++): ?>
-    <a href="?action=ty_urunler&p=<?= $i ?>&q=<?= urlencode($search) ?>&maliyet=<?= urlencode($maliyetFilt) ?>" class="tab-btn <?= $i===$page?'active':'' ?>" style="padding:5px 10px;font-size:12px"><?= $i ?></a>
+    <a href="?action=ty_urunler&p=<?= $i ?>&q=<?= urlencode($search) ?>&maliyet=<?= urlencode($maliyetFilt) ?>&sort=<?= $sortCol ?>&dir=<?= $sortDir ?>" class="tab-btn <?= $i===$page?'active':'' ?>" style="padding:5px 10px;font-size:12px"><?= $i ?></a>
     <?php endfor; ?>
 </div>
 <?php endif; ?>
