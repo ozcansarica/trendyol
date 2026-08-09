@@ -18,20 +18,54 @@ concurrency:
   group: php-deploy
   cancel-in-progress: true
 
+# Gerekli GitHub Secrets (Settings → Secrets and variables → Actions):
+#   SSH_HOST        — sunucu IP veya domain (ör. 123.45.67.89)
+#   SSH_USER        — SSH kullanıcı adı (ör. deploy)
+#   SSH_PRIVATE_KEY — SSH özel anahtarı (-----BEGIN OPENSSH PRIVATE KEY----- …)
+#   SSH_PORT        — SSH portu (varsayılan 22, opsiyonel)
+#   DEPLOY_PATH     — sunucudaki hedef klasör (ör. /var/www/trendyol)
+#   HEALTH_URL      — (opsiyonel) deploy sonrası kontrol edilecek URL
+
 jobs:
+  lint:
+    name: PHP Sözdizimi Kontrolü
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP kurulumu (8.2)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, mbstring, json, zip
+          coverage: none
+
+      - name: Composer bağımlılıklarını yükle
+        working-directory: php-app
+        run: composer install --no-interaction --no-progress --prefer-dist --no-dev
+
+      - name: PHP sözdizimi kontrolü (tüm .php dosyaları)
+        run: |
+          errors=0
+          while IFS= read -r -d '' file; do
+            result=$(php -l "$file" 2>&1)
+            if ! echo "$result" | grep -q "No syntax errors"; then
+              echo "HATA: $file"
+              echo "$result"
+              errors=$((errors + 1))
+            fi
+          done < <(find php-app -name "*.php" ! -path "*/vendor/*" -print0)
+          if [ $errors -gt 0 ]; then
+            echo "❌ $errors dosyada sözdizimi hatası bulundu. Deploy iptal edildi."
+            exit 1
+          fi
+          echo "✅ Tüm PHP dosyaları sözdizimi kontrolünden geçti."
+
   deploy:
     name: Sunucuya Deploy (rsync + SSH)
     runs-on: ubuntu-latest
-
-    # Gerekli GitHub Secrets:
-    #   SSH_HOST       — sunucu IP veya domain (ör. 123.45.67.89 veya example.com)
-    #   SSH_USER       — SSH kullanıcı adı (ör. deploy)
-    #   SSH_PRIVATE_KEY — SSH özel anahtarı (-----BEGIN OPENSSH PRIVATE KEY----- …)
-    #   SSH_PORT       — SSH portu (varsayılan 22, opsiyonel)
-    #   DEPLOY_PATH    — sunucudaki hedef klasör (ör. /var/www/trendyol-analiz)
-    #
-    # Secrets ayarlamak için:
-    #   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+    needs: lint
 
     steps:
       - name: Checkout
@@ -61,6 +95,7 @@ jobs:
             --exclude='.env' \
             --exclude='uploads/' \
             --exclude='*.log' \
+            --exclude='.git' \
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }} -o StrictHostKeyChecking=no" \
             php-app/ \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
@@ -72,6 +107,34 @@ jobs:
             -o StrictHostKeyChecking=no \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "cd ${{ secrets.DEPLOY_PATH }} && composer dump-autoload --optimize --no-dev 2>/dev/null || true"
+
+      - name: Sağlık kontrolü (health check)
+        if: ${{ secrets.HEALTH_URL != '' }}
+        run: |
+          URL="${{ secrets.HEALTH_URL }}"
+          echo "Kontrol ediliyor: $URL"
+          for i in 1 2 3; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$URL" || echo "000")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "302" ]; then
+              echo "✅ Uygulama çalışıyor (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "⏳ Deneme $i/3 — HTTP $STATUS, 5s bekleniyor..."
+            sleep 5
+          done
+          echo "⚠️ Sağlık kontrolü başarısız (son HTTP: $STATUS) — deploy tamamlandı fakat sunucu yanıt vermiyor."
+          exit 1
+
+      - name: Deploy özeti
+        if: always()
+        run: |
+          echo "### Deploy Özeti" >> $GITHUB_STEP_SUMMARY
+          echo "| Alan | Değer |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Sunucu | \`${{ secrets.SSH_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Hedef Klasör | \`${{ secrets.DEPLOY_PATH }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tetikleyen | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Anahtarı temizle
         if: always()
