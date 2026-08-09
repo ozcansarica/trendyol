@@ -209,6 +209,10 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch(PDOException $e) {}
 
+    // reklamlar.kampanya_id kolonu — Reklam API upsert için
+    $migrate('reklamlar', 'kampanya_id', "VARCHAR(80) DEFAULT NULL");
+    try { DB::get()->exec("CREATE UNIQUE INDEX IF NOT EXISTS uk_kampanya ON reklamlar (magaza_id, kampanya_id)"); } catch(PDOException $e) {}
+
     // reklamlar tablosu
     try {
         DB::get()->exec("CREATE TABLE IF NOT EXISTS `reklamlar` (
@@ -727,12 +731,44 @@ input[type="file"]{display:none;}
 .tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1d2e;}
 #toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;z-index:9999;display:none;max-width:350px;}
 .hidden{display:none!important;}
+
+/* ── Hamburger ── */
+.hamburger{display:none;position:fixed;top:12px;left:12px;z-index:300;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;flex-direction:column;gap:4px;align-items:center;}
+.hamburger span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:.2s;}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;}
+
+/* ── Mobile ── */
+@media(max-width:820px){
+  .hamburger{display:flex;}
+  .sidebar{transform:translateX(-240px);transition:transform .25s ease;z-index:200;width:220px;}
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-overlay.open{display:block;}
+  .main{margin-left:0;padding:16px 14px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  [style*="grid-template-columns:repeat(5,1fr)"],[style*="grid-template-columns:repeat(4,1fr)"]{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
+  [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important;}
+  .page-title{font-size:17px;padding-top:44px;}
+  table{font-size:12px;}
+  th,td{padding:7px 8px!important;}
+  .btn{padding:8px 12px;font-size:12px;}
+  .form-grid{grid-template-columns:1fr!important;}
+  .chart-wrap{height:200px;}
+  .tip-box{left:0;transform:none;white-space:normal;min-width:160px;max-width:280px;}
+  #toast{left:10px;right:10px;bottom:10px;}
+}
+@media(min-width:821px){
+  .sidebar-overlay{display:none!important;}
+}
 </style>
 </head>
 <body>
 <div id="toast"></div>
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()" aria-label="Menü">
+    <span></span><span></span><span></span>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
     <div class="logo">🛒 <?= htmlspecialchars($magaza['magaza_adi']) ?><span>Kar/Zarar Analizi</span></div>
     <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);margin-bottom:8px">
         <div style="font-size:11px;color:var(--text2)">👤 <?= htmlspecialchars($authUser['ad'] ?: $authUser['email']) ?></div>
@@ -758,6 +794,8 @@ input[type="file"]{display:none;}
     <a href="?action=ty_urunler" class="<?= $action==='ty_urunler'?'active':'' ?>"><span>🔄</span> Trendyol Ürünleri</a>
     <a href="?action=veri_yukle" class="<?= $action==='veri_yukle'?'active':'' ?>"><span>📤</span> Veri Yükle</a>
     <a href="?action=ayarlar" class="<?= $action==='ayarlar'?'active':'' ?>"><span>⚙️</span> Ayarlar / API</a>
+    <div class="sep">Araçlar</div>
+    <a href="?action=karsilastir" class="<?= $action==='karsilastir'?'active':'' ?>"><span>⚖️</span> Mağaza Karşılaştır</a>
     <a href="logout.php" style="position:absolute;bottom:15px;left:0;right:0"><span>🚪</span> Çıkış Yap</a>
 </div>
 
@@ -2431,7 +2469,14 @@ $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
 ?>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
     <div class="page-title" style="margin:0">📣 <span>Reklam Analizi</span></div>
-    <a href="?action=veri_yukle" class="btn btn-sm" style="font-size:12px">📤 Reklam Excel Yükle</a>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <?php if ($apiOk): ?>
+        <button class="btn btn-success btn-sm" onclick="syncAdsApi(this)" style="font-size:12px">
+            🔄 API'den Çek
+        </button>
+        <?php endif; ?>
+        <a href="?action=veri_yukle" class="btn btn-sm" style="font-size:12px;background:var(--bg3);color:var(--text2)">📤 Excel Yükle</a>
+    </div>
 </div>
 
 <?php if (empty($reklamlar)): ?>
@@ -3904,6 +3949,181 @@ function tumunuAnalizeEt() {
 
 <?php endif; ?>
 
+<?php elseif ($action === 'karsilastir'): ?>
+<?php
+$authUser2 = authUser();
+$userMagazalar = DB::rows(
+    "SELECT id, magaza_adi, ty_seller_id FROM magazalar WHERE kullanici_id=? AND aktif=1 ORDER BY id",
+    [$authUser2['id'] ?? 0]
+);
+
+// Tüm dönemler
+$donemler = [];
+foreach ($userMagazalar as $um) {
+    $ds = DB::rows(
+        "SELECT DISTINCT LEFT(siparis_tarihi,7) AS yyaa FROM siparisler
+         WHERE magaza_id=? AND siparis_tarihi!='' ORDER BY yyaa DESC LIMIT 18",
+        [(int)$um['id']]
+    );
+    foreach ($ds as $d) { if ($d['yyaa']) $donemler[$d['yyaa']] = true; }
+}
+krsort($donemler);
+$donemler = array_keys($donemler);
+$selDonem = $_GET['donem'] ?? ($donemler[0] ?? '');
+$donemSql = $selDonem ? " AND LEFT(siparis_tarihi,7)='{$selDonem}'" : '';
+
+// Her mağaza için veriler
+$karsiData = [];
+foreach ($userMagazalar as $um) {
+    $mid = (int)$um['id'];
+    $s = DB::row(
+        "SELECT COUNT(*) AS s, COALESCE(SUM(siparis_tutari),0) AS ciro,
+                COALESCE(SUM(net_tutar),0) AS net, COALESCE(SUM(komisyon),0) AS kom,
+                COALESCE(SUM(iade),0) AS iade, COALESCE(SUM(iptal),0) AS iptal,
+                COALESCE(AVG(NULLIF(siparis_tutari,0)),0) AS ort
+         FROM siparisler WHERE magaza_id=$mid" . $donemSql
+    ) ?? [];
+    $urun   = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler WHERE magaza_id=? AND approved=1", [$mid]);
+    $r = DB::row("SELECT COALESCE(SUM(harcama),0) AS h, COALESCE(SUM(toplam_ciro),0) AS c FROM reklamlar WHERE magaza_id=?", [$mid]) ?? [];
+    $talep  = (int)DB::scalar("SELECT COUNT(*) FROM talepler WHERE magaza_id=?", [$mid]);
+    $ciro   = (float)($s['ciro'] ?? 0);
+    $hrc    = (float)($r['h'] ?? 0);
+    $karsiData[] = [
+        'id'       => $mid, 'adi' => $um['magaza_adi'], 'seller_id' => $um['ty_seller_id'],
+        'siparis'  => (int)($s['s'] ?? 0),
+        'ciro'     => $ciro,
+        'net'      => (float)($s['net'] ?? 0),
+        'kom'      => (float)($s['kom'] ?? 0),
+        'kom_oran' => $ciro > 0 ? round((float)($s['kom'] ?? 0) / $ciro * 100, 1) : 0,
+        'ort'      => round((float)($s['ort'] ?? 0), 0),
+        'iade'     => (float)($s['iade'] ?? 0),
+        'iptal'    => (float)($s['iptal'] ?? 0),
+        'urun'     => $urun,
+        'rek_hrc'  => $hrc,
+        'rek_ciro' => (float)($r['c'] ?? 0),
+        'roas'     => $hrc > 0 ? round((float)($r['c'] ?? 0) / $hrc, 2) : 0,
+        'talep'    => $talep,
+    ];
+}
+
+$ayIsim = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May','06'=>'Haz',
+           '07'=>'Tem','08'=>'Ağu','09'=>'Eyl','10'=>'Eki','11'=>'Kas','12'=>'Ara'];
+
+function bestIdx(array $data, string $key, bool $lower = false): int {
+    if (empty($data)) return -1;
+    $vals = array_column($data, $key);
+    $fn = $lower ? 'min' : 'max';
+    $best = $fn($vals);
+    return (int)array_search($best, $vals);
+}
+?>
+<div class="page-title">⚖️ <span>Mağaza Karşılaştırma</span></div>
+
+<?php if (count($userMagazalar) < 2): ?>
+<div class="card"><div class="no-data">
+    <div class="icon">🏪</div>
+    <p style="font-size:15px;margin-bottom:8px">Karşılaştırma için en az 2 mağaza gerekli</p>
+    <p style="color:var(--text2)">Mağaza Değiştir → Yeni Mağaza Ekle ile başka bir mağaza oluşturun.</p>
+</div></div>
+<?php else: ?>
+
+<!-- Dönem seçimi -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--text2)">Dönem:</span>
+    <a href="?action=karsilastir" class="tab-btn <?= $selDonem===''?'active':'' ?>" style="padding:5px 12px;font-size:12px">Tümü</a>
+    <?php foreach ($donemler as $dk):
+        $parts = explode('-', $dk);
+        $lbl = ($ayIsim[$parts[1]??''] ?? ($parts[1]??'')) . ' ' . ($parts[0]??'');
+    ?>
+    <a href="?action=karsilastir&donem=<?= urlencode($dk) ?>" class="tab-btn <?= $selDonem===$dk?'active':'' ?>" style="padding:5px 12px;font-size:12px"><?= $lbl ?></a>
+    <?php endforeach; ?>
+</div>
+
+<!-- Karşılaştırma tablosu -->
+<div class="card" style="padding:0;overflow:hidden">
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;min-width:560px">
+<thead><tr style="background:var(--bg3)">
+    <th style="padding:10px 16px;font-size:11px;text-transform:uppercase;color:var(--text2);font-weight:500;text-align:left">Metrik</th>
+    <?php foreach ($karsiData as $km): ?>
+    <th style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--primary);text-align:right">
+        <?= htmlspecialchars($km['adi']) ?>
+        <?php if ($km['seller_id']): ?>
+        <div style="font-size:10px;color:var(--text2);font-weight:400">ID: <?= htmlspecialchars($km['seller_id']) ?></div>
+        <?php endif; ?>
+    </th>
+    <?php endforeach; ?>
+</tr></thead>
+<tbody>
+<?php
+$rows = [
+    ['label'=>'Sipariş Sayısı',    'key'=>'siparis', 'fmt'=>'int',  'best'=>'max'],
+    ['label'=>'Toplam Ciro',       'key'=>'ciro',    'fmt'=>'tl',   'best'=>'max'],
+    ['label'=>'Net Kazanç',        'key'=>'net',     'fmt'=>'tl',   'best'=>'max'],
+    ['label'=>'Komisyon',          'key'=>'kom',     'fmt'=>'tl',   'best'=>'min'],
+    ['label'=>'Komisyon Oranı',    'key'=>'kom_oran','fmt'=>'pct',  'best'=>'min'],
+    ['label'=>'Ort. Sipariş',      'key'=>'ort',     'fmt'=>'tl',   'best'=>'max'],
+    ['label'=>'İade',              'key'=>'iade',    'fmt'=>'tl',   'best'=>'min'],
+    ['label'=>'İptal',             'key'=>'iptal',   'fmt'=>'tl',   'best'=>'min'],
+    ['label'=>'Aktif Ürün',        'key'=>'urun',    'fmt'=>'int',  'best'=>'max'],
+    ['label'=>'Reklam Harcaması',  'key'=>'rek_hrc', 'fmt'=>'tl',   'best'=>'min'],
+    ['label'=>'Reklam Cirosu',     'key'=>'rek_ciro','fmt'=>'tl',   'best'=>'max'],
+    ['label'=>'ROAS',              'key'=>'roas',    'fmt'=>'x',    'best'=>'max'],
+    ['label'=>'Talep / İade',      'key'=>'talep',   'fmt'=>'int',  'best'=>'min'],
+];
+foreach ($rows as $ri => $row):
+    $bestI = bestIdx($karsiData, $row['key'], $row['best']==='min');
+?>
+<tr style="border-bottom:1px solid var(--border);background:<?= $ri%2===0?'rgba(255,255,255,.015)':'' ?>">
+    <td style="padding:9px 16px;font-size:12px;color:var(--text2);font-weight:500;white-space:nowrap"><?= $row['label'] ?></td>
+    <?php foreach ($karsiData as $ci => $km):
+        $v = $km[$row['key']];
+        $isBest = $ci === $bestI && $v != 0;
+        $fmt = $row['fmt'];
+        if ($fmt==='tl')  $disp = fmtTL($v);
+        elseif($fmt==='int') $disp = number_format($v,0,',','.');
+        elseif($fmt==='pct') $disp = fmt($v,1).'%';
+        elseif($fmt==='x')   $disp = $v.'×';
+        else $disp = $v;
+    ?>
+    <td style="padding:9px 14px;text-align:right;font-weight:<?= $isBest?'700':'400' ?>;color:<?= $isBest?'var(--'.($row['best']==='max'?'green':'red').')':'var(--text)' ?>">
+        <?= $disp ?>
+        <?= $isBest ? '<span style="font-size:10px;margin-left:3px">'.($row['best']==='max'?'▲':'▼').'</span>' : '' ?>
+    </td>
+    <?php endforeach; ?>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- Toplam skor kartı -->
+<div style="display:grid;grid-template-columns:repeat(<?= count($karsiData) ?>,1fr);gap:12px;margin-top:16px">
+<?php
+$skors = [];
+foreach ($karsiData as $ci => $km) {
+    $skor = 0;
+    foreach ($rows as $row) {
+        $bestI = bestIdx($karsiData, $row['key'], $row['best']==='min');
+        if ($ci === $bestI && $km[$row['key']] != 0) $skor++;
+    }
+    $skors[] = $skor;
+}
+$maxSkor = max($skors);
+foreach ($karsiData as $ci => $km): ?>
+<div class="card" style="text-align:center;padding:16px 12px;border-top:3px solid <?= $skors[$ci]===$maxSkor?'var(--green)':'var(--border)' ?>">
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px"><?= htmlspecialchars($km['adi']) ?></div>
+    <div style="font-size:28px;font-weight:700;color:<?= $skors[$ci]===$maxSkor?'var(--green)':'var(--text)' ?>"><?= $skors[$ci] ?></div>
+    <div style="font-size:11px;color:var(--text2);margin-top:4px">/ <?= count($rows) ?> metrikte en iyi</div>
+    <?php if ($skors[$ci]===$maxSkor): ?>
+    <div style="font-size:11px;color:var(--green);margin-top:6px;font-weight:600">🏆 En iyi performans</div>
+    <?php endif; ?>
+</div>
+<?php endforeach; ?>
+</div>
+<?php endif; ?>
+
 <?php elseif ($action === 'ayarlar'): ?>
 <?php
 // Ayarlar kaydet
@@ -4155,6 +4375,26 @@ function clearTable(tbl) {
     post({action:'clear_table', table:tbl}).then(d => {
         if (d.ok) { toast('✅ Temizlendi'); setTimeout(()=>location.reload(),800); }
     });
+}
+
+// Mobil sidebar toggle
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// Reklam API sync
+function syncAdsApi(btn) {
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Çekiliyor…';
+    post({action: 'sync_ads'}).then(d => {
+        if (d.error) { toast('❌ ' + d.error, false); }
+        else { toast(`✅ ${d.inserted} yeni, ${d.updated} güncellendi (Toplam: ${d.total})`); setTimeout(()=>location.reload(), 1200); }
+    }).finally(() => { btn.disabled = false; btn.textContent = orig; });
 }
 
 function selectCostProduct(sel) {
