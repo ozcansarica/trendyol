@@ -734,7 +734,10 @@ input[type="file"]{display:none;}
 
 /* ── Hamburger ── */
 .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:300;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;flex-direction:column;gap:4px;align-items:center;}
-.hamburger span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:.2s;}
+.hamburger span{display:block;width:18px;height:2px;background:var(--text);border-radius:2px;transition:transform .25s ease, opacity .2s ease;}
+.hamburger.open span:nth-child(1){transform:translateY(6px) rotate(45deg);}
+.hamburger.open span:nth-child(2){opacity:0;transform:scaleX(0);}
+.hamburger.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg);}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;}
 
 /* ── Mobile ── */
@@ -755,6 +758,22 @@ input[type="file"]{display:none;}
   .chart-wrap{height:200px;}
   .tip-box{left:0;transform:none;white-space:normal;min-width:160px;max-width:280px;}
   #toast{left:10px;right:10px;bottom:10px;}
+  /* Sabit genişlikli arama inputları tam genişliğe */
+  input[type="text"][style*="width:200px"],
+  input[type="text"][style*="width:220px"],
+  input[type="text"][style*="width:180px"]{width:100%!important;min-width:0!important;}
+  /* Arama formlarının satır sonuna geçmesi */
+  form[style*="display:flex"]{flex-wrap:wrap!important;}
+  /* 3 mağaza karşılaştırma grid'i → 2 sütun */
+  [style*="grid-template-columns:repeat(3,1fr)"]{display:grid!important;grid-template-columns:repeat(2,1fr)!important;}
+  /* Komisyon paneli: yan border → üst border (mobilde alt alta dizilince) */
+  [style*="border-left:1px solid var(--border);padding-left:16px"]{border-left:none!important;padding-left:0!important;border-top:1px solid var(--border);padding-top:12px!important;}
+  /* Sidebar nav daha geniş dokunma alanı */
+  .sidebar a{padding:13px 20px!important;}
+  /* Bütün inputlar kutu boyutunu aşmasın */
+  input[type="text"],input[type="email"],input[type="password"],select,textarea{max-width:100%;box-sizing:border-box;}
+  /* Kart başlıkları */
+  .card-title{font-size:13px;}
 }
 @media(min-width:821px){
   .sidebar-overlay{display:none!important;}
@@ -4381,11 +4400,24 @@ function clearTable(tbl) {
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('sidebarOverlay').classList.toggle('open');
+    document.getElementById('hamburger').classList.toggle('open');
 }
 function closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebarOverlay').classList.remove('open');
+    document.getElementById('hamburger').classList.remove('open');
 }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+// Kaydırarak kapatma (swipe-left)
+(function(){
+    var startX, startY;
+    var sid = document.getElementById('sidebar');
+    sid.addEventListener('touchstart', function(e){ startX=e.touches[0].clientX; startY=e.touches[0].clientY; }, {passive:true});
+    sid.addEventListener('touchend', function(e){
+        var dx=e.changedTouches[0].clientX-startX, dy=e.changedTouches[0].clientY-startY;
+        if (dx < -40 && Math.abs(dy) < 60) closeSidebar();
+    }, {passive:true});
+})();
 
 // Reklam API sync
 function syncAdsApi(btn) {
