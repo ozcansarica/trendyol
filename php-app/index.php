@@ -4013,6 +4013,7 @@ foreach ($userMagazalar as $um) {
 krsort($donemler);
 $donemler = array_keys($donemler);
 $selDonem = $_GET['donem'] ?? ($donemler[0] ?? '');
+if (!$selDonem && !empty($donemler)) $selDonem = $donemler[0];
 $donemSql = $selDonem ? " AND LEFT(siparis_tarihi,7)='{$selDonem}'" : '';
 
 // Her mağaza için veriler
@@ -4027,7 +4028,8 @@ foreach ($userMagazalar as $um) {
          FROM siparisler WHERE magaza_id=$mid" . $donemSql
     ) ?? [];
     $urun   = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler WHERE magaza_id=? AND approved=1", [$mid]);
-    $r = DB::row("SELECT COALESCE(SUM(harcama),0) AS h, COALESCE(SUM(toplam_ciro),0) AS c FROM reklamlar WHERE magaza_id=?", [$mid]) ?? [];
+    $rekDonemSql = $selDonem ? " AND LEFT(baslangic_tarihi,7)='" . $selDonem . "'" : '';
+    $r = DB::row("SELECT COALESCE(SUM(harcama),0) AS h, COALESCE(SUM(toplam_ciro),0) AS c FROM reklamlar WHERE magaza_id=$mid" . $rekDonemSql) ?? [];
     $ciro   = (float)($s['ciro'] ?? 0);
     $hrc    = (float)($r['h'] ?? 0);
     $karsiData[] = [
@@ -4070,8 +4072,7 @@ function bestIdx(array $data, string $key, bool $lower = false): int {
 
 <!-- Dönem seçimi -->
 <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-    <span style="font-size:12px;color:var(--text2)">Dönem:</span>
-    <a href="?action=karsilastir" class="tab-btn <?= $selDonem===''?'active':'' ?>" style="padding:5px 12px;font-size:12px">Tümü</a>
+    <span style="font-size:12px;color:var(--text2)">Ay:</span>
     <?php foreach ($donemler as $dk):
         $parts = explode('-', $dk);
         $lbl = ($ayIsim[$parts[1]??''] ?? ($parts[1]??'')) . ' ' . ($parts[0]??'');
