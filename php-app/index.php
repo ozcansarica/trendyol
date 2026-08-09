@@ -2483,6 +2483,14 @@ $filtreliReklamlar = $selAyReklam
     ? array_filter($reklamlar, fn($r) => $r['yyaa'] === $selAyReklam)
     : $reklamlar;
 
+// Sayfalama
+$rekPerPage = 20;
+$rekPage    = max(1, (int)($_GET['rp'] ?? 1));
+$rekToplam  = count($filtreliReklamlar);
+$rekPages   = max(1, (int)ceil($rekToplam / $rekPerPage));
+$rekPage    = min($rekPage, $rekPages);
+$filtreliReklamlarSayfa = array_slice(array_values($filtreliReklamlar), ($rekPage - 1) * $rekPerPage, $rekPerPage);
+
 $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
                 '06'=>'Haz','07'=>'Tem','08'=>'Ağu','09'=>'Eyl','10'=>'Eki','11'=>'Kas','12'=>'Ara'];
 ?>
@@ -2521,6 +2529,92 @@ $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
         <div class="kpi-sub">ROAS ≥2 karlı</div>
     </div>
 </div>
+
+<!-- Aylık Reklam Performans Grafiği -->
+<?php if (!empty($reklamAylar)): ?>
+<?php
+$chartAylar = array_reverse($reklamAylar);
+$chartLabels  = [];
+$chartHarcama = [];
+$chartCiro    = [];
+$chartRoas    = [];
+foreach ($chartAylar as $ay) {
+    $p = explode('-', $ay['yyaa']);
+    $chartLabels[]  = ($ayIsimleriR[$p[1] ?? ''] ?? ($p[1] ?? '')).' '.($p[0] ?? '');
+    $chartHarcama[] = (float)$ay['toplam_harcama'];
+    $chartCiro[]    = (float)$ay['toplam_ciro'];
+    $chartRoas[]    = (float)$ay['roas'];
+}
+?>
+<div class="card" style="padding:16px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:12px">📊 Aylık Reklam Performansı</div>
+    <div class="chart-wrap" style="height:220px"><canvas id="reklamChart"></canvas></div>
+</div>
+<script>
+(function(){
+    var ctx = document.getElementById('reklamChart');
+    if (!ctx) return;
+    new Chart(ctx, {
+        data: {
+            labels: <?= json_encode($chartLabels) ?>,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Harcama (₺)',
+                    data: <?= json_encode($chartHarcama) ?>,
+                    backgroundColor: 'rgba(248,113,113,.7)',
+                    borderColor: 'rgba(248,113,113,1)',
+                    borderWidth: 1,
+                    yAxisID: 'yTL'
+                },
+                {
+                    type: 'bar',
+                    label: 'Reklam Cirosu (₺)',
+                    data: <?= json_encode($chartCiro) ?>,
+                    backgroundColor: 'rgba(96,165,250,.65)',
+                    borderColor: 'rgba(96,165,250,1)',
+                    borderWidth: 1,
+                    yAxisID: 'yTL'
+                },
+                {
+                    type: 'line',
+                    label: 'ROAS',
+                    data: <?= json_encode($chartRoas) ?>,
+                    borderColor: 'rgba(74,222,128,1)',
+                    backgroundColor: 'rgba(74,222,128,.12)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: 'rgba(74,222,128,1)',
+                    tension: 0.3,
+                    yAxisID: 'yROAS',
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#a1a1aa', font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: function(c) {
+                            if (c.dataset.yAxisID==='yROAS') return ' ROAS: '+c.raw+'×';
+                            return ' '+c.dataset.label+': '+c.raw.toLocaleString('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0});
+                        }
+                    }
+                }
+            },
+            scales: {
+                yTL:   { type:'linear', position:'left',  grid:{ color:'rgba(255,255,255,.06)' }, ticks:{ color:'#a1a1aa', font:{size:10}, callback: v => v>=1000?(v/1000).toFixed(0)+'K₺':v+'₺' } },
+                yROAS: { type:'linear', position:'right', grid:{ drawOnChartArea:false }, ticks:{ color:'#4ade80', font:{size:10}, callback: v => v+'×' }, min:0 },
+                x:     { grid:{ color:'rgba(255,255,255,.04)' }, ticks:{ color:'#a1a1aa', font:{size:10} } }
+            }
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <!-- Karlı / Zararlı özet -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -2599,7 +2693,7 @@ $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
             </span>
             <?php endif; ?>
         </div>
-        <span style="font-size:12px;color:var(--text2)"><?= count($filtreliReklamlar) ?> kampanya</span>
+        <span style="font-size:12px;color:var(--text2)"><?= $rekToplam ?> kampanya<?= $rekPages > 1 ? ' · Sayfa '.$rekPage.'/'.$rekPages : '' ?></span>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     <thead><tr style="background:var(--bg3)">
@@ -2613,7 +2707,7 @@ $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
         <th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--text2);text-transform:uppercase;font-weight:500">ROAS</th>
         <th style="text-align:right;padding:8px 16px;font-size:11px;color:var(--text2);text-transform:uppercase;font-weight:500">Net Etki</th>
     </tr></thead><tbody>
-    <?php foreach ($filtreliReklamlar as $r):
+    <?php foreach ($filtreliReklamlarSayfa as $r):
         $roas   = (float)$r['roas'];
         $netEtki= (float)$r['toplam_ciro'] - (float)$r['harcama'];
         $statuKls = $r['statu']==='Yayında'?'badge-blue':($r['statu']==='Tamamlandı'?'badge-green':'badge-orange');
@@ -2637,21 +2731,35 @@ $ayIsimleriR = ['01'=>'Oca','02'=>'Şub','03'=>'Mar','04'=>'Nis','05'=>'May',
     <?php endforeach; ?>
     <!-- Toplam -->
     <?php
-    $fH = array_sum(array_column(array_values($filtreliReklamlar),'harcama'));
-    $fC = array_sum(array_column(array_values($filtreliReklamlar),'toplam_ciro'));
+    $allFilt = array_values($filtreliReklamlar);
+    $fH = array_sum(array_column($allFilt,'harcama'));
+    $fC = array_sum(array_column($allFilt,'toplam_ciro'));
     $fR = $fH > 0 ? round($fC/$fH,2) : 0;
     ?>
     <tr style="background:var(--bg3);border-top:2px solid var(--border);font-weight:600">
-        <td style="padding:9px 16px">Toplam</td>
+        <td style="padding:9px 16px">Toplam (<?= $rekToplam ?> kampanya)</td>
         <td></td><td></td>
         <td style="text-align:right;padding:9px 12px;color:var(--red)"><?= fmtTL($fH) ?></td>
-        <td style="text-align:right;padding:9px 12px"><?= number_format(array_sum(array_column(array_values($filtreliReklamlar),'tiklanma')),0,',','.') ?></td>
-        <td style="text-align:right;padding:9px 12px"><?= array_sum(array_column(array_values($filtreliReklamlar),'toplam_satis')) ?></td>
+        <td style="text-align:right;padding:9px 12px"><?= number_format(array_sum(array_column($allFilt,'tiklanma')),0,',','.') ?></td>
+        <td style="text-align:right;padding:9px 12px"><?= array_sum(array_column($allFilt,'toplam_satis')) ?></td>
         <td style="text-align:right;padding:9px 12px"><?= fmtTL($fC) ?></td>
         <td style="text-align:right;padding:9px 12px"><span class="<?= $fR>=2?'positive':($fR>=1?'neutral':'negative') ?>"><?= $fR ?>×</span></td>
         <td style="text-align:right;padding:9px 16px"><span class="<?= ($fC-$fH)>=0?'positive':'negative' ?>"><?= fmtTL($fC-$fH) ?></span></td>
     </tr>
     </tbody></table></div>
+    <?php if ($rekPages > 1): ?>
+    <div style="display:flex;gap:6px;padding:12px 16px;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--border)">
+        <?php
+        $rpBase = '?action=reklamlar'.($selAyReklam ? '&ray='.urlencode($selAyReklam) : '');
+        for ($rpi = 1; $rpi <= $rekPages; $rpi++):
+        ?>
+        <a href="<?= $rpBase ?>&rp=<?= $rpi ?>"
+           style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);text-decoration:none;font-size:12px;
+                  background:<?= $rpi===$rekPage?'var(--primary)':'var(--bg3)' ?>;
+                  color:<?= $rpi===$rekPage?'#fff':'var(--text2)' ?>"><?= $rpi ?></a>
+        <?php endfor; ?>
+    </div>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
