@@ -771,6 +771,152 @@ class TrendyolApi {
     }
 
     /**
+     * Kategori bazlı komisyon oranlarını Trendyol API'den çekip
+     * komisyon_api_kategoriler tablosuna kaydeder.
+     *
+     * Endpoint: GET /integration/sellers/{sellerId}/commission-rates
+     * Yanıt: [{categoryId, categoryName, commissionRate, priceRanges:[{minPrice,maxPrice,rate}]}]
+     *
+     * @return array ['inserted'=>int,'updated'=>int,'total'=>int,'error'=>?string]
+     */
+    public function syncCommissionRates(): array {
+        if (!$this->isConfigured()) {
+            return ['error' => 'API bilgileri eksik.'];
+        }
+
+        $inserted = 0;
+        $updated  = 0;
+        $now      = date('Y-m-d H:i:s');
+        $page     = 0;
+
+        do {
+            $data = $this->request(
+                "/integration/sellers/{$this->sellerId}/commission-rates",
+                ['page' => $page, 'size' => 200]
+            );
+
+            if (isset($data['error'])) {
+                return ['error' => $data['error'], 'inserted' => $inserted, 'updated' => $updated];
+            }
+
+            $items      = $data['content'] ?? $data['commissionRates'] ?? $data;
+            $totalPages = (int)($data['totalPages'] ?? 1);
+
+            if (!is_array($items)) break;
+
+            foreach ($items as $item) {
+                $catId   = (string)($item['categoryId']   ?? $item['id']           ?? '');
+                $catAdi  = (string)($item['categoryName'] ?? $item['name']         ?? '');
+                $oran    = (float)($item['commissionRate'] ?? $item['rate']        ?? 0);
+                $araliklar = json_encode(
+                    $item['priceRanges'] ?? $item['commissionRates'] ?? [],
+                    JSON_UNESCAPED_UNICODE
+                );
+
+                if (!$catId && !$catAdi) continue;
+                if (!$catId) $catId = md5($catAdi);
+
+                $exists = DB::scalar(
+                    "SELECT id FROM komisyon_api_kategoriler WHERE magaza_id=? AND kategori_id=?",
+                    [$this->magazaId, $catId]
+                );
+
+                if ($exists) {
+                    DB::exec(
+                        "UPDATE komisyon_api_kategoriler
+                         SET kategori_adi=?, komisyon_orani=?, fiyat_araliklari=?, guncelleme=?
+                         WHERE magaza_id=? AND kategori_id=?",
+                        [$catAdi, $oran, $araliklar, $now, $this->magazaId, $catId]
+                    );
+                    $updated++;
+                } else {
+                    try {
+                        DB::exec(
+                            "INSERT INTO komisyon_api_kategoriler
+                             (magaza_id,kategori_id,kategori_adi,komisyon_orani,fiyat_araliklari,guncelleme)
+                             VALUES (?,?,?,?,?,?)",
+                            [$this->magazaId, $catId, $catAdi, $oran, $araliklar, $now]
+                        );
+                        $inserted++;
+                    } catch (PDOException $e) {}
+                }
+            }
+
+            $page++;
+        } while ($page < $totalPages && $page < 50);
+
+        $total = $inserted + $updated;
+
+        // Trendyol ürünlerini kategori oranıyla güncelle (kesin eşleşme: category_name → kategori_adi)
+        $matched = $this->applyApiRatesToProducts();
+
+        return [
+            'inserted'      => $inserted,
+            'updated'       => $updated,
+            'total'         => $total,
+            'urun_guncelle' => $matched,
+        ];
+    }
+
+    /**
+     * API'den çekilen kategori oranlarını trendyol_urunler'e uygular.
+     * trendyol_urunler.category_name = komisyon_api_kategoriler.kategori_adi
+     */
+    private function applyApiRatesToProducts(): int {
+        return DB::exec(
+            "UPDATE trendyol_urunler tu
+             JOIN komisyon_api_kategoriler kak
+               ON tu.magaza_id = kak.magaza_id
+              AND tu.category_name = kak.kategori_adi
+             SET tu.api_komisyon_orani = kak.komisyon_orani
+             WHERE tu.magaza_id = ?",
+            [$this->magazaId]
+        );
+    }
+
+    /**
+     * Gerçekleşmiş uzlaşım verilerinden (odeme_detay) barkod bazlı komisyon oranı türetir.
+     * En az 2 işlem olan barkodlar için ortalama hesaplanır ve komisyon_tarifeleri tablosu güncellenir.
+     *
+     * @return array ['barkod_sayisi'=>int,'guncellenen'=>int]
+     */
+    public function applySettlementCommissions(): array {
+        // Barkod bazlı ortalama komisyon oranını hesapla (≥2 işlem)
+        $rates = DB::rows(
+            "SELECT barkod,
+                    ROUND(AVG(komisyon_orani), 4) AS ort_oran,
+                    COUNT(*)                       AS islem_sayisi
+             FROM odeme_detay
+             WHERE magaza_id = ?
+               AND barkod != ''
+               AND komisyon_orani > 0
+             GROUP BY barkod
+             HAVING COUNT(*) >= 2",
+            [$this->magazaId]
+        );
+
+        if (empty($rates)) {
+            return ['barkod_sayisi' => 0, 'guncellenen' => 0];
+        }
+
+        $guncellenen = 0;
+        foreach ($rates as $r) {
+            $affected = DB::exec(
+                "UPDATE komisyon_tarifeleri
+                 SET guncel_komisyon = ?
+                 WHERE magaza_id = ? AND (barcode = ? OR stok_kodu = ?)",
+                [$r['ort_oran'], $this->magazaId, $r['barkod'], $r['barkod']]
+            );
+            if ($affected) $guncellenen++;
+        }
+
+        return [
+            'barkod_sayisi' => count($rates),
+            'guncellenen'   => $guncellenen,
+        ];
+    }
+
+    /**
      * Müşteri taleplerini (iade, hasar, kayıp) API'den çekip talepler tablosuna yazar.
      *
      * @param string $startDate  'Y-m-d' formatı

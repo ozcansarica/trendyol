@@ -349,6 +349,23 @@ CREATE TABLE IF NOT EXISTS `talepler` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------
+--  Komisyon API Kategorileri — Faz 3
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `komisyon_api_kategoriler` (
+    `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `magaza_id`        INT UNSIGNED NOT NULL DEFAULT 1,
+    `kategori_id`      VARCHAR(60),
+    `kategori_adi`     VARCHAR(200),
+    `komisyon_orani`   DECIMAL(6,2) DEFAULT 0,
+    `fiyat_araliklari` TEXT,
+    `guncelleme`       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_magaza_kat` (`magaza_id`, `kategori_id`),
+    INDEX `idx_magaza`  (`magaza_id`),
+    INDEX `idx_kat_adi` (`kategori_adi`(100)),
+    FOREIGN KEY (`magaza_id`) REFERENCES `magazalar`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------
 --  Müşteri Soruları (Questions API) — Faz 2
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `musteri_sorulari` (

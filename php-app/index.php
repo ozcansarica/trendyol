@@ -168,6 +168,25 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch(PDOException $e) {}
 
+    // komisyon_api_kategoriler tablosu — Faz 3
+    try {
+        DB::get()->exec("CREATE TABLE IF NOT EXISTS `komisyon_api_kategoriler` (
+            `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `magaza_id`        INT UNSIGNED NOT NULL DEFAULT 1,
+            `kategori_id`      VARCHAR(60),
+            `kategori_adi`     VARCHAR(200),
+            `komisyon_orani`   DECIMAL(6,2) DEFAULT 0,
+            `fiyat_araliklari` TEXT,
+            `guncelleme`       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY `uk_magaza_kat` (`magaza_id`, `kategori_id`),
+            INDEX `idx_magaza`  (`magaza_id`),
+            INDEX `idx_kat_adi` (`kategori_adi`(100))
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(PDOException $e) {}
+
+    // api_komisyon_orani kolonu — Faz 3
+    $migrate('trendyol_urunler', 'api_komisyon_orani', 'DECIMAL(6,2) DEFAULT NULL');
+
     // musteri_sorulari tablosu — Faz 2
     try {
         DB::get()->exec("CREATE TABLE IF NOT EXISTS `musteri_sorulari` (
@@ -2662,6 +2681,141 @@ $hesapla = function(float $fiyat, float $kom, float $birim, float $paket, float 
     <div class="page-title" style="margin:0;color:inherit">🏷️ <span>Komisyon Tarifeleri</span></div>
     <a href="?action=veri_yukle" class="btn btn-sm" style="font-size:12px">📤 Excel Yükle</a>
 </div>
+
+<?php
+// Komisyon API kategorileri
+$apiKatSayisi = (int)DB::scalar("SELECT COUNT(*) FROM komisyon_api_kategoriler WHERE magaza_id=?", [$magazaId]);
+$apiKatSon = DB::scalar("SELECT MAX(guncelleme) FROM komisyon_api_kategoriler WHERE magaza_id=?", [$magazaId]);
+?>
+<div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:220px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">📡 API'den Komisyon Oranları</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+                Trendyol Kategori Komisyon API'sinden güncel oranları çek.
+                <?php if ($apiKatSayisi > 0): ?>
+                <br><span style="color:var(--green)">✓ <?= $apiKatSayisi ?> kategori</span>
+                <?php if ($apiKatSon): ?><span style="color:var(--text2)"> · <?= date('d.m.Y H:i', strtotime($apiKatSon)) ?></span><?php endif; ?>
+                <?php endif; ?>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-sm" onclick="syncCommissionRates(this)">🔄 API'den Çek</button>
+                <?php if ($apiKatSayisi > 0): ?>
+                <button class="btn btn-sm" style="background:var(--bg3);color:var(--text)" onclick="toggleApiRates()">📋 Oranları Göster/Gizle</button>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div style="flex:1;min-width:220px;border-left:1px solid var(--border);padding-left:16px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">💳 Gerçekleşen Komisyonlar</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+                Ödeme detay kayıtlarındaki gerçek komisyon oranlarını barkoda göre hesapla ve komisyon tarifelerine yaz.
+            </div>
+            <button class="btn btn-sm" onclick="applySettlementCommissions(this)">🧮 Hesapla &amp; Uygula</button>
+        </div>
+    </div>
+</div>
+
+<div id="apiRatesContainer" style="display:none;margin-bottom:16px">
+    <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:10px 16px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+            <span>📡 API Kategori Komisyon Oranları</span>
+            <input type="text" id="apiRatesSearch" placeholder="Kategori ara…" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);width:180px" oninput="filterApiRates(this.value)">
+        </div>
+        <div style="max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px" id="apiRatesTable">
+                <thead style="position:sticky;top:0;background:var(--bg3)">
+                    <tr>
+                        <th style="text-align:left;padding:8px 14px;font-weight:500;color:var(--text2)">Kategori</th>
+                        <th style="text-align:center;padding:8px 14px;font-weight:500;color:var(--text2)">Komisyon %</th>
+                        <th style="text-align:center;padding:8px 14px;font-weight:500;color:var(--text2)">Güncelleme</th>
+                    </tr>
+                </thead>
+                <tbody id="apiRatesBody"></tbody>
+            </table>
+        </div>
+        <div id="apiRatesEmpty" style="display:none;padding:24px;text-align:center;color:var(--text2);font-size:12px">Kategori bulunamadı</div>
+    </div>
+</div>
+
+<script>
+var _apiRatesLoaded = false;
+var _apiRatesData   = [];
+
+function syncCommissionRates(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Çekiliyor…';
+    fetch('<?= $ajaxUrl ?>', {method:'POST', body: new URLSearchParams({action:'sync_commission_rates'})})
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) { alert('Hata: ' + d.error); return; }
+            var msg = '✅ Senkronizasyon tamamlandı.\n'
+                + 'Eklenen: ' + (d.inserted||0) + ' · Güncellenen: ' + (d.updated||0) + ' · Toplam: ' + (d.total||0) + ' kategori';
+            if (d.urun_guncelleme) msg += '\n' + d.urun_guncelleme + ' ürüne API oranı atandı.';
+            alert(msg);
+            location.reload();
+        })
+        .catch(() => alert('Bağlantı hatası'))
+        .finally(() => { btn.disabled = false; btn.textContent = '🔄 API\'den Çek'; });
+}
+
+function applySettlementCommissions(btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Hesaplanıyor…';
+    fetch('<?= $ajaxUrl ?>', {method:'POST', body: new URLSearchParams({action:'apply_settlement_commissions'})})
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) { alert('Hata: ' + d.error); return; }
+            alert('✅ Gerçekleşen komisyonlar hesaplandı.\n'
+                + (d.barkod_sayisi||0) + ' barkod incelendi, '
+                + (d.guncellenen||0) + ' tarifede komisyon güncellendi.');
+            location.reload();
+        })
+        .catch(() => alert('Bağlantı hatası'))
+        .finally(() => { btn.disabled = false; btn.textContent = '🧮 Hesapla & Uygula'; });
+}
+
+function toggleApiRates() {
+    var c = document.getElementById('apiRatesContainer');
+    if (c.style.display === 'none') {
+        c.style.display = 'block';
+        if (!_apiRatesLoaded) loadApiRates();
+    } else {
+        c.style.display = 'none';
+    }
+}
+
+function loadApiRates() {
+    fetch('<?= $ajaxUrl ?>?action=list_commission_rates')
+        .then(r => r.json())
+        .then(d => {
+            _apiRatesData   = d.rates || [];
+            _apiRatesLoaded = true;
+            renderApiRates(_apiRatesData);
+        });
+}
+
+function renderApiRates(rows) {
+    var tbody = document.getElementById('apiRatesBody');
+    var empty = document.getElementById('apiRatesEmpty');
+    if (!rows.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = rows.map(function(r) {
+        return '<tr style="border-top:1px solid var(--border)">'
+            + '<td style="padding:7px 14px;color:var(--text)">' + (r.kategori_adi||'') + '</td>'
+            + '<td style="padding:7px 14px;text-align:center;font-weight:600;color:var(--primary)">%' + parseFloat(r.komisyon_orani||0).toFixed(1) + '</td>'
+            + '<td style="padding:7px 14px;text-align:center;color:var(--text2);font-size:11px">' + (r.guncelleme ? r.guncelleme.substring(0,10) : '—') + '</td>'
+            + '</tr>';
+    }).join('');
+}
+
+function filterApiRates(q) {
+    if (!_apiRatesLoaded) return;
+    var f = q.toLowerCase();
+    renderApiRates(f ? _apiRatesData.filter(function(r) {
+        return (r.kategori_adi||'').toLowerCase().includes(f);
+    }) : _apiRatesData);
+}
+</script>
 
 <?php if (empty($komUrunler)): ?>
 <div class="card"><div class="no-data"><div class="icon">🏷️</div>

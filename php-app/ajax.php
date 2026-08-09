@@ -455,6 +455,30 @@ try {
             echo json_encode($result);
             break;
 
+        // ------ Komisyon Oranları API'den çek ------
+        case 'sync_commission_rates':
+            $api    = new TrendyolApi($magaza);
+            $result = $api->syncCommissionRates();
+            echo json_encode($result);
+            break;
+
+        // ------ Gerçekleşen Komisyon Oranlarını Hesapla (ödeme detayından) ------
+        case 'apply_settlement_commissions':
+            $api    = new TrendyolApi($magaza);
+            $result = $api->applySettlementCommissions();
+            echo json_encode($result);
+            break;
+
+        // ------ Komisyon Kategori Listesi ------
+        case 'list_commission_rates':
+            $rows = DB::rows(
+                "SELECT kategori_id, kategori_adi, komisyon_orani, guncelleme
+                 FROM komisyon_api_kategoriler WHERE magaza_id=? ORDER BY kategori_adi",
+                [$magazaId]
+            );
+            echo json_encode(['rates' => $rows, 'total' => count($rows)]);
+            break;
+
         // ------ Talep / soru listeleri ------
         case 'list_claims':
             $status = $_GET['status'] ?? '';
@@ -493,7 +517,7 @@ try {
         // ------ Tabloyu temizle ------
         case 'clear_table':
             $tbl = $_POST['table'] ?? '';
-            $allowed = ['siparisler', 'urun_satis', 'trendyol_urunler', 'maliyetler', 'reklamlar', 'komisyon_tarifeleri', 'odeme_detay', 'talepler', 'musteri_sorulari'];
+            $allowed = ['siparisler', 'urun_satis', 'trendyol_urunler', 'maliyetler', 'reklamlar', 'komisyon_tarifeleri', 'odeme_detay', 'talepler', 'musteri_sorulari', 'komisyon_api_kategoriler'];
             if (in_array($tbl, $allowed, true)) {
                 DB::exec("DELETE FROM `$tbl` WHERE magaza_id=?", [$magazaId]);
                 echo json_encode(['ok' => true]);
