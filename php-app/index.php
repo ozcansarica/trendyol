@@ -2461,6 +2461,20 @@ try { $komSayisi = (int)DB::scalar("SELECT COUNT(*) FROM komisyon_tarifeleri WHE
         <span><strong style="color:var(--text)"><?= number_format($stats['toplam_siparis'],0,',','.') ?></strong> kayıt</span>
         <?php if ($stats['toplam_siparis']>0): ?><a href="#" onclick="clearTable('siparisler')" style="color:var(--red);text-decoration:none;font-size:11px">🗑 Temizle</a><?php endif; ?>
     </div>
+    <?php if ($apiOk): ?>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600">📡 Trendyol API'den Otomatik Çek</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+            <input type="date" id="vyStart" value="<?= date('Y-m-d', strtotime('-30 days')) ?>" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-size:12px;flex:1;min-width:110px">
+            <input type="date" id="vyEnd" value="<?= date('Y-m-d') ?>" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-size:12px;flex:1;min-width:110px">
+            <button class="btn btn-primary" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="syncOrdersCard(this)">📡 Çek</button>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:6px">
+            <?php if ($lastOrderSync): ?>Son çekim: <?= $lastOrderSync ?><?php else: ?>Henüz API'den çekilmemiş<?php endif; ?>
+        </div>
+        <div style="font-size:10px;color:var(--text2);margin-top:3px">14 günden uzun aralıklar dilimlere bölünerek çekilir.</div>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Reklam Raporu -->
@@ -4337,6 +4351,20 @@ function normalizeStatus() {
         toast(`✅ ${d.updated||0} sipariş statüsü Türkçeye çevrildi`);
         setTimeout(()=>location.reload(),1000);
     });
+}
+
+function syncOrdersCard(btn) {
+    const start = document.getElementById('vyStart').value;
+    const end   = document.getElementById('vyEnd').value;
+    if (!start || !end) { toast('Lütfen tarih aralığı girin', false); return; }
+    const diff = Math.ceil((new Date(end) - new Date(start)) / (1000*60*60*24));
+    btn.disabled = true;
+    btn.textContent = diff > 14 ? `⏳ ${Math.ceil(diff/13)} dilim...` : '⏳ Çekiliyor...';
+    post({action:'sync_orders', start_date:start, end_date:end}).then(d => {
+        if (d.error) { toast('❌ ' + d.error, false); }
+        else { toast(`✅ ${d.synced} sipariş güncellendi, ${d.lines_saved} kalem eklendi, ${d.matched} eşleştirme`); setTimeout(()=>location.reload(),1500); }
+        btn.disabled = false; btn.textContent = '📡 Çek';
+    }).catch(()=>{ toast('❌ Bağlantı hatası', false); btn.disabled=false; });
 }
 
 function syncOrders() {
