@@ -1,0 +1,50 @@
+name: PHP App CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'php-app/**'
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'php-app/**'
+
+jobs:
+  lint:
+    name: PHP Lint & Syntax Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP kurulumu (8.2)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, mbstring, json, zip
+          coverage: none
+
+      - name: Composer bağımlılıklarını yükle
+        working-directory: php-app
+        run: composer install --no-interaction --no-progress --prefer-dist --no-dev
+
+      - name: PHP sözdizimi kontrolü (tüm .php dosyaları)
+        run: |
+          find php-app -name "*.php" ! -path "*/vendor/*" \
+            -exec php -l {} \; | tee /tmp/php-lint.log
+          grep -v "No syntax errors" /tmp/php-lint.log && exit 1 || true
+
+      - name: Kritik güvenlik kontrolleri
+        run: |
+          echo "=== Olası hardcoded credential taraması ==="
+          # Şifre/key içeren satır varsa CI başarısız olur
+          ! grep -rn \
+            --include="*.php" \
+            -E "(password|passwd|DB_PASS)\s*=\s*['\"][^'\"]{4,}" \
+            php-app/ \
+            --exclude-dir=vendor \
+            | grep -v "env(" \
+            | grep -v "#" \
+            | grep -v "placeholder"
