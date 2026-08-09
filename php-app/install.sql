@@ -366,6 +366,39 @@ CREATE TABLE IF NOT EXISTS `komisyon_api_kategoriler` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------
+--  Reklamlar (Trendyol Reklam Kampanyaları)
+-- ----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `reklamlar` (
+    `id`               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `magaza_id`        INT UNSIGNED NOT NULL DEFAULT 1,
+    `kampanya_id`      VARCHAR(80) DEFAULT NULL,
+    `reklam_adi`       VARCHAR(200),
+    `statu`            VARCHAR(50),
+    `baslangic_tarihi` VARCHAR(30),
+    `bitis_tarihi`     VARCHAR(30),
+    `urun_adedi`       INT DEFAULT 0,
+    `toplam_butce`     DECIMAL(12,2) DEFAULT 0,
+    `kalan_butce`      DECIMAL(12,2) DEFAULT 0,
+    `harcama`          DECIMAL(12,2) DEFAULT 0,
+    `tbm_teklif`       VARCHAR(50),
+    `gerceklesen_tbm`  DECIMAL(8,2) DEFAULT 0,
+    `tiklanma`         INT DEFAULT 0,
+    `goruntulenme`     INT DEFAULT 0,
+    `dogrudan_satis`   INT DEFAULT 0,
+    `dolayli_satis`    INT DEFAULT 0,
+    `toplam_satis`     INT DEFAULT 0,
+    `dogrudan_ciro`    DECIMAL(12,2) DEFAULT 0,
+    `dolayli_ciro`     DECIMAL(12,2) DEFAULT 0,
+    `toplam_ciro`      DECIMAL(12,2) DEFAULT 0,
+    `roas`             DECIMAL(8,2) DEFAULT 0,
+    `yukleme_tarihi`   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_kampanya`  (`magaza_id`, `kampanya_id`),
+    INDEX `idx_magaza`        (`magaza_id`),
+    INDEX `idx_tarih`         (`baslangic_tarihi`),
+    FOREIGN KEY (`magaza_id`) REFERENCES `magazalar`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------
 --  Müşteri Soruları (Questions API) — Faz 2
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `musteri_sorulari` (
