@@ -21,7 +21,7 @@ class TrendyolApi {
         $this->apiKey    = $magaza['ty_api_key']     ?? TY_API_KEY;
         $this->apiSecret = $magaza['ty_api_secret']  ?? TY_API_SECRET;
         $this->magazaId  = (int)($magaza['id']       ?? 0);
-        $this->userAgent = $this->sellerId . ' - SelfIntegration';
+        $this->userAgent = $this->sellerId . ' - selfIntegration';
     }
 
     /** API statüsünü Türkçeye çevir */
@@ -87,6 +87,7 @@ class TrendyolApi {
             if (!empty($bodyData['errors'][0]['message']))  $errMsg .= ' ' . $bodyData['errors'][0]['message'];
             elseif (!empty($bodyData['message']))           $errMsg .= ' ' . $bodyData['message'];
             elseif (!empty($bodyData['error']))             $errMsg .= ' ' . $bodyData['error'];
+            elseif (!empty($body))                          $errMsg .= ' Yanıt: ' . substr(strip_tags($body), 0, 300);
             return ['error' => $errMsg, 'body' => $body];
         }
 
