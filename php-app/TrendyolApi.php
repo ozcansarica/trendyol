@@ -81,7 +81,14 @@ class TrendyolApi {
         if ($err) return ['error' => 'cURL hatası: ' . $err];
         if ($httpCode === 401) return ['error' => 'Yetkilendirme hatası (401). API Key/Secret kontrol edin.'];
         if ($httpCode === 403) return ['error' => 'Erişim engellendi (403). User-Agent bilginizi kontrol edin.'];
-        if ($httpCode >= 400) return ['error' => "HTTP $httpCode hatası.", 'body' => $body];
+        if ($httpCode >= 400) {
+            $errMsg  = "HTTP $httpCode hatası.";
+            $bodyData = json_decode($body, true);
+            if (!empty($bodyData['errors'][0]['message']))  $errMsg .= ' ' . $bodyData['errors'][0]['message'];
+            elseif (!empty($bodyData['message']))           $errMsg .= ' ' . $bodyData['message'];
+            elseif (!empty($bodyData['error']))             $errMsg .= ' ' . $bodyData['error'];
+            return ['error' => $errMsg, 'body' => $body];
+        }
 
         $data = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
