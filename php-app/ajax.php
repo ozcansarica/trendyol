@@ -392,11 +392,19 @@ try {
 
             if (!$res) { echo json_encode(['error' => 'API bağlantı hatası']); break; }
             $data = json_decode($res, true);
-            if ($code !== 200 || !isset($data['content'][0]['text'])) {
+            if ($code !== 200) {
                 echo json_encode(['error' => 'API hatası: ' . ($data['error']['message'] ?? $res)]);
                 break;
             }
-            $analizMetni = $data['content'][0]['text'];
+            // Sonnet thinking bloğu içerebilir — type==="text" olan ilk bloğu al
+            $analizMetni = '';
+            foreach ($data['content'] ?? [] as $block) {
+                if (($block['type'] ?? '') === 'text') { $analizMetni = $block['text']; break; }
+            }
+            if (!$analizMetni) {
+                echo json_encode(['error' => 'API boş yanıt döndürdü']);
+                break;
+            }
 
             // DB'ye kaydet (aynı tip+dönem varsa güncelle)
             try {
