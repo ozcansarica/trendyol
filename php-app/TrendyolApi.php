@@ -104,7 +104,7 @@ class TrendyolApi {
      */
     public function getApprovedProducts(int $page = 0, int $size = 200): array {
         return $this->request(
-            "/sapigw/sellers/{$this->sellerId}/v2/products",
+            "/sapigw/suppliers/{$this->sellerId}/v2/products",
             ['page' => $page, 'size' => $size, 'approved' => 'true']
         );
     }
@@ -112,7 +112,7 @@ class TrendyolApi {
     /** Onaysız / beklemedeki ürünleri çek — V2 path. */
     public function getUnapprovedProducts(int $page = 0, int $size = 200): array {
         return $this->request(
-            "/sapigw/sellers/{$this->sellerId}/v2/products",
+            "/sapigw/suppliers/{$this->sellerId}/v2/products",
             ['page' => $page, 'size' => $size, 'approved' => 'false']
         );
     }
@@ -125,7 +125,7 @@ class TrendyolApi {
      */
     public function getProductsByFilter(array $filters, int $page = 0, int $size = 50): array {
         return $this->request(
-            "/sapigw/sellers/{$this->sellerId}/v2/products/filter",
+            "/sapigw/suppliers/{$this->sellerId}/v2/products/filter",
             array_merge($filters, ['page' => $page, 'size' => $size])
         );
     }
