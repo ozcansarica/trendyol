@@ -3908,20 +3908,28 @@ try {
            style="font-size:13px;padding:7px 16px"><?= $dl ?></a>
         <?php endforeach; ?>
     </div>
-    <button class="btn btn-primary" id="btnTumunuAnaliz" onclick="tumunuAnalizeEt()" style="margin-left:auto;font-size:13px;padding:8px 18px">
-        ⚡ Tümünü Analiz Et
-    </button>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <span style="font-size:11px;color:var(--text2)">Model:</span>
+        <button id="btnModelSec" onclick="toggleModel(this)"
+                style="font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);cursor:pointer;white-space:nowrap">
+            🧠 Haiku (Hızlı)
+        </button>
+        <button class="btn btn-primary" id="btnTumunuAnaliz" onclick="tumunuAnalizeEt()" style="font-size:13px;padding:8px 18px">
+            ⚡ Tümünü Analiz Et
+        </button>
+    </div>
 </div>
 
 <!-- Analiz Kartları -->
 <div style="display:flex;flex-direction:column;gap:16px" id="aiKartlar">
 <?php
 $kartlar = [
-    ['tip'=>'stratejik',  'baslik'=>'📊 Stratejik Analiz',       'aciklama'=>'Net kar, ciro, maliyet ve marj trendleri'],
+    ['tip'=>'stratejik',  'baslik'=>'📊 Stratejik Analiz',       'aciklama'=>'Net kar, ciro, maliyet — önceki dönemle karşılaştırmalı'],
     ['tip'=>'kategori',   'baslik'=>'🏷️ Kategori Analizi',        'aciklama'=>'Kategorilere göre karlılık ve büyüme'],
     ['tip'=>'urun',       'baslik'=>'📦 Ürün Portföyü Analizi',   'aciklama'=>'En iyi/kötü performanslı ürünler, konsantrasyon riski'],
     ['tip'=>'odeme',      'baslik'=>'💰 Ödeme & Hakediş Analizi', 'aciklama'=>'Kargo/platform yükü, bekleyen ödemeler'],
-    ['tip'=>'operasyonel','baslik'=>'⚙️ Operasyonel Analiz',      'aciklama'=>'İade oranları, eksik maliyetler, reklam verimliliği'],
+    ['tip'=>'operasyonel','baslik'=>'⚙️ Operasyonel Analiz',      'aciklama'=>'İade oranları, ROAS, reklam verimliliği'],
+    ['tip'=>'trend',      'baslik'=>'📈 Büyüme & Trend Analizi',  'aciklama'=>'Aylık ciro/kar trendi, büyüme hızı, mevsimsellik'],
 ];
 foreach ($kartlar as $k):
 ?>
@@ -3937,6 +3945,10 @@ foreach ($kartlar as $k):
                 Son: <?= date('d.m.Y H:i', strtotime($kayitliYorumlar[$k['tip']]['olusturuldu'])) ?>
             </span>
             <?php endif; ?>
+            <button id="kopyala-<?= $k['tip'] ?>" onclick="analizKopyala('<?= $k['tip'] ?>')"
+                    style="font-size:11px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;<?= isset($kayitliYorumlar[$k['tip']]) ? '' : 'display:none' ?>">
+                📋
+            </button>
             <button class="btn btn-primary" onclick="analizeEt('<?= $k['tip'] ?>')"
                     id="btn-<?= $k['tip'] ?>" style="font-size:12px;white-space:nowrap">
                 <?= isset($kayitliYorumlar[$k['tip']]) ? '🔄 Yenile' : '🤖 Analiz Et' ?>
@@ -3967,6 +3979,23 @@ foreach ($kartlar as $k):
 
 <script>
 var AI_DONEM = '<?= $aiDonem ?>';
+var AI_MODEL = 'haiku';
+
+function toggleModel(btn) {
+    AI_MODEL = AI_MODEL === 'haiku' ? 'sonnet' : 'haiku';
+    btn.textContent = AI_MODEL === 'sonnet' ? '🧠 Sonnet (Derin)' : '🧠 Haiku (Hızlı)';
+    btn.style.borderColor = AI_MODEL === 'sonnet' ? 'var(--primary)' : 'var(--border)';
+    btn.style.color = AI_MODEL === 'sonnet' ? 'var(--primary)' : 'var(--text2)';
+}
+
+function analizKopyala(tip) {
+    var metin = document.getElementById('sonuc-'+tip);
+    if (!metin) return;
+    var ps = metin.querySelectorAll('.ai-metin p');
+    if (!ps.length) { toast('❌ Kopyalanacak analiz yok', false); return; }
+    var text = Array.from(ps).map(function(p){ return p.textContent.trim(); }).filter(Boolean).join('\n\n');
+    navigator.clipboard.writeText(text).then(function(){ toast('📋 Analiz kopyalandı'); }).catch(function(){ toast('❌ Kopyalanamadı', false); });
+}
 
 // Sayfa yüklenince kayıtlı yorumları render et
 document.addEventListener('DOMContentLoaded', function() {
@@ -4013,7 +4042,7 @@ function analizeEt(tip) {
     loading.style.display = 'block';
     metin.innerHTML = '';
 
-    post({ action:'ai_analiz', tip:tip, donem:AI_DONEM })
+    post({ action:'ai_analiz', tip:tip, donem:AI_DONEM, model:AI_MODEL })
     .then(function(d) {
         btn.disabled = false;
         btn.textContent = '🔄 Yenile';
@@ -4023,6 +4052,8 @@ function analizeEt(tip) {
             return;
         }
         metin.innerHTML = renderAiMetin(d.analiz||'');
+        var kb = document.getElementById('kopyala-'+tip);
+        if (kb) kb.style.display = '';
     })
     .catch(function() {
         btn.disabled = false;
@@ -4033,7 +4064,7 @@ function analizeEt(tip) {
 }
 
 function tumunuAnalizeEt() {
-    var tipler = ['stratejik','kategori','urun','odeme','operasyonel'];
+    var tipler = ['stratejik','kategori','urun','odeme','operasyonel','trend'];
     var tamam = 0;
     var btnTumunu = document.getElementById('btnTumunuAnaliz');
     btnTumunu.disabled = true;
@@ -4055,7 +4086,7 @@ function tumunuAnalizeEt() {
         sonuc.style.display = 'block';
         loading.style.display = 'block';
         metin.innerHTML = '';
-        post({ action:'ai_analiz', tip:tip, donem:AI_DONEM })
+        post({ action:'ai_analiz', tip:tip, donem:AI_DONEM, model:AI_MODEL })
         .then(function(d) {
             btn.disabled = false;
             btn.textContent = '🔄 Yenile';
@@ -4064,6 +4095,8 @@ function tumunuAnalizeEt() {
                 metin.innerHTML = '<div style="color:var(--red);padding:8px 0">❌ ' + d.error + '</div>';
             } else {
                 metin.innerHTML = renderAiMetin(d.analiz||'');
+                var kb = document.getElementById('kopyala-'+tip);
+                if (kb) kb.style.display = '';
             }
             analizSiradaki(i + 1);
         })

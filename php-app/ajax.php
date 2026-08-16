@@ -38,6 +38,7 @@ try {
             }
             $tip    = $_POST['tip']   ?? '';
             $donem  = $_POST['donem'] ?? 'bu_ay';
+            $aiModel = ($_POST['model'] ?? '') === 'sonnet' ? 'claude-sonnet-5' : 'claude-haiku-4-5-20251001';
             if (!in_array($donem, ['bu_ay','gecen_ay','son_3_ay','son_6_ay'])) $donem = 'bu_ay';
 
             $buYil  = (int)date('Y');
@@ -121,6 +122,40 @@ try {
                     $reklam = (float)DB::scalar("SELECT COALESCE(SUM(harcama),0) FROM reklamlar WHERE $reklamWhere", $reklamPrms);
                     $kar = (float)$kpi['net_tutar'] - $maliyet - $reklam;
                     $marj = $kpi['ciro'] > 0 ? round($kar/$kpi['ciro']*100,1) : 0;
+                    // Önceki dönem karşılaştırması
+                    $prevSipWhere = "s.magaza_id=? AND s.siparis_statusu NOT LIKE '%İptal%' AND s.siparis_statusu NOT LIKE '%Cancel%'";
+                    $prevSipPrms  = [$magazaId];
+                    $prevLabel    = '';
+                    if ($donem === 'bu_ay') {
+                        $pa = $buAy === 1 ? 12 : $buAy - 1;
+                        $py = $buAy === 1 ? $buYil - 1 : $buYil;
+                        $prevSipWhere .= " AND SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?";
+                        $prevSipPrms[] = sprintf('%02d',$pa); $prevSipPrms[] = (string)$py;
+                        $prevLabel = date('F Y', mktime(0,0,0,$pa,1,$py));
+                    } elseif ($donem === 'gecen_ay') {
+                        $ga=$buAy===1?12:$buAy-1; $gy=$buAy===1?$buYil-1:$buYil;
+                        $pa2=$ga===1?12:$ga-1; $py2=$ga===1?$gy-1:$gy;
+                        $prevSipWhere .= " AND SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?";
+                        $prevSipPrms[] = sprintf('%02d',$pa2); $prevSipPrms[] = (string)$py2;
+                        $prevLabel = date('F Y', mktime(0,0,0,$pa2,1,$py2));
+                    } elseif ($donem === 'son_3_ay' || $donem === 'son_6_ay') {
+                        $nPrev = $donem === 'son_6_ay' ? 6 : 3;
+                        $prevAyKos = [];
+                        for ($i = $nPrev; $i < $nPrev*2; $i++) {
+                            $a=$buAy-$i; $y=$buYil; if($a<=0){$a+=12;$y--;}
+                            $prevAyKos[] = "(SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?)";
+                            $prevSipPrms[] = sprintf('%02d',$a); $prevSipPrms[] = (string)$y;
+                        }
+                        $prevSipWhere .= " AND (" . implode(' OR ', $prevAyKos) . ")";
+                        $prevLabel = 'Önceki ' . $nPrev . ' Ay';
+                    }
+                    $prevKpi = DB::row("SELECT COUNT(*) AS siparis, SUM(siparis_tutari) AS ciro, SUM(net_tutar) AS net_tutar
+                        FROM siparisler s WHERE $prevSipWhere", $prevSipPrms);
+                    $prevMaliyet = (float)DB::scalar("
+                        SELECT COALESCE(SUM(s.urun_adedi*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet)),0)
+                        FROM siparisler s JOIN maliyetler m ON s.ty_urun_id=m.ty_urun_id AND m.magaza_id=s.magaza_id
+                        WHERE $prevSipWhere", $prevSipPrms);
+
                     $veri = [
                         'dönem' => $donemLabel,
                         'sipariş_sayısı' => (int)$kpi['siparis'],
@@ -133,8 +168,15 @@ try {
                         'reklam_harcaması_TL' => round($reklam,2),
                         'net_kâr_TL' => round($kar,2),
                         'net_kâr_marjı_yüzde' => $marj,
+                        'önceki_dönem' => $prevLabel ?: null,
+                        'önceki_sipariş' => (int)($prevKpi['siparis'] ?? 0),
+                        'önceki_ciro_TL' => round((float)($prevKpi['ciro'] ?? 0),2),
+                        'önceki_net_tutar_TL' => round((float)($prevKpi['net_tutar'] ?? 0),2),
+                        'önceki_maliyet_TL' => round($prevMaliyet,2),
+                        'ciro_değişim_yüzde' => $prevKpi['ciro'] > 0 ? round(((float)$kpi['ciro']-(float)$prevKpi['ciro'])/(float)$prevKpi['ciro']*100,1) : null,
+                        'sipariş_değişim_yüzde' => $prevKpi['siparis'] > 0 ? round(((int)$kpi['siparis']-(int)$prevKpi['siparis'])/(int)$prevKpi['siparis']*100,1) : null,
                     ];
-                    $prompt = "Sen bir e-ticaret karlılık uzmanısın. Markdown kullanma (##, **, * gibi işaretler kullanma).  Aşağıdaki Trendyol mağaza verilerini analiz et ve stratejik bir değerlendirme yaz. Güçlü ve zayıf noktalara, kritik risklere ve somut önerilere odaklan. Yanıtı 4-5 madde halinde, her madde 2-3 cümle olacak şekilde ver. Maddeler emoji ile başlasın (🔴 kritik, 🟡 dikkat, 🟢 iyi). JSON değil düz metin ver.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
+                    $prompt = "Sen bir e-ticaret karlılık uzmanısın. Markdown kullanma (##, **, * gibi işaretler kullanma). Aşağıdaki Trendyol mağaza verilerini analiz et; önceki dönemle karşılaştırarak trend ve değişimleri vurgula. Güçlü/zayıf noktalara, kritik risklere ve somut önerilere odaklan. 4-5 madde, her madde 2-3 cümle. Maddeler 🔴/🟡/🟢 ile başlasın. Düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
                     break;
 
                 case 'kategori':
@@ -175,8 +217,27 @@ try {
                         $r['ciro'] = round((float)$r['ciro'],2);
                         unset($r['net_tutar'],$r['maliyet']);
                     }
-                    $veri = $rows;
-                    $prompt = "Sen bir e-ticaret ürün portföy uzmanısın. Markdown kullanma (##, **, * gibi işaretler kullanma).  Aşağıdaki ürün performans verilerini analiz et. Gelir konsantrasyonu riski, yüksek/düşük marjlı ürünler, veri anomalileri ve fırsat alanlarını değerlendir. 4-5 madde, 🔴/🟡/🟢, düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
+                    // En kötü marjlı 5 ürün (maliyet girilmiş olanlar arasında)
+                    $bottomRows = DB::rows("
+                        SELECT tu.title AS ürün, tu.category_name AS kategori,
+                               SUM(s.urun_adedi) AS satış_adedi, SUM(s.siparis_tutari) AS ciro,
+                               SUM(s.net_tutar) AS net_tutar,
+                               COALESCE(SUM(s.urun_adedi*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet)),0) AS maliyet
+                        FROM siparisler s
+                        JOIN trendyol_urunler tu ON s.ty_urun_id=tu.ty_id AND tu.magaza_id=s.magaza_id
+                        JOIN maliyetler m ON s.ty_urun_id=m.ty_urun_id AND m.magaza_id=s.magaza_id
+                        WHERE $aiWhere GROUP BY tu.ty_id, tu.title, tu.category_name HAVING SUM(s.siparis_tutari)>0
+                        ORDER BY (SUM(s.net_tutar)-COALESCE(SUM(s.urun_adedi*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet)),0))/SUM(s.siparis_tutari) ASC
+                        LIMIT 5", $aiPrms);
+                    foreach ($bottomRows as &$br) {
+                        $br['kâr'] = round((float)$br['net_tutar'] - (float)$br['maliyet'], 2);
+                        $br['kâr_marjı_yüzde'] = $br['ciro'] > 0 ? round($br['kâr']/(float)$br['ciro']*100,1) : 0;
+                        $br['ciro'] = round((float)$br['ciro'],2);
+                        unset($br['net_tutar'],$br['maliyet']);
+                    }
+                    unset($br);
+                    $veri = ['en_iyi_20_ürün' => $rows, 'en_düşük_marjlı_5_ürün' => $bottomRows];
+                    $prompt = "Sen bir e-ticaret ürün portföy uzmanısın. Markdown kullanma. Aşağıdaki ürün performans verilerini analiz et. Gelir konsantrasyonu riski, yüksek/düşük marjlı ürünler, portföyden çıkarılması gerekenler ve büyütülmesi gerekenler hakkında somut öneriler ver. 4-5 madde, 🔴/🟡/🟢, düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
                     break;
 
                 case 'odeme':
@@ -249,15 +310,56 @@ try {
                         $opRekPrms[]=$ral['ay'];$opRekPrms[]=$ral['yil'];$opRekPrms[]=$ral['ay'];$opRekPrms[]=$ral['yil'];
                     }
                     $opReklamWhere = "magaza_id=?" . ($opRk ? " AND (".implode(' OR ',$opRk).")" : "");
-                    $topReklam = DB::rows("SELECT reklam_adi, harcama, tiklanma, goruntulenme FROM reklamlar WHERE $opReklamWhere ORDER BY harcama DESC LIMIT 5", $opRekPrms);
+                    $topReklam = DB::rows("
+                        SELECT reklam_adi, harcama, tiklanma, goruntulenme,
+                            CASE WHEN tiklanma>0 THEN ROUND(harcama/tiklanma,2) ELSE NULL END AS tiklama_basina_maliyet_TL,
+                            CASE WHEN goruntulenme>0 THEN ROUND(harcama/goruntulenme*1000,2) ELSE NULL END AS bin_gosterim_maliyeti_TL
+                        FROM reklamlar WHERE $opReklamWhere ORDER BY harcama DESC LIMIT 5", $opRekPrms);
+                    $topCiro = (float)DB::scalar("SELECT COALESCE(SUM(siparis_tutari),0) FROM siparisler s WHERE $aiWhere", $aiPrms);
+                    $topHarcama = (float)DB::scalar("SELECT COALESCE(SUM(harcama),0) FROM reklamlar WHERE $opReklamWhere", $opRekPrms);
+                    $storeRoas = $topHarcama > 0 ? round($topCiro / $topHarcama, 2) : null;
                     $veri = [
                         'toplam_sipariş' => (int)$iadeOran['toplam'],
                         'iade_sayısı' => (int)$iadeOran['iade'],
                         'iade_oranı_yüzde' => $iadeOran['toplam'] > 0 ? round($iadeOran['iade']/$iadeOran['toplam']*100,1) : 0,
                         'maliyeti_girilmemiş_ürün_sayısı' => $maliyetsizUrun,
+                        'toplam_reklam_harcaması_TL' => round($topHarcama,2),
+                        'mağaza_roas' => $storeRoas,
                         'top_reklam_kampanyaları' => $topReklam,
                     ];
-                    $prompt = "Sen bir e-ticaret operasyon uzmanısın. Markdown kullanma (##, **, * gibi işaretler kullanma).  Aşağıdaki operasyonel metrikleri analiz et. İade oranları, eksik maliyet verileri, reklam verimliliği ve operasyonel riskler hakkında somut öneriler ver. 4-5 madde, 🔴/🟡/🟢, düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
+                    $prompt = "Sen bir e-ticaret operasyon uzmanısın. Markdown kullanma. Aşağıdaki operasyonel metrikleri analiz et. İade oranları, eksik maliyet verileri, ROAS ve reklam verimliliği, operasyonel riskler hakkında somut öneriler ver. ROAS < 3 ise kritik say. 4-5 madde, 🔴/🟡/🟢, düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
+                    break;
+
+                case 'trend':
+                    $nAyTrend = ($donem === 'son_6_ay') ? 6 : (($donem === 'son_3_ay') ? 3 : 2);
+                    $aylarTrend = [];
+                    for ($i = $nAyTrend-1; $i >= 0; $i--) {
+                        $a=$buAy-$i; $y=$buYil; if($a<=0){$a+=12;$y--;}
+                        $aylarTrend[] = ['ay'=>$a,'yil'=>$y,'label'=>date('M Y',mktime(0,0,0,$a,1,$y))];
+                    }
+                    $trendData = [];
+                    foreach ($aylarTrend as $ad) {
+                        $ayW = "s.magaza_id=? AND s.siparis_statusu NOT LIKE '%İptal%' AND s.siparis_statusu NOT LIKE '%Cancel%'
+                                AND SUBSTRING(s.siparis_tarihi,4,2)=? AND SUBSTRING(s.siparis_tarihi,7,4)=?";
+                        $ayP = [$magazaId, sprintf('%02d',$ad['ay']), (string)$ad['yil']];
+                        $ayKpi = DB::row("SELECT COUNT(*) AS siparis, SUM(siparis_tutari) AS ciro,
+                            SUM(net_tutar) AS net_tutar, SUM(urun_adedi) AS adet
+                            FROM siparisler s WHERE $ayW", $ayP);
+                        $ayMaliyet = (float)DB::scalar("
+                            SELECT COALESCE(SUM(s.urun_adedi*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet)),0)
+                            FROM siparisler s JOIN maliyetler m ON s.ty_urun_id=m.ty_urun_id AND m.magaza_id=s.magaza_id
+                            WHERE $ayW", $ayP);
+                        $trendData[] = [
+                            'dönem'        => $ad['label'],
+                            'sipariş'      => (int)($ayKpi['siparis'] ?? 0),
+                            'ciro_TL'      => round((float)($ayKpi['ciro'] ?? 0),2),
+                            'net_tutar_TL' => round((float)($ayKpi['net_tutar'] ?? 0),2),
+                            'maliyet_TL'   => round($ayMaliyet,2),
+                            'net_kâr_TL'  => round((float)($ayKpi['net_tutar'] ?? 0) - $ayMaliyet,2),
+                        ];
+                    }
+                    $veri = $trendData;
+                    $prompt = "Sen bir e-ticaret büyüme analisti sin. Markdown kullanma. Aşağıdaki aylık Trendyol mağaza verilerini analiz et. Büyüme hızı, mevsimsel etkiler, ciro ve kâr marjı trendi, ivme değerlendirmesi ve gelecek dönem için önerileri değerlendir. 4-6 madde, 🔴/🟡/🟢, düz metin.\n\nVeri:\n" . json_encode($veri, JSON_UNESCAPED_UNICODE);
                     break;
 
                 default:
@@ -267,7 +369,7 @@ try {
 
             // Anthropic API çağrısı
             $payload = json_encode([
-                'model' => 'claude-haiku-4-5-20251001',
+                'model' => $aiModel,
                 'max_tokens' => 2000,
                 'messages' => [['role' => 'user', 'content' => $prompt]]
             ]);
