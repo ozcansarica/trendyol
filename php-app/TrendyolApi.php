@@ -99,33 +99,31 @@ class TrendyolApi {
     }
 
     /**
-     * Onaylı ürünleri çek — V2 path.
-     * V1 (/integration/product/…) deprecated; artık bu kullanılmalı.
+     * Onaylı ürünleri çek — V1 path (V2 /sapigw/suppliers bazı hesaplarda 556 döner).
      */
     public function getApprovedProducts(int $page = 0, int $size = 200): array {
         return $this->request(
-            "/sapigw/suppliers/{$this->sellerId}/v2/products",
+            "/integration/product/sellers/{$this->sellerId}/products",
             ['page' => $page, 'size' => $size, 'approved' => 'true']
         );
     }
 
-    /** Onaysız / beklemedeki ürünleri çek — V2 path. */
+    /** Onaysız / beklemedeki ürünleri çek — V1 path. */
     public function getUnapprovedProducts(int $page = 0, int $size = 200): array {
         return $this->request(
-            "/sapigw/suppliers/{$this->sellerId}/v2/products",
+            "/integration/product/sellers/{$this->sellerId}/products",
             ['page' => $page, 'size' => $size, 'approved' => 'false']
         );
     }
 
     /**
-     * Barkod, stok kodu veya ürün kodu ile filtreli ürün sorgulama — V2.
-     * Eşleştirme sorunlarını çözmek için kullanılır.
+     * Barkod, stok kodu veya ürün kodu ile filtreli ürün sorgulama.
      *
      * @param array $filters  ['barcode'=>'...'] | ['stockCode'=>'...'] | ['productMainId'=>'...']
      */
     public function getProductsByFilter(array $filters, int $page = 0, int $size = 50): array {
         return $this->request(
-            "/sapigw/suppliers/{$this->sellerId}/v2/products/filter",
+            "/integration/product/sellers/{$this->sellerId}/products",
             array_merge($filters, ['page' => $page, 'size' => $size])
         );
     }
