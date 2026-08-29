@@ -158,14 +158,20 @@ Ana sayfadaki hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez
 
 Sitedeki diğer sayfalardan **bilinçli olarak kopuk** bir araçtır: ana sayfadan
 link verilmez, ana sayfanın ürün verisini/maliyet kayıtlarını/kargo ayarını ne
-okur ne yazar. Kendi verisini `trendyol_kargo_barem_urunler_v1` anahtarında
-tutar ve kargo/hizmet için `ortak.js`'teki **varsayılanları** kullanır. Yalnızca
-hesaplama modülleri (`calc.js`, `ortak.js`) ortaktır.
+okur ne yazar. Kendi anahtarlarını kullanır — ürünler
+`trendyol_kargo_barem_urunler_v1`, kargo/hizmet ayarı
+`trendyol_kargo_barem_ayar_v1` (kayıt yoksa `ortak.js`'teki varsayılanlar).
+Yalnızca hesaplama modülleri (`calc.js`, `ortak.js`) ortaktır.
 
 | Sayfa | İş |
 |-------|-----|
 | `kargo-barem/yukle.html` | "Aktif-Pasif Ürün" .xlsx yükler (`parseAktifPasifXlsx()`), şablonu gösterir, atlanan satırları listeler, yüklü veriyi silmeye izin verir |
-| `kargo-barem/index.html` | Tabloyu gösterir; veri yoksa yükleme sayfasına yönlendirir |
+| `kargo-barem/index.html` | Tabloyu ve **📦 Kargo/Hizmet Bedeli Tanımı** modalini gösterir; veri yoksa yükleme sayfasına yönlendirir |
+
+Modal ana sayfadakiyle aynı alanları taşır (sabit hizmet bedeli + üç kargo
+kademesi ve iki eşik), `esik1 < esik2` doğrulaması yapar, "Varsayılana Dön" ile
+kaydı siler. Kaydedilen değerler tabloya anında yansır ve sayfa yenilense de
+kalır; ana sayfanın `trendyol_kargo_hizmet_v1` ayarına dokunmaz.
 
 Şablon (kolonlar isimle eşleştirilir, sıra önemsizdir; zorunlular **kalın**):
 **Barkod No** · Ürün Adı · Alış Tutarı (KDV) · **Satış Tutarı (KDV)** ·

@@ -50,6 +50,30 @@
   .indirim-tutar { font-weight: 800; color: var(--orange-d); }
   .bos { padding: 30px 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
   .bos a { color: var(--orange-d); font-weight: 700; }
+  .ayar-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .ayar-btn:hover { border-color: var(--orange); color: var(--orange); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+  .modal-overlay.hidden { display: none; }
+  .modal-panel { background: #fff; border-radius: 14px; width: 100%; max-width: 480px; max-height: 86vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { font-size: 16px; font-weight: 800; color: var(--navy); }
+  .modal-head p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .modal-close { margin-left: auto; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 16px; cursor: pointer; color: var(--muted); }
+  .modal-close:hover { background: #f1f3f6; }
+  .kargo-form { display:flex; flex-direction:column; gap:18px; }
+  .kargo-section { background:#f8f9fb; border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kargo-section-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:10px; }
+  .kargo-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
+  .kargo-lbl { font-size:13px; color:#374151; flex:1; }
+  .kargo-input-group { display:flex; align-items:center; gap:4px; }
+  .kargo-input { width:80px; padding:6px 8px; border:1.5px solid var(--line); border-radius:7px; font-size:13px; font-weight:700; text-align:right; }
+  .kargo-input:focus { outline:none; border-color:var(--orange); }
+  .kargo-esik { width:65px; display:inline-block; vertical-align:middle; margin:0 2px; padding:4px 6px; }
+  .kargo-unit { font-size:13px; color:var(--muted); font-weight:600; }
+  .kargo-save-btn { padding:9px 18px; background:var(--green); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+  .kargo-save-btn:hover { opacity:.88; }
+  .kargo-reset-btn { padding:9px 14px; background:#fff; color:var(--muted); border:1.5px solid var(--line); border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+  .kargo-reset-btn:hover { border-color:var(--orange); color:var(--orange); }
 </style>
 </head>
 <body>
@@ -65,6 +89,7 @@
 <div class="wrap">
   <div class="databar">
     <a class="yukle-btn" href="./yukle.html">📤 Ürün Yükleme</a>
+    <button class="ayar-btn" onclick="openKargoModal()">📦 Kargo/Hizmet Bedeli Tanımı</button>
     <span class="kaynak" id="kaynak"></span>
   </div>
 
@@ -109,16 +134,72 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="kargoModal">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <div>
+        <h2>📦 Kargo/Hizmet Bedeli Tanımı</h2>
+        <p>Bu araca özeldir; değişiklikler anında tablodaki tüm hesaplara yansır. Ana sayfanın ayarını etkilemez.</p>
+      </div>
+      <button class="modal-close" onclick="closeKargoModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;overflow:auto">
+      <div class="kargo-form">
+        <div class="kargo-section">
+          <div class="kargo-section-title">Hizmet Bedeli</div>
+          <div class="kargo-row">
+            <span class="kargo-lbl">Sabit hizmet bedeli (tüm siparişlerde)</span>
+            <div class="kargo-input-group"><input type="number" id="khHizmet" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+        </div>
+        <div class="kargo-section">
+          <div class="kargo-section-title">Kargo Kademeleri (sipariş toplamına göre)</div>
+          <div class="kargo-row">
+            <span class="kargo-lbl">Sipariş toplamı &lt; <input type="number" id="khEsik1" step="1" min="1" class="kargo-input kargo-esik"> ₺ → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo1" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+          <div class="kargo-row">
+            <span class="kargo-lbl"><span id="khEsik1Label">200</span> – <input type="number" id="khEsik2" step="1" min="1" class="kargo-input kargo-esik"> ₺ arası → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo2" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+          <div class="kargo-row">
+            <span class="kargo-lbl"><span id="khEsik2Label">350</span> ₺ ve üstü → kargo</span>
+            <div class="kargo-input-group"><input type="number" id="khKargo3" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
+          </div>
+          <div class="kargo-lbl" style="margin-top:8px;font-size:11.5px;color:var(--muted)">
+            Eşiğe oturan tutar üst kademeye girer: tam <span id="khEsik1Not">200</span>₺ ikinci,
+            tam <span id="khEsik2Not">350</span>₺ üçüncü kademededir.
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="kargo-save-btn" onclick="saveKargoModal()">💾 Kaydet ve Uygula</button>
+          <button class="kargo-reset-btn" onclick="resetKargoModal()">↩ Varsayılana Dön</button>
+          <span id="kargoKayitMsg" style="font-size:12px;color:var(--green);display:none">✓ Kaydedildi</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="../assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
 import { kargoEsikAdetleri, adetliSiparisKari, kargoKademesi, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI } from '../assets/calc.js?v=__BUILD_VERSION__';
 import { KDV_PCT, tl, pc, VARSAYILAN_KARGO_AYAR, VARSAYILAN_HIZMET } from '../assets/ortak.js?v=__BUILD_VERSION__';
 
-// Bu araç bilinçli olarak bağımsızdır: verisini yalnızca kendi anahtarından
-// okur ve ana sayfanın kargo/hizmet ayarını değil varsayılanları kullanır.
+// Bu araç bilinçli olarak bağımsızdır: hem ürün verisini hem kargo/hizmet
+// ayarını yalnızca kendi anahtarlarından okur; ana sayfanın
+// trendyol_kargo_hizmet_v1 ayarını ne okur ne yazar.
 const KARGO_BAREM_KEY = 'trendyol_kargo_barem_urunler_v1';
-const kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
-const hizmetAyar = VARSAYILAN_HIZMET;
+const AYAR_KEY = 'trendyol_kargo_barem_ayar_v1';
+
+let kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
+let hizmetAyar = VARSAYILAN_HIZMET;
+try {
+  const d = JSON.parse(localStorage.getItem(AYAR_KEY) || 'null');
+  if (d && d.kargoAyar) kargoAyar = { ...kargoAyar, ...d.kargoAyar };
+  if (d && d.hizmetAyar != null) hizmetAyar = +d.hizmetAyar;
+} catch (e) { /* bozuk ayar varsa varsayılana düş */ }
+
 const kargoIcin = (siparisToplami) => kargoKademesi(siparisToplami, kargoAyar);
 
 // Ürünler zorunlu sipariş adedinin devreye girdiği sınıra göre iki sekmeye
@@ -241,10 +322,60 @@ window.render = function () {
     + ` · KDV %${KDV_PCT}, hizmet bedeli ${tl(hizmetAyar)}.`;
 };
 
+window.openKargoModal = function () {
+  el('khHizmet').value = hizmetAyar;
+  el('khEsik1').value = kargoAyar.esik1;
+  el('khEsik2').value = kargoAyar.esik2;
+  el('khKargo1').value = kargoAyar.kargo1;
+  el('khKargo2').value = kargoAyar.kargo2;
+  el('khKargo3').value = kargoAyar.kargo3;
+  esikEtiketleriniGuncelle();
+  el('kargoKayitMsg').style.display = 'none';
+  el('kargoModal').classList.remove('hidden');
+};
+
+window.closeKargoModal = function () {
+  el('kargoModal').classList.add('hidden');
+};
+
+function esikEtiketleriniGuncelle() {
+  for (const id of ['khEsik1Label', 'khEsik1Not']) el(id).textContent = kargoAyar.esik1;
+  for (const id of ['khEsik2Label', 'khEsik2Not']) el(id).textContent = kargoAyar.esik2;
+}
+
+window.saveKargoModal = function () {
+  const val = (id) => parseFloat(el(id).value) || 0;
+  const esik1 = val('khEsik1'), esik2 = val('khEsik2');
+  if (esik1 >= esik2) { alert('1. eşik 2. eşikten küçük olmalıdır.'); return; }
+  kargoAyar = { esik1, esik2, kargo1: val('khKargo1'), kargo2: val('khKargo2'), kargo3: val('khKargo3') };
+  hizmetAyar = val('khHizmet');
+  localStorage.setItem(AYAR_KEY, JSON.stringify({ kargoAyar, hizmetAyar }));
+  esikEtiketleriniGuncelle();
+  render();
+  const msg = el('kargoKayitMsg');
+  msg.style.display = '';
+  setTimeout(() => { msg.style.display = 'none'; }, 2000);
+};
+
+window.resetKargoModal = function () {
+  kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
+  hizmetAyar = VARSAYILAN_HIZMET;
+  localStorage.removeItem(AYAR_KEY);
+  openKargoModal();
+  render();
+};
+
 window.setSekme = function (sekme) {
   aktifSekme = sekme;
   render();
 };
+
+el('kargoModal').addEventListener('click', (e) => {
+  if (e.target.id === 'kargoModal') closeKargoModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeKargoModal();
+});
 
 render();
 </script>
