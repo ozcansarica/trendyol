@@ -56,7 +56,8 @@ zorunlu adet kadar ürünün birlikte satıldığı siparişin gerçek toplamın
 yansıtır (`satis: sellPrice * adet, alis: u.maliyet * adet`).
 
 - Komisyon = Satış × Komisyon%
-- Hizmet Bedeli = tüm satışlarda sabit **8,39₺** (`HIZMET_BEDELI_SABIT`)
+- Hizmet Bedeli = tüm satışlarda sabit **13,19₺** (`HIZMET_BEDELI_SABIT`, `assets/calc.js`;
+  `📦 Kargo/Hizmet Tanımı` panelinden değiştirilebilir, `hizmetAyar` olarak saklanır)
 - ...Oluşan KDV = ilgili tutar × `r`
 - Ödenecek KDV = Satıştan KDV − (Alış + Kargo + Komisyon + Hizmet Bedeli KDV'leri); negatifse 0 (devreden)
 - Stopaj = (Satış / (1 + kdv/100)) × %1
