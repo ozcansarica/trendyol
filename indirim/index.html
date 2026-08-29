@@ -24,13 +24,15 @@
   .indir-btn:hover { background: #116932; }
   .aciklama { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
   .aciklama b { color: var(--navy); }
-  .filtreler { background: #fff; border: 1px solid var(--line); border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: none; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .filtreler { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .filtreler input[type=text] { flex: 1; min-width: 220px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px; }
   .filtreler input[type=text]:focus { outline: none; border-color: var(--orange); }
-  .barem-max { width: 56px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
-  .barem-filtre { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
   .barem-durum { background: #f8f9fb; border: 1px solid var(--line); border-bottom: none; padding: 8px 16px; font-size: 12px; color: var(--navy); font-weight: 600; }
+  .grup { margin-bottom: 18px; }
+  .grup-baslik { font-size: 14px; font-weight: 800; color: var(--navy); padding: 0 2px 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .grup-not { font-size: 11px; font-weight: 600; color: var(--muted); }
   .tablewrap { background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; overflow: auto; }
+  .tablewrap table { min-width: 1080px; }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 700; padding: 10px; text-align: left; white-space: nowrap; z-index: 2; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
   tbody td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -63,46 +65,70 @@
   </div>
 
   <div class="aciklama">
-    Kargo bedeli sipariş toplamına göre <b>kademeli</b> arttığından, bir kargo eşiğinin hemen üstünde kalan
-    siparişi eşiğin altına çekmek fiyattan kaybedileni kargodan (ve satışla orantılı düşen komisyondan)
-    fazlasıyla geri kazandırabilir — örneğin 240₺'lik bir sipariş 199₺'ye indirilince kargo kademesi düşer.
-    Kâr, zorunlu sipariş adedi dahil <b>sipariş toplamı</b> üzerinden hesaplanır; önerilen fiyat eşiğin
-    <span id="baremMarjBilgi"></span> altına iner. <b>Komisyon oranı değişmez</b> — ürünün güncel komisyonu
-    her iki senaryoda da aynı; komisyon tarifesindeki fiyat aralıkları bu hesaba karışmaz.
-    Ürün verisi, maliyetler ve kargo/hizmet ayarı ana sayfayla ortaktır.
+    Fiyatı bir barem eşiğinin altına çekince kârın ne olduğunu gösterir. İki tür eşik var:
+    <b>zorunlu sipariş adedi</b> eşikleri birim fiyata bakar (75₺ → 2, 50₺ → 3, 35₺ → 4, 25₺ → 6 adet) —
+    fiyatı bir alt bareme çekmek müşteriyi daha fazla adet almaya zorlar, kargo yine tek sefer alınır.
+    <b>Kargo kademesi</b> eşikleri ise sipariş toplamına bakar ve eşiğin <span id="baremMarjBilgi"></span>
+    altına inilir (240₺ → 199₺). Kâr her zaman zorunlu adet dahil <b>sipariş toplamı</b> üzerinden hesaplanır.
+    <b>Komisyon oranı değişmez</b> — ürünün güncel komisyonu her iki senaryoda da aynı; komisyon
+    tarifesindeki fiyat aralıkları bu hesaba karışmaz. Ürün verisi, maliyetler ve kargo/hizmet ayarı
+    ana sayfayla ortaktır.
   </div>
 
   <div class="filtreler">
     <input type="text" id="baremSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderBarem()">
-    <label class="barem-filtre">En fazla indirim
-      <input type="number" id="baremMaxIndirim" min="1" max="100" step="1" class="barem-max" onchange="setBaremMaxIndirim(this.value)"> %
-    </label>
-    <label class="barem-filtre"><input type="checkbox" id="baremSadeceKarli" checked onchange="renderBarem()"> Yalnızca kârı artıranlar</label>
   </div>
-  <div class="barem-durum" id="baremDurum"></div>
-  <div class="tablewrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Ürün</th>
-          <th class="num">Mevcut Fiyat</th>
-          <th class="num">Mevcut Kâr</th>
-          <th class="num">Önerilen Fiyat</th>
-          <th class="num">İndirim</th>
-          <th class="num">Yeni Kâr</th>
-          <th class="num">Kâr Farkı</th>
-          <th>Barem</th>
-          <th class="num">Seç</th>
-        </tr>
-      </thead>
-      <tbody id="baremBody"></tbody>
-    </table>
+
+  <div class="grup">
+    <div class="grup-baslik">75₺ ve altı ürünler <span class="grup-not">zorunlu sipariş adedi + kargo eşikleri</span></div>
+    <div class="barem-durum" id="baremDurumAlt"></div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th class="num">Mevcut Fiyat</th>
+            <th class="num">Mevcut Kâr</th>
+            <th class="num">Önerilen Fiyat</th>
+            <th class="num">İndirim</th>
+            <th class="num">Yeni Kâr</th>
+            <th class="num">Kâr Farkı</th>
+            <th>Barem</th>
+            <th class="num">Seç</th>
+          </tr>
+        </thead>
+        <tbody id="baremBodyAlt"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grup">
+    <div class="grup-baslik">75₺ üzeri ürünler <span class="grup-not">kargo kademesi eşikleri</span></div>
+    <div class="barem-durum" id="baremDurumUst"></div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th class="num">Mevcut Fiyat</th>
+            <th class="num">Mevcut Kâr</th>
+            <th class="num">Önerilen Fiyat</th>
+            <th class="num">İndirim</th>
+            <th class="num">Yeni Kâr</th>
+            <th class="num">Kâr Farkı</th>
+            <th>Barem</th>
+            <th class="num">Seç</th>
+          </tr>
+        </thead>
+        <tbody id="baremBodyUst"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 <script src="../assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
-import { baremIndirimAnalizi, BAREM_MARJI, kargoKademesi } from '../assets/calc.js?v=__BUILD_VERSION__';
+import { baremIndirimAnalizi, BAREM_MARJI, kargoKademesi, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI } from '../assets/calc.js?v=__BUILD_VERSION__';
 import { URUNLER } from '../assets/urunler-data.js?v=__BUILD_VERSION__';
 import { KDV_PCT, tl, pc, applyMaliyetKayitlari, readKargoHizmet, readUrunler } from '../assets/ortak.js?v=__BUILD_VERSION__';
 import { buildXlsxBlob } from '../assets/xlsx-writer.js?v=__BUILD_VERSION__';
@@ -112,37 +138,32 @@ const { urunler: aktifUrunler, meta } = readUrunler(URUNLER);
 applyMaliyetKayitlari(aktifUrunler);
 const { kargoAyar, hizmetAyar } = readKargoHizmet();
 
-const BAREM_AYAR_KEY = 'trendyol_barem_ayar_v1';
-// "Yakınlık" sınırı: bundan fazla indirim gerektiren barem, yuvarlama değil
-// fiyat kırma sayılır ve önerilmez. Örnek 240₺ → 199₺ indirimi %17.1'dir.
-let baremMaxIndirim = 20;
+// Grupları ayıran sınır, zorunlu sipariş adedinin devreye girdiği yerdir:
+// bu fiyatın altında/eşitinde müşteri tek adet alamaz, üstünde alabilir.
+// Sabit yazmak yerine barem tablosunun en üst eşiğinden okunur (bugün 75₺).
+const ADET_SINIRI = ZORUNLU_ADET_BAREMLERI[ZORUNLU_ADET_BAREMLERI.length - 1].esik;
+
 const selectedBarem = new Set(); // "ürünIndex|önerilenFiyat"
-
-function loadBaremAyar() {
-  try {
-    const raw = localStorage.getItem(BAREM_AYAR_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d && d.maxIndirim > 0) baremMaxIndirim = +d.maxIndirim;
-  } catch (e) {}
-}
-
-window.setBaremMaxIndirim = function (val) {
-  const n = parseFloat(val);
-  if (!(n > 0)) { document.getElementById('baremMaxIndirim').value = baremMaxIndirim; return; }
-  baremMaxIndirim = n;
-  localStorage.setItem(BAREM_AYAR_KEY, JSON.stringify({ maxIndirim: baremMaxIndirim }));
-  renderBarem();
-};
 
 const kargoIcin = (siparisToplami) => kargoKademesi(siparisToplami, kargoAyar);
 
-// Aday barem eşikleri: kargo kademesi eşikleri, sipariş toplamına uygulanır.
-// Komisyon tarifesindeki fiyat aralıkları bu hesaba karışmaz.
-const BAREM_ESIKLERI = [
-  { esik: kargoAyar.esik1, etiket: `Kargo ${kargoAyar.kargo2}₺→${kargoAyar.kargo1}₺` },
-  { esik: kargoAyar.esik2, etiket: `Kargo ${kargoAyar.kargo3}₺→${kargoAyar.kargo2}₺` },
+// Kargo kademesi eşikleri — sipariş toplamına uygulanır, her iki grupta da aday.
+const KARGO_BAREMLERI = [
+  { esik: kargoAyar.esik1, kapsam: 'toplam', etiket: `Kargo ${kargoAyar.kargo2}₺→${kargoAyar.kargo1}₺` },
+  { esik: kargoAyar.esik2, kapsam: 'toplam', etiket: `Kargo ${kargoAyar.kargo3}₺→${kargoAyar.kargo2}₺` },
 ];
+
+// Zorunlu sipariş adedi eşikleri — birim fiyata uygulanır, yalnızca 75₺ ve altı
+// grubunda aday. (75₺ üzeri ürünlerde adet baremi kullanılmaz.)
+const ADET_BAREMLERI = ZORUNLU_ADET_BAREMLERI.map(b => ({
+  esik: b.esik, kapsam: 'birim', etiket: `${b.esik}₺ → ${b.adet} adet`,
+}));
+
+const altGrupMu = (u) => zorunluSiparisAdedi(u.guncel_tsf) > 1;
+
+function baremEsikleri(u) {
+  return altGrupMu(u) ? [...ADET_BAREMLERI, ...KARGO_BAREMLERI] : KARGO_BAREMLERI;
+}
 
 // Komisyon iki senaryoda da ürünün güncel komisyonudur; indirimli fiyat başka
 // bir tarife aralığına düşse bile oran değişmez.
@@ -154,66 +175,65 @@ function baremAnaliz(u) {
     komisyon: u.guncel_komisyon,
     kdvPct: KDV_PCT,
     hizmet: hizmetAyar,
-    maxIndirimYuzdesi: baremMaxIndirim,
     kargoIcin,
-    baremler: BAREM_ESIKLERI,
+    baremler: baremEsikleri(u),
   });
 }
 
-// Her ürünün her barem adayı ayrı satır olur; böylece bir üründe hem kargo hem
-// komisyon baremi varsa ikisi de görünür.
-function baremSatirlari({ sadeceKarli = true, q = '' } = {}) {
+// Her ürünün her barem adayı ayrı satır olur; kâr farkına göre azalan sıralı.
+function baremSatirlari(q, altGrup) {
   const satirlar = [];
   aktifUrunler.forEach((u, idx) => {
+    if (altGrupMu(u) !== altGrup) return;
     if (q && !`${u.urun} ${u.model || ''} ${u.barkod || ''}`.toLowerCase().includes(q)) return;
     const analiz = baremAnaliz(u);
     if (!analiz) return;
     for (const aday of analiz.adaylar) {
-      if (sadeceKarli && aday.karFarki <= 0) continue;
       satirlar.push({ idx, u, mevcut: analiz.mevcut, aday, key: `${idx}|${aday.birimFiyat}` });
     }
   });
   return satirlar.sort((a, b) => b.aday.karFarki - a.aday.karFarki);
 }
 
+function satirHtml({ u, mevcut, aday, key }) {
+  const farkCls = aday.karFarki >= 0 ? 'barem-pos' : 'barem-neg';
+  const mevcutCls = mevcut.kar >= 0 ? 'barem-pos' : 'barem-neg';
+  const yeniCls = aday.kar >= 0 ? 'barem-pos' : 'barem-neg';
+  const adetBilgi = `<div class="barem-alt">${aday.adet} adet · toplam ${tl(aday.siparisToplami)}</div>`;
+  const mevcutAdet = `<div class="barem-alt">${mevcut.adet} adet · toplam ${tl(mevcut.siparisToplami)}</div>`;
+  const etiketler = aday.baremler.map(b => `<span class="barem-etiket">${b.etiket}</span>`).join('');
+  return `<tr>
+    <td>${u.urun}<div class="barem-alt">Barkod: ${u.barkod || '-'} · Maliyet: ${tl(u.maliyet)}</div></td>
+    <td class="num">${tl(mevcut.birimFiyat)}<div class="barem-alt">%${u.guncel_komisyon} komisyon · kargo ${tl(mevcut.kargo)}</div>${mevcutAdet}</td>
+    <td class="num ${mevcutCls}">${tl(mevcut.kar)}<div class="barem-alt">${pc(mevcut.karOrani)}</div></td>
+    <td class="num"><span class="barem-hedef">${tl(aday.birimFiyat)}</span><div class="barem-alt">kargo ${tl(aday.kargo)}</div>${adetBilgi}</td>
+    <td class="num">${tl(aday.indirimTutari)}<div class="barem-alt">${pc(aday.indirimYuzdesi)}</div></td>
+    <td class="num ${yeniCls}">${tl(aday.kar)}<div class="barem-alt">${pc(aday.karOrani)}</div></td>
+    <td class="num ${farkCls}">${aday.karFarki >= 0 ? '+' : ''}${tl(aday.karFarki)}</td>
+    <td>${etiketler}</td>
+    <td class="num"><input type="checkbox" ${selectedBarem.has(key) ? 'checked' : ''} onchange="toggleBaremSec('${key}', this)"></td>
+  </tr>`;
+}
+
+function renderGrup(altGrup, bodyId, durumId, q) {
+  const satirlar = baremSatirlari(q, altGrup);
+  const body = document.getElementById(bodyId);
+  body.innerHTML = satirlar.length
+    ? satirlar.map(satirHtml).join('')
+    : `<tr><td colspan="9" class="barem-bos">Bu grupta barem adayı yok — ürünlerin maliyeti ve güncel komisyonu girilmiş olmalı.</td></tr>`;
+
+  const urunSayisi = new Set(satirlar.map(r => r.idx)).size;
+  const karli = satirlar.filter(r => r.aday.karFarki > 0);
+  const karliUrun = new Set(karli.map(r => r.idx)).size;
+  document.getElementById(durumId).textContent = satirlar.length
+    ? `${urunSayisi} üründe ${satirlar.length} barem adayı — ${karliUrun} üründeki ${karli.length} tanesi kârı artırıyor.`
+    : 'Aday yok.';
+}
+
 window.renderBarem = function () {
   const q = document.getElementById('baremSearch').value.trim().toLowerCase();
-  const sadeceKarli = document.getElementById('baremSadeceKarli').checked;
-  const satirlar = baremSatirlari({ sadeceKarli, q });
-
-  const body = document.getElementById('baremBody');
-  if (satirlar.length === 0) {
-    body.innerHTML = `<tr><td colspan="9" class="barem-bos">${
-      sadeceKarli
-        ? `Kârı artıran bir barem indirimi bulunamadı. Ürünlerin maliyeti girilmiş olmalı; "En fazla indirim" sınırını (%${baremMaxIndirim}) yükseltmeyi ya da "Yalnızca kârı artıranlar" filtresini kapatmayı deneyin.`
-        : 'Gösterilecek barem adayı yok — ürünlerin maliyeti ve güncel komisyonu girilmiş olmalı.'
-    }</td></tr>`;
-  } else {
-    body.innerHTML = satirlar.map(({ u, mevcut, aday, key }) => {
-      const farkCls = aday.karFarki >= 0 ? 'barem-pos' : 'barem-neg';
-      const mevcutCls = mevcut.kar >= 0 ? 'barem-pos' : 'barem-neg';
-      const yeniCls = aday.kar >= 0 ? 'barem-pos' : 'barem-neg';
-      const adetBilgi = aday.adet > 1 ? `<div class="barem-alt">${aday.adet} adet · toplam ${tl(aday.siparisToplami)}</div>` : '';
-      const mevcutAdet = mevcut.adet > 1 ? `<div class="barem-alt">${mevcut.adet} adet · toplam ${tl(mevcut.siparisToplami)}</div>` : '';
-      const etiketler = aday.baremler.map(b => `<span class="barem-etiket">${b.etiket}</span>`).join('');
-      return `<tr>
-        <td>${u.urun}<div class="barem-alt">Barkod: ${u.barkod || '-'} · Maliyet: ${tl(u.maliyet)}</div></td>
-        <td class="num">${tl(mevcut.birimFiyat)}<div class="barem-alt">%${u.guncel_komisyon} komisyon · kargo ${tl(mevcut.kargo)}</div>${mevcutAdet}</td>
-        <td class="num ${mevcutCls}">${tl(mevcut.kar)}<div class="barem-alt">${pc(mevcut.karOrani)}</div></td>
-        <td class="num"><span class="barem-hedef">${tl(aday.birimFiyat)}</span><div class="barem-alt">kargo ${tl(aday.kargo)}</div>${adetBilgi}</td>
-        <td class="num">${tl(aday.indirimTutari)}<div class="barem-alt">${pc(aday.indirimYuzdesi)}</div></td>
-        <td class="num ${yeniCls}">${tl(aday.kar)}<div class="barem-alt">${pc(aday.karOrani)}</div></td>
-        <td class="num ${farkCls}">${aday.karFarki >= 0 ? '+' : ''}${tl(aday.karFarki)}</td>
-        <td>${etiketler}</td>
-        <td class="num"><input type="checkbox" ${selectedBarem.has(key) ? 'checked' : ''} onchange="toggleBaremSec('${key}', this)"></td>
-      </tr>`;
-    }).join('');
-  }
-
-  const karli = baremSatirlari({ sadeceKarli: true });
-  const urunSayisi = new Set(karli.map(r => r.idx)).size;
-  document.getElementById('baremDurum').textContent =
-    `${aktifUrunler.length} üründen ${urunSayisi} tanesinde kârı artıran ${karli.length} barem indirimi var (en fazla %${baremMaxIndirim} indirimle).`;
+  renderGrup(true, 'baremBodyAlt', 'baremDurumAlt', q);
+  renderGrup(false, 'baremBodyUst', 'baremDurumUst', q);
   updateBaremSecimBar();
 };
 
@@ -232,7 +252,7 @@ window.exportBaremSecilenlerXlsx = async function () {
   if (!selectedBarem.size) return;
   const rows = [[
     'Ürün', 'Model', 'Barkod', 'Maliyet (₺)',
-    'Komisyon (%)',
+    'Grup', 'Komisyon (%)',
     'Mevcut Fiyat (₺)', 'Mevcut Adet', 'Mevcut Sipariş Toplamı (₺)', 'Mevcut Kargo (₺)', 'Mevcut Kâr (₺)', 'Mevcut Kâr Oranı (%)',
     'Önerilen Fiyat (₺)', 'İndirim (₺)', 'İndirim (%)', 'Önerilen Adet', 'Önerilen Sipariş Toplamı (₺)', 'Önerilen Kargo (₺)', 'Yeni Kâr (₺)', 'Yeni Kâr Oranı (%)', 'Kâr Farkı (₺)',
     'Barem',
@@ -240,8 +260,6 @@ window.exportBaremSecilenlerXlsx = async function () {
   const r2 = (x) => Math.round(x * 100) / 100;
   const r1 = (x) => Math.round(x * 10) / 10;
 
-  // Satırlar seçim anındaki değil, indirme anındaki ayarlarla yeniden
-  // hesaplanır (indirim sınırı arada değişmiş olabilir).
   const keys = [...selectedBarem].sort((a, b) => (+a.split('|')[0]) - (+b.split('|')[0]));
   for (const key of keys) {
     const [idxStr, fiyatStr] = key.split('|');
@@ -252,7 +270,8 @@ window.exportBaremSecilenlerXlsx = async function () {
     if (!aday) continue;
     const m = analiz.mevcut;
     rows.push([
-      u.urun, u.model || '', String(u.barkod || ''), u.maliyet, u.guncel_komisyon,
+      u.urun, u.model || '', String(u.barkod || ''), u.maliyet,
+      altGrupMu(u) ? `${ADET_SINIRI}₺ ve altı` : `${ADET_SINIRI}₺ üzeri`, u.guncel_komisyon,
       m.birimFiyat, m.adet, m.siparisToplami, m.kargo, r2(m.kar), r1(m.karOrani),
       aday.birimFiyat, aday.indirimTutari, aday.indirimYuzdesi, aday.adet, aday.siparisToplami, aday.kargo, r2(aday.kar), r1(aday.karOrani), r2(aday.karFarki),
       aday.baremler.map(b => b.etiket).join(' + '),
@@ -268,8 +287,6 @@ window.exportBaremSecilenlerXlsx = async function () {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
-loadBaremAyar();
-document.getElementById('baremMaxIndirim').value = baremMaxIndirim;
 document.getElementById('baremMarjBilgi').textContent = `${BAREM_MARJI.toFixed(2)}₺`;
 document.getElementById('veriKaynagi').textContent = meta && meta.fileName
   ? `Veri kaynağı: ${meta.fileName}`
