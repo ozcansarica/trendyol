@@ -181,7 +181,9 @@ hesaplanmaz.
 Ürünler, zorunlu sipariş adedinin devreye girdiği **75₺ sınırına göre iki
 sekmeye** ayrılır (75₺ ve altı / 75₺ üzeri; sınır `ZORUNLU_ADET_BAREMLERI`'nin
 en üst eşiğinden okunur, sabit yazılmaz). Arama kutusu iki sekmede birden
-çalışır ve sekme başlıklarındaki sayılar arama sonucunu yansıtır.
+çalışır ve sekme başlıklarındaki sayılar arama sonucunu yansıtır. Satırlar
+dosyadaki sırayla değil **satış fiyatına göre** sıralanır (varsayılan artan;
+"Satış Fiyatı" başlığına tıklayınca yön değişir, seçim sekmeler arasında korunur).
 
 Tablo her ürün için iki kargo eşiğini ayrı ayrı, her biri **iki sütun** hâlinde
 gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
