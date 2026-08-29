@@ -23,6 +23,12 @@
   .kaynak { font-size: 11.5px; color: var(--muted); }
   .aciklama { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
   .aciklama b { color: var(--navy); }
+  .sekmeler { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sekme { padding: 10px 18px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; text-align: left; }
+  .sekme:hover { border-color: var(--orange); color: var(--orange); }
+  .sekme.aktif { border-color: var(--orange); background: #fff3e8; color: var(--orange-d); }
+  .sekme .sayi { display: block; font-size: 10.5px; font-weight: 600; color: #94a3b8; margin-top: 2px; }
+  .sekme.aktif .sayi { color: #c2760f; }
   .filtreler { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; padding: 12px 16px; display: flex; gap: 12px; flex-wrap: wrap; }
   .filtreler input { flex: 1; min-width: 220px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px; }
   .filtreler input:focus { outline: none; border-color: var(--orange); }
@@ -67,11 +73,18 @@
     bir siparişte kaç adet satılırsa toplamın kargo eşiklerini geçtiğini; hemen yanındaki sütunda ise
     <b>o adette baremin altında kalmak için sipariş toplamından düşülmesi gereken indirimi</b> gösterir.
     İndirim birim fiyata değil <b>sepet toplamına</b> uygulandığından hedef tutar tam tutturulur.
+    Ürünler zorunlu sipariş adedinin devreye girdiği <b>75₺</b> sınırına göre iki sekmeye ayrılır:
+    75₺ ve altında müşteri tek adet alamaz, üstünde alabilir.
     <span id="esikNot"></span>
   </div>
 
   <div class="filtreler">
     <input type="text" id="ara" placeholder="🔍 Ürün adı veya barkod ara..." oninput="render()">
+  </div>
+
+  <div class="sekmeler" id="sekmeler">
+    <button class="sekme aktif" data-sekme="alt" onclick="setSekme('alt')">75₺ ve altı ürünler<span class="sayi" id="sayiAlt"></span></button>
+    <button class="sekme" data-sekme="ust" onclick="setSekme('ust')">75₺ üzeri ürünler<span class="sayi" id="sayiUst"></span></button>
   </div>
   <div class="durum" id="durum"></div>
   <div class="tablewrap">
@@ -80,6 +93,7 @@
         <tr>
           <th rowspan="2">Ürün</th>
           <th rowspan="2" class="num">Satış Fiyatı</th>
+          <th rowspan="2" class="num">Zorunlu Adet</th>
           <th colspan="2" class="grup-esik" id="bas1"></th>
           <th colspan="2" class="grup-esik" id="bas2"></th>
         </tr>
@@ -97,7 +111,7 @@
 
 <script src="../assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
-import { kargoEsikAdetleri, adetliSiparisKari, kargoKademesi } from '../assets/calc.js?v=__BUILD_VERSION__';
+import { kargoEsikAdetleri, adetliSiparisKari, kargoKademesi, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI } from '../assets/calc.js?v=__BUILD_VERSION__';
 import { KDV_PCT, tl, pc, VARSAYILAN_KARGO_AYAR, VARSAYILAN_HIZMET } from '../assets/ortak.js?v=__BUILD_VERSION__';
 
 // Bu araç bilinçli olarak bağımsızdır: verisini yalnızca kendi anahtarından
@@ -106,6 +120,13 @@ const KARGO_BAREM_KEY = 'trendyol_kargo_barem_urunler_v1';
 const kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
 const hizmetAyar = VARSAYILAN_HIZMET;
 const kargoIcin = (siparisToplami) => kargoKademesi(siparisToplami, kargoAyar);
+
+// Ürünler zorunlu sipariş adedinin devreye girdiği sınıra göre iki sekmeye
+// ayrılır: sınırın altında/eşitinde müşteri tek adet alamaz, üstünde alabilir.
+// Sınır sabit yazılmaz, barem tablosunun en üst eşiğinden okunur (bugün 75₺).
+const ADET_SINIRI = ZORUNLU_ADET_BAREMLERI[ZORUNLU_ADET_BAREMLERI.length - 1].esik;
+const altGrupMu = (u) => zorunluSiparisAdedi(u.satis) > 1;
+let aktifSekme = 'alt';
 
 let kayit = null;
 try { kayit = JSON.parse(localStorage.getItem(KARGO_BAREM_KEY) || 'null'); } catch (e) {}
@@ -174,7 +195,7 @@ window.render = function () {
 
   const govde = el('govde');
   if (urunler.length === 0) {
-    govde.innerHTML = `<tr><td colspan="6" class="bos">
+    govde.innerHTML = `<tr><td colspan="7" class="bos">
       Bu araç kendi ürün verisini kullanır ve sitedeki diğer sayfalardan bağımsızdır.<br>
       Başlamak için <a href="./yukle.html">📤 Ürün Yükleme</a> sayfasından
       "Aktif-Pasif Ürün" Excel'inizi yükleyin.
@@ -184,26 +205,44 @@ window.render = function () {
   }
 
   const q = el('ara').value.trim().toLowerCase();
-  const liste = urunler.filter(u => u.satis > 0
+  const eslesen = urunler.filter(u => u.satis > 0
     && (!q || `${u.urun} ${u.barkod || ''}`.toLowerCase().includes(q)));
 
+  // Sekme sayıları arama sonucunu yansıtır, böylece boş sekme belli olur.
+  const altListe = eslesen.filter(altGrupMu);
+  const ustListe = eslesen.filter(u => !altGrupMu(u));
+  el('sayiAlt').textContent = `${altListe.length} ürün`;
+  el('sayiUst').textContent = `${ustListe.length} ürün`;
+  for (const btn of document.querySelectorAll('#sekmeler .sekme')) {
+    btn.classList.toggle('aktif', btn.dataset.sekme === aktifSekme);
+  }
+
+  const liste = aktifSekme === 'alt' ? altListe : ustListe;
   govde.innerHTML = liste.length
     ? liste.map(u => {
         const [e1, e2] = kargoEsikAdetleri(u.satis, kargoAyar);
+        const zorunlu = zorunluSiparisAdedi(u.satis);
         return `<tr>
           <td>${u.urun}
             <div class="alt">Barkod: ${u.barkod || '-'} · Alış: ${u.maliyet > 0 ? tl(u.maliyet) : '-'} · Komisyon: %${u.komisyon}</div>
           </td>
           <td class="num">${tl(u.satis)}</td>
+          <td class="num">${zorunlu}${zorunlu > 1 ? `<div class="alt">toplam ${tl(u.satis * zorunlu)}</div>` : '<div class="alt">tek adet</div>'}</td>
           ${esikHucreleri(u, e1)}
           ${esikHucreleri(u, e2)}
         </tr>`;
       }).join('')
-    : '<tr><td colspan="6" class="bos">Aramayla eşleşen ürün yok.</td></tr>';
+    : `<tr><td colspan="7" class="bos">${q ? 'Aramayla eşleşen ürün yok.' : 'Bu grupta ürün yok.'}</td></tr>`;
 
-  el('durum').textContent = `${liste.length} ürün gösteriliyor`
-    + (liste.length !== urunler.length ? ` (toplam ${urunler.length})` : '')
+  const grupAdi = aktifSekme === 'alt' ? `${tl(ADET_SINIRI)} ve altı` : `${tl(ADET_SINIRI)} üzeri`;
+  el('durum').textContent = `${grupAdi}: ${liste.length} ürün gösteriliyor`
+    + ` · toplam ${eslesen.length}${eslesen.length !== urunler.length ? ` (${urunler.length} üründen arama sonucu)` : ''}`
     + ` · KDV %${KDV_PCT}, hizmet bedeli ${tl(hizmetAyar)}.`;
+};
+
+window.setSekme = function (sekme) {
+  aktifSekme = sekme;
+  render();
 };
 
 render();
