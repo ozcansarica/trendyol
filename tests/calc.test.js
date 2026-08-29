@@ -269,52 +269,65 @@ test('adetliSiparisKari: adet dışarıdan verilir, kargo toplamdan bulunur', ()
   assert.equal(r.kar, c.kar);
 });
 
-test('altında kalmak: indirim sipariş toplamından düşülür, hedef tam tutturulur', () => {
+test('altında kalmak: en az indirim, hedef yuvarlanmadan tam sınıra iner', () => {
   const [ikinci, ucuncu] = kargoEsikAdetleri(120, kargoAyarTest);
 
-  // 2 adette 240₺ ile 200₺ eşiği geçiliyor; altında kalmak için toplam 199₺.
+  // 2 adette 240₺ ile 200₺ eşiği geçiliyor. Altında kalmak için 199₺'ye
+  // yuvarlamak gerekmez; bir kuruş altı (199,99₺) yeter, indirim de o kadar az.
   assert.equal(ikinci.adet, 2);
   assert.equal(ikinci.siparisToplami, 240);
-  assert.equal(ikinci.altindaKalmak.indirimTutari, 41);   // 240 − 199
-  assert.equal(ikinci.altindaKalmak.indirimYuzdesi, 17.08);
-  assert.equal(ikinci.altindaKalmak.siparisToplami, 199); // birim fiyata bölünmediği için tam
+  assert.equal(ikinci.altindaKalmak.siparisToplami, 199.99);
+  assert.equal(ikinci.altindaKalmak.indirimTutari, 40.01); // 240 − 199,99
   assert.equal(ikinci.altindaKalmak.kargo, 42);
-  assert.equal(ikinci.altindaKalmak.birimFiyat, 99.5);    // bilgi amaçlı karşılık
+  // Bilgi amaçlı birim karşılığı aşağı kırpılır: 199,99 / 2 = 99,995 → 99,99
+  // (yukarı yuvarlansa 100,00 × 2 = 200,00 ile eşiğe geri çıkardı).
+  assert.equal(ikinci.altindaKalmak.birimFiyat, 99.99);
+  assert.ok(ikinci.altindaKalmak.birimFiyat * ikinci.adet < kargoAyarTest.esik1);
 
-  // 3 adette 360₺ ile 350₺ eşiği geçiliyor; 350₺'nin kendisi hâlâ alt kademe.
+  // 350₺ eşiğinde sınır eşiğin kendisidir (≤ 350 hâlâ alt kademe), kuruş inmez.
   assert.equal(ucuncu.adet, 3);
-  assert.equal(ucuncu.altindaKalmak.indirimTutari, 10);   // 360 − 350
   assert.equal(ucuncu.altindaKalmak.siparisToplami, 350);
+  assert.equal(ucuncu.altindaKalmak.indirimTutari, 10); // 360 − 350
   assert.equal(ucuncu.altindaKalmak.kargo, 78);
 });
 
+test('altında kalmak: eşiğe tam oturan toplamda bir kuruş indirim yeter', () => {
+  // 25₺ × 8 = 200,00₺ tam eşik → 78₺ kademesinde. 1 kuruş indirim 199,99₺'ye
+  // indirip kargoyu 42₺'ye çeker.
+  const [ikinci] = kargoEsikAdetleri(25, kargoAyarTest);
+  assert.equal(ikinci.siparisToplami, 200);
+  assert.equal(ikinci.kargo, 78);
+  assert.equal(ikinci.altindaKalmak.indirimTutari, 0.01);
+  assert.equal(ikinci.altindaKalmak.siparisToplami, 199.99);
+  assert.equal(ikinci.altindaKalmak.kargo, 42);
+});
+
 test('altında kalmak: hedef toplam eşiği aşmaz ve alt kademeyi verir', () => {
-  for (const fiyat of [19.18, 20, 35, 49.9, 60, 75, 120, 199, 249, 375]) {
+  for (const fiyat of [19.18, 20, 34.9, 49.9, 60, 75, 120, 199, 249, 375]) {
     const [ikinci, ucuncu] = kargoEsikAdetleri(fiyat, kargoAyarTest);
     for (const e of [ikinci, ucuncu]) {
       if (!e.altindaKalmak) continue;
       const a = e.altindaKalmak;
-      // Hedef, eşiğin kendi kuralına göre: 200₺ için 199₺, 350₺ için tam 350₺.
-      assert.equal(a.siparisToplami, e.esik === 200 ? 199 : 350);
+      // Hedef, eşiğin kendi kuralındaki tam sınır: 200₺ için 199,99₺, 350₺ için 350₺.
+      assert.equal(a.siparisToplami, e.esik === 200 ? 199.99 : 350);
       // Ve gerçekten geçilen kademenin altında kalmalı.
       assert.equal(a.kargo, kargoKademesi(a.siparisToplami, kargoAyarTest));
       assert.ok(a.kargo < e.kargo, `${fiyat}₺ ${e.esik}₺ eşiği: ${a.kargo}₺ < ${e.kargo}₺ olmalı`);
       // İndirim sipariş toplamı üzerinden, tutar ve yüzde tutarlı olmalı.
       assert.equal(a.indirimTutari, round2(e.siparisToplami - a.siparisToplami));
       assert.equal(a.indirimYuzdesi, round2(a.indirimTutari / e.siparisToplami * 100));
+      // Bilgi amaçlı birim karşılığı hiçbir zaman hedefi aşmamalı.
+      assert.ok(round2(a.birimFiyat * e.adet) <= a.siparisToplami);
     }
   }
 });
 
-test('altında kalmak: eşik zaten tutturulmuşsa indirim gerekmez', () => {
-  // 20₺ × 10 = 200₺ tam eşik → 1₺ indirimle 199₺'ye inilir.
-  const [ikinci] = kargoEsikAdetleri(20, kargoAyarTest);
-  assert.equal(ikinci.siparisToplami, 200);
-  assert.equal(ikinci.altindaKalmak.indirimTutari, 1);
-
-  // 375₺'lik ürün tek adette 350₺ eşiğini geçiyor → 25₺ indirimle tam 350₺.
-  const [, ucuncu] = kargoEsikAdetleri(375, kargoAyarTest);
-  assert.equal(ucuncu.adet, 1);
-  assert.equal(ucuncu.altindaKalmak.indirimTutari, 25);
-  assert.equal(ucuncu.altindaKalmak.siparisToplami, 350);
+test('altında kalmak: marj parametresiyle yuvarlanmış hedef de istenebilir', () => {
+  // Varsayılan bir kuruş; 1₺ verilirse eski davranış (199₺'ye yuvarlama).
+  const [varsayilan] = kargoEsikAdetleri(34.9, kargoAyarTest);
+  const [yuvarlanmis] = kargoEsikAdetleri(34.9, kargoAyarTest, 1);
+  assert.equal(varsayilan.altindaKalmak.siparisToplami, 199.99);
+  assert.equal(varsayilan.altindaKalmak.indirimTutari, 9.41);
+  assert.equal(yuvarlanmis.altindaKalmak.siparisToplami, 199);
+  assert.equal(yuvarlanmis.altindaKalmak.indirimTutari, 10.4);
 });
