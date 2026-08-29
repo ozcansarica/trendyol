@@ -101,41 +101,50 @@ bu anahtarlardan dinamik olarak üretilir.
 
 ## Barem İndirimi (`indirim/index.html`)
 
-Kargo bedeli sipariş toplamına göre **kademeli** arttığından, bir kargo eşiğinin
-hemen üstünde kalan siparişi eşiğin altına çekmek fiyattan kaybedileni kargodan
-(ve satışla orantılı düşen komisyondan) fazlasıyla geri kazandırabilir: 240₺'lik
-bir sipariş 199₺'ye indirilince kargo 78₺ → 42₺ düşer. Sayfa bu senaryoları
-tarayıp mevcut durumla karşılaştırır.
+Bir fiyatı barem eşiğinin altına çekince kârın ne olduğunu gösterir. Sayfa
+ürünleri **zorunlu sipariş adedinin devreye girdiği 75₺ sınırına göre ikiye
+ayırır**; iki grubun barem türü farklıdır:
+
+| Grup | Kullanılan baremler |
+|------|---------------------|
+| **75₺ ve altı** (zorunlu adet > 1) | Zorunlu sipariş adedi eşikleri **+** kargo kademesi eşikleri |
+| **75₺ üzeri** (tek adet satılabilir) | Yalnızca kargo kademesi eşikleri |
+
+Grup sınırı sabit yazılmaz, `ZORUNLU_ADET_BAREMLERI`'nin en üst eşiğinden okunur.
+
+**İki eşik türü, farklı tutara bakar** (`kapsam` alanı, `baremIndirimAnalizi()`):
+
+| Kapsam | Eşik kaynağı | Baktığı tutar | Hedef fiyat |
+|--------|--------------|---------------|-------------|
+| `'birim'` | Zorunlu sipariş adedi (`ZORUNLU_ADET_BAREMLERI`: 25/35/50/75₺) | Birim fiyat | Eşiğin kendisi — kural "X ₺ ve altı" (50₺ → 3 adet) |
+| `'toplam'` | Kargo kademesi (`kargoAyar.esik1/esik2`, varsayılan 200/350₺) | Sipariş toplamı | Eşik − `BAREM_MARJI` (1₺): 200₺ → 199₺ |
+
+Adet baremi mantığı: fiyatı bir alt bareme çekmek müşteriyi daha fazla adet
+almaya zorlar, kargo yine tek sefer alınır — ör. 60₺'lik ürün 50₺'ye çekilince
+zorunlu adet 2 → 3 olur, sipariş toplamı 120₺ → 150₺ çıkar. Kâr, ek adetlerin
+maliyeti ciro artışını yemediği sürece artar; yani birim marjı yüksek ürünlerde
+işe yarar.
+
+`'toplam'` kapsamda hedef sipariş toplamı adede bölünerek birim fiyata çevrilir;
+birim fiyat düşünce zorunlu adet artabildiğinden sabit noktaya yakınsanır ve
+kuruş küsuratı **aşağı** kırpılır (aksi halde toplam eşiği aşardı). Yakınsamayan
+eşik elenir.
+
+`ZORUNLU_ADET_BAREMLERI` (`assets/calc.js`) eşik → adet tablosunun tek
+kaynağıdır; `zorunluSiparisAdedi()` de bu tablodan okur.
 
 **Komisyon tarifesiyle ilgisi yoktur.** Ürünün `guncel_komisyon`'u hem mevcut hem
 indirimli senaryoda aynen kullanılır; indirimli fiyat başka bir tarife aralığına
 düşse bile oran değişmez. Komisyon fiyat aralıkları (1.–4. aralık) ana tablonun
 konusudur, bu sayfanın değil — bu yüzden sayfada tarife seçimi de yoktur.
 
-Çekirdek `baremIndirimAnalizi()` (`assets/calc.js`) saf bir fonksiyondur; kargo ve
-adet bilgisini enjekte edilen fonksiyonlardan, komisyonu tek bir `komisyon`
-parametresinden alır. Aday eşikler kargo kademesi eşikleridir
-(`kargoAyar.esik1/esik2`, varsayılan 200₺ ve 350₺) ve **sipariş toplamına**
-uygulanır; hedef tutar eşiğin `BAREM_MARJI` (1₺) altıdır → `200₺ → 199₺`.
+Her ürünün her barem adayı ayrı satır olur ve grup içinde **kâr farkına** göre
+sıralanır; kârı düşüren adaylar da listelenir (filtre yoktur), seçilenler
+Excel'e aktarılabilir.
 
-Hedef sipariş toplamı adede bölünerek birim fiyata çevrilir; birim fiyat düşünce
-zorunlu sipariş adedi artabildiğinden sabit noktaya yakınsanır ve kuruş küsuratı
-**aşağı** kırpılır (aksi halde toplam eşiği aşardı). Yakınsamayan eşik elenir.
-
-Her aday, mevcut durumla aynı formülle (zorunlu adet dahil sipariş toplamı
-üzerinden) hesaplanıp **kâr farkına** göre sıralanır. `maxIndirimYuzdesi`
-(panelde **En fazla indirim**, varsayılan %20, `trendyol_barem_ayar_v1`'de
-saklanır) bundan fazla indirim gerektiren eşikleri eler — amaç yakın bir bareme
-yuvarlamak, fiyatı dibe çekmek değil.
-
-Pratikte 200₺ eşiği için kâr sınırı, kargo tasarrufunun (36₺) indirim tutarını
-karşıladığı yerdir: maliyet 100₺ varsayımıyla %15 komisyonda ~241₺, %20'de ~245₺,
-%30'da ~251₺ ve altındaki fiyatlarda yuvarlamak kârlı; üstünde zararlı.
-
-Sayfa localStorage'ı yalnızca **okur** (kendi `trendyol_barem_ayar_v1` anahtarı
-hariç): ürün verisini, maliyet kayıtlarını ve kargo/hizmet ayarını ana sayfanın
-kaydettiği şekilde alır, hiçbirini değiştirmez. Ana sayfadaki hesaplamaları,
-Maliyet Girişi'ni veya diğer panelleri etkilemez.
+Sayfa localStorage'ı yalnızca **okur**: ürün verisini, maliyet kayıtlarını ve
+kargo/hizmet ayarını ana sayfanın kaydettiği şekilde alır, hiçbirini değiştirmez.
+Ana sayfadaki hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 
