@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ürün Yükleme — Kargo Barem</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📤</text></svg>">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --orange: #f27a1a; --orange-d: #e55a00; --navy: #1e293b; --line: #e6e9ef;
+    --bg: #f4f6f9; --green: #15803d; --green-bg: #eaf7ee; --red: #dc2626; --muted: #64748b;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: #111827; padding-bottom: 40px; }
+  .header { background: linear-gradient(135deg, var(--orange) 0%, var(--orange-d) 100%); color: #fff; padding: 18px 28px; display: flex; align-items: center; gap: 14px; }
+  .header-logo { width: 42px; height: 42px; background: rgba(255,255,255,.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .header h1 { font-size: 19px; font-weight: 800; }
+  .header p { font-size: 12px; opacity: .9; margin-top: 2px; }
+  .wrap { padding: 22px 28px; max-width: 900px; }
+  .kart { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .kart h2 { font-size: 15px; font-weight: 800; color: var(--navy); margin-bottom: 10px; }
+  .kart p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .upload-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 14px; }
+  .upload-btn:hover { background: #2b3a52; }
+  .git-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--green); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 700; text-decoration: none; margin-top: 12px; }
+  .git-btn:hover { background: #116932; }
+  table.sablon { border-collapse: collapse; margin-top: 12px; font-size: 12px; width: 100%; }
+  table.sablon th, table.sablon td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+  table.sablon th { background: var(--navy); color: #fff; font-weight: 700; white-space: nowrap; }
+  table.sablon td { color: var(--muted); }
+  .zorunlu { color: var(--orange-d); font-weight: 700; }
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-size: 13px; display: none; line-height: 1.5; }
+  .msg.error { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+  .msg.ok { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+  .msg.warn { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+  .msg ul { margin: 6px 0 0 18px; }
+  .mevcut { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .mevcut b { color: var(--navy); }
+  .sil-btn { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 5px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer; margin-left: 8px; }
+  .sil-btn:hover { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">📤</div>
+  <div>
+    <h1>Ürün Yükleme</h1>
+    <p>Kargo Barem aracının ürün verisi — bu sayfa sitedeki diğer verilerden bağımsızdır</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="kart">
+    <h2>Excel yükle</h2>
+    <p>
+      Trendyol <b>"Aktif-Pasif Ürün"</b> export'unu (.xlsx) seçin. Veriler tarayıcıda ayrıştırılıp
+      bu araca ait ayrı bir kayıtta saklanır; sayfayı yenileseniz de kalır.
+      Ana sayfanın ürün listesini, maliyet kayıtlarını ya da kargo ayarını <b>etkilemez</b> ve onlardan
+      <b>etkilenmez</b>.
+    </p>
+    <label class="upload-btn" for="fileInput">📤 Excel Dosyası Seç (.xlsx)</label>
+    <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+    <div class="msg error" id="hata"></div>
+    <div class="msg warn" id="uyari"></div>
+    <div class="msg ok" id="basari"></div>
+    <div class="mevcut" id="mevcut"></div>
+  </div>
+
+  <div class="kart">
+    <h2>Beklenen şablon</h2>
+    <p>Kolonlar isimle eşleştirilir, sıraları önemli değildir. <span class="zorunlu">Turuncu</span> olanlar zorunludur.</p>
+    <table class="sablon">
+      <thead>
+        <tr>
+          <th class="zorunlu">Barkod No</th>
+          <th>Ürün Adı</th>
+          <th>Alış Tutarı (KDV)</th>
+          <th class="zorunlu">Satış Tutarı (KDV)</th>
+          <th class="zorunlu">Komisyon Oranı</th>
+          <th>Ürün Resim</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>6010625458449</td>
+          <td>Eğik Cam Pipet (6 Adet)</td>
+          <td>8,80</td>
+          <td>34,90</td>
+          <td>20,5</td>
+          <td>https://cdn.dsmcdn.com/…</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px">
+      <b>Alış Tutarı</b> boşsa ürün yine listelenir ama kâr hesaplanmaz.
+      Satış tutarı ya da komisyon oranı olmayan satırlar atlanır ve yükleme sonrasında listelenir.
+    </p>
+  </div>
+</div>
+
+<script src="../assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
+<script type="module">
+import { parseAktifPasifXlsx } from '../assets/aktif-pasif-xlsx-reader.js?v=__BUILD_VERSION__';
+
+// Bu aracın kendi kaydı — ana sayfanın anahtarlarıyla (trendyol_urunler_data_v1
+// vb.) hiçbir ilgisi yoktur, bilinçli olarak ayrıdır.
+const KARGO_BAREM_KEY = 'trendyol_kargo_barem_urunler_v1';
+
+const el = (id) => document.getElementById(id);
+const goster = (id, html) => { const n = el(id); n.innerHTML = html; n.style.display = html ? 'block' : 'none'; };
+
+function mevcutGoster() {
+  let kayit = null;
+  try { kayit = JSON.parse(localStorage.getItem(KARGO_BAREM_KEY) || 'null'); } catch (e) {}
+  if (!kayit || !Array.isArray(kayit.urunler) || kayit.urunler.length === 0) {
+    el('mevcut').innerHTML = 'Henüz ürün yüklenmedi.';
+    return;
+  }
+  const tarih = kayit.uploadedAt ? new Date(kayit.uploadedAt).toLocaleString('tr-TR') : '';
+  el('mevcut').innerHTML = `Yüklü: <b>${kayit.urunler.length} ürün</b>`
+    + (kayit.fileName ? ` · ${kayit.fileName}` : '') + (tarih ? ` · ${tarih}` : '')
+    + ` <button class="sil-btn" onclick="veriyiSil()">Yüklenen veriyi sil</button>`
+    + `<div style="margin-top:10px"><a class="git-btn" href="./">📊 Kargo Barem tablosuna git →</a></div>`;
+}
+
+window.veriyiSil = function () {
+  if (!confirm('Bu araca yüklenmiş ürün verisi silinecek. Devam edilsin mi?')) return;
+  localStorage.removeItem(KARGO_BAREM_KEY);
+  goster('basari', ''); goster('uyari', ''); goster('hata', '');
+  mevcutGoster();
+};
+
+el('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  goster('hata', ''); goster('uyari', ''); goster('basari', '');
+  try {
+    const { urunler, warnings } = await parseAktifPasifXlsx(await file.arrayBuffer());
+    localStorage.setItem(KARGO_BAREM_KEY, JSON.stringify({
+      urunler, fileName: file.name, uploadedAt: new Date().toISOString(),
+    }));
+    const maliyetsiz = urunler.filter(u => !(u.maliyet > 0)).length;
+    goster('basari', `✓ <b>${urunler.length} ürün</b> yüklendi.`
+      + (maliyetsiz ? ` ${maliyetsiz} üründe alış tutarı yok, onlarda kâr hesaplanmayacak.` : ''));
+    if (warnings.length) {
+      const ilk = warnings.slice(0, 8).map(w => `<li>${w}</li>`).join('');
+      goster('uyari', `${warnings.length} satır atlandı:<ul>${ilk}</ul>`
+        + (warnings.length > 8 ? `<div style="margin-top:6px">…ve ${warnings.length - 8} satır daha.</div>` : ''));
+    }
+    mevcutGoster();
+  } catch (err) {
+    goster('hata', `Dosya okunamadı: ${err.message}`);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+mevcutGoster();
+</script>
+</body>
+</html>
