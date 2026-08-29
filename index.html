@@ -32,7 +32,7 @@
   .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .upload-btn:hover { background: #2b3a52; }
-  .maliyet-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .maliyet-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;text-decoration: none; }
   .maliyet-btn:hover { border-color: var(--orange); color: var(--orange); }
   .databar .status { font-size: 12px; color: var(--navy); font-weight: 600; }
   .databar .status b { color: var(--orange); }
@@ -75,18 +75,6 @@
   .modal-table input.m-maliyet:focus { outline: none; border-color: var(--orange); }
   .modal-table input.m-maliyet.kayitli { border-color: var(--green); background: var(--green-bg); }
   .modal-foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
-  .barem-tbl td.num, .barem-tbl th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .barem-pos { color: var(--green); font-weight: 700; }
-  .barem-neg { color: var(--red); font-weight: 700; }
-  .barem-hedef { font-weight: 800; color: var(--navy); }
-  .barem-etiket { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--muted); background: #f1f3f7; padding: 1px 6px; border-radius: 20px; margin: 1px 3px 1px 0; }
-  .barem-max { width: 52px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; text-align: right; }
-  .barem-filtre { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
-  .barem-bos { padding: 26px 20px; color: var(--muted); font-size: 12.5px; }
-  .barem-durum { padding: 8px 20px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--navy); font-weight: 600; background: #f8f9fb; }
-  .barem-tbl th, .barem-tbl td { padding-left: 10px; padding-right: 10px; }
-  .barem-tbl td:first-child { min-width: 190px; max-width: 260px; }
-  .barem-alt { font-size: 10.5px; color: var(--muted); font-weight: 500; }
   .kayit-badge { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--green); background: var(--green-bg); padding: 1px 6px; border-radius: 20px; margin-left: 5px; vertical-align: middle; }
 
   .tablewrap { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 74vh; }
@@ -179,7 +167,7 @@
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
     <button class="maliyet-btn" onclick="openYildizModal()">⭐ Yıldızlı Ürün Fiyatları</button>
-    <button class="maliyet-btn" onclick="openBaremModal()">⬇️ Barem İndirimi</button>
+    <a class="maliyet-btn" href="./indirim/">⬇️ Barem İndirimi</a>
     <button class="maliyet-btn" onclick="openKargoModal()">📦 Kargo/Hizmet Tanımı</button>
     <button id="secimIndir" class="indir-btn" onclick="exportSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="secimSayisi">0</span>)</button>
     <span class="status" id="dataStatus"></span>
@@ -272,50 +260,6 @@
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="baremModal">
-  <div class="modal-panel" style="max-width:1240px">
-    <div class="modal-head">
-      <div>
-        <h2>⬇️ Barem İndirimi</h2>
-        <p>Satış fiyatı bir barem eşiğinin (kargo kademesi ya da komisyon fiyat aralığı) hemen üstünde kalan ürünleri bulur; eşiğin altına inen fiyatla kârı karşılaştırır. Örnek: 240₺'lik sipariş 199₺'ye çekilince kargo kademesi düşer ve kâr artabilir.</p>
-      </div>
-      <button class="modal-close" onclick="closeBaremModal()">✕</button>
-    </div>
-    <div class="modal-search">
-      <input type="text" id="baremSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderBaremModal()">
-      <label class="barem-filtre">En fazla indirim
-        <input type="number" id="baremMaxIndirim" min="1" max="100" step="1" class="barem-max" onchange="setBaremMaxIndirim(this.value)"> %
-      </label>
-      <label class="barem-filtre"><input type="checkbox" id="baremSadeceKarli" checked onchange="renderBaremModal()"> Yalnızca kârı artıranlar</label>
-      <button id="baremSecimIndir" class="indir-btn" onclick="exportBaremSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="baremSecimSayisi">0</span>)</button>
-    </div>
-    <div class="barem-durum" id="baremDurum"></div>
-    <div class="modal-body">
-      <table class="modal-table barem-tbl">
-        <thead>
-          <tr>
-            <th>Ürün</th>
-            <th class="num">Mevcut Fiyat</th>
-            <th class="num">Mevcut Kâr</th>
-            <th class="num">Önerilen Fiyat</th>
-            <th class="num">İndirim</th>
-            <th class="num">Yeni Kâr</th>
-            <th class="num">Kâr Farkı</th>
-            <th>Barem</th>
-            <th class="num">Seç</th>
-          </tr>
-        </thead>
-        <tbody id="baremModalBody"></tbody>
-      </table>
-    </div>
-    <div class="modal-foot">
-      Kâr, zorunlu sipariş adedi dahil sipariş toplamı üzerinden hesaplanır; kargo kademesi de sipariş
-      toplamına göre belirlenir. Önerilen fiyat, kargo eşiklerinde eşiğin <span id="baremMarjBilgi"></span>
-      altına, komisyon aralıklarında aralığın üst sınırına iner.
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay hidden" id="kargoModal">
   <div class="modal-panel" style="max-width:480px">
     <div class="modal-head">
@@ -361,83 +305,53 @@
 
 <script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
-import { computeMaliyet, zorunluSiparisAdedi, baremIndirimAnalizi, BAREM_MARJI } from './assets/calc.js?v=__BUILD_VERSION__';
+import { computeMaliyet, zorunluSiparisAdedi, kargoKademesi, tarifeTierleri, tarifeTierForPrice } from './assets/calc.js?v=__BUILD_VERSION__';
+import {
+  KDV_PCT, STORAGE_KEY, MALIYET_KEY, KARGO_HIZMET_KEY, VARSAYILAN_KARGO_AYAR, VARSAYILAN_HIZMET,
+  tl, pc, loadMaliyetKayitlari, maliyetAnahtari, applyMaliyetKayitlari, readKargoHizmet, readUrunler,
+} from './assets/ortak.js?v=__BUILD_VERSION__';
+import { buildXlsxBlob } from './assets/xlsx-writer.js?v=__BUILD_VERSION__';
 import { URUNLER } from './assets/urunler-data.js?v=__BUILD_VERSION__';
 import { parseUrunlerXlsx } from './assets/xlsx-reader.js?v=__BUILD_VERSION__';
 import { parseMaliyetXlsx } from './assets/maliyet-xlsx-reader.js?v=__BUILD_VERSION__';
 import { parseYildizliUrunXlsx } from './assets/yildizli-urun-xlsx-reader.js?v=__BUILD_VERSION__';
-
-const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
-const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 
 const CAT_EMOJI = {
   'Toka':'💇','Anahtarlık':'🔑','Balon':'🎈','Maket Bıçak':'🔪','Eğitici Oyuncak':'🧩','Cetvel':'📏',
   'Askılık':'🧥','Karakter Figür Oyuncak':'🎭','Bijuteri Kolye':'📿','Oyun Hamuru':'🎨','Temizlik Bezi':'🧹','Pasta Cila':'✨',
 };
 
-const KDV_PCT = 20; // Trendyol satışlarında sabit %20 KDV
-
 // Kargo / Hizmet Bedeli — kullanıcı tarafından özelleştirilebilir, localStorage'da saklanır
-const KARGO_HIZMET_KEY = 'trendyol_kargo_hizmet_v1';
-let kargoAyar = { esik1: 200, esik2: 350, kargo1: 42, kargo2: 78, kargo3: 98 };
-let hizmetAyar = 13.19;
+let kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
+let hizmetAyar = VARSAYILAN_HIZMET;
 
 function loadKargoHizmet() {
-  try {
-    const raw = localStorage.getItem(KARGO_HIZMET_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d.kargoAyar) kargoAyar = { ...kargoAyar, ...d.kargoAyar };
-    if (d.hizmetAyar != null) hizmetAyar = +d.hizmetAyar;
-  } catch (e) {}
+  ({ kargoAyar, hizmetAyar } = readKargoHizmet());
 }
 function saveKargoHizmetStorage() {
   localStorage.setItem(KARGO_HIZMET_KEY, JSON.stringify({ kargoAyar, hizmetAyar }));
 }
 
-// Kargo: sipariş toplamına göre otomatik kademe. Kargo bedeli gönderi başına
-// bir kez alındığından kademe de birim fiyata değil, siparişin tamamına
-// (birim fiyat × zorunlu sipariş adedi) bakar.
+// Kargo: sipariş toplamına göre otomatik kademe (kargoKademesi(), calc.js).
+// Kargo bedeli gönderi başına bir kez alındığından kademe de birim fiyata
+// değil, siparişin tamamına (birim fiyat × zorunlu sipariş adedi) bakar.
 function kargoIcin(siparisToplami) {
-  if (siparisToplami < kargoAyar.esik1) return kargoAyar.kargo1;
-  if (siparisToplami <= kargoAyar.esik2) return kargoAyar.kargo2;
-  return kargoAyar.kargo3;
+  return kargoKademesi(siparisToplami, kargoAyar);
 }
 
 // zorunluSiparisAdedi() calc.js'te (tarayıcı + testler ortak çekirdek).
 
-const STORAGE_KEY = 'trendyol_urunler_data_v1';
 let activeUrunler = URUNLER;
 let activeMeta = null; // { fileName, uploadedAt } — yüklenmiş bir dosya varsa dolu
 
 function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const saved = JSON.parse(raw);
-    if (!saved || !Array.isArray(saved.urunler) || saved.urunler.length === 0) return;
-    activeUrunler = saved.urunler;
-    activeMeta = { fileName: saved.fileName, uploadedAt: saved.uploadedAt };
-  } catch {
-    // bozuk veri varsa sessizce varsayılana düş
-  }
+  ({ urunler: activeUrunler, meta: activeMeta } = readUrunler(URUNLER));
 }
 
 // Maliyet kayıt defteri: barkoda göre bir kere girilen maliyetler burada
 // saklanır ve her veri yüklemesinde (varsayılan veya yeni Excel) otomatik
 // uygulanır — böylece haftalık Excel'ler fiyat/komisyon değiştirse de
 // maliyeti yeniden girmeye gerek kalmaz.
-const MALIYET_KEY = 'trendyol_maliyet_kayitlari_v1';
-
-function loadMaliyetKayitlari() {
-  try {
-    const raw = localStorage.getItem(MALIYET_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
 function saveMaliyetKaydi(anahtar, maliyet) {
   const kayitlar = loadMaliyetKayitlari();
   kayitlar[anahtar] = maliyet;
@@ -454,20 +368,6 @@ function saveMaliyetKayitlariBulk(map) {
 }
 
 // Eşleştirme anahtarı: önce barkod, yoksa model kodu, o da yoksa ürün adı.
-function maliyetAnahtari(u) {
-  return String(u.barkod || u.model || u.urun || '').trim();
-}
-
-// Kayıtlı maliyetleri verilen ürün dizisine uygular (barkoda göre eşleştirir).
-function applyMaliyetKayitlari(urunler) {
-  const kayitlar = loadMaliyetKayitlari();
-  for (const u of urunler) {
-    const anahtar = maliyetAnahtari(u);
-    if (anahtar && kayitlar[anahtar] != null) u.maliyet = kayitlar[anahtar];
-  }
-  return urunler;
-}
-
 // activeUrunler üzerindeki (maliyet gibi) güncellemeleri STORAGE_KEY'deki
 // kayıtlı ürün verisine yansıtır, fileName/uploadedAt meta verisini korur.
 function persistActiveUrunler() {
@@ -665,25 +565,14 @@ window.setTarife = function (t) {
 // Bir ürünün 4 fiyat aralığının sınırlarını ve seçili tarifedeki komisyon
 // oranlarını döner (kâr hesabı içermez — tierInfo() ve tierForPrice() ortak kullanır).
 function tierTanimlari(u, tarifeKey) {
-  const grup = u.tarifeler && u.tarifeler[tarifeKey !== undefined ? tarifeKey : tarife];
-  const k = grup ? grup.k : [0, 0, 0, 0];
-  return [
-    { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
-    { num: 2, komisyon: k[1], rangeText: `${u.f2_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f2_alt, maxPrice: u.f2_ust },
-    { num: 3, komisyon: k[2], rangeText: `${u.f3_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f3_alt, maxPrice: u.f3_ust },
-    { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
-  ];
+  return tarifeTierleri(u, tarifeKey !== undefined ? tarifeKey : tarife);
 }
 
 // Girilen özel bir satış fiyatının hangi fiyat aralığına (komisyon dilimine)
 // düştüğünü bulur. Aralıklar en üstten (1. Aralık) en alta (4. Aralık) doğru
 // azalan ve bitişik olduğundan, fiyatın karşıladığı ilk (en üst) aralık kullanılır.
 function tierForPrice(u, price) {
-  const tiers = tierTanimlari(u);
-  for (const t of tiers) {
-    if (t.minPrice != null && price >= t.minPrice) return t;
-  }
-  return tiers[tiers.length - 1]; // en düşük aralığın da altındaysa yine en düşük aralık kullanılır
+  return tarifeTierForPrice(u, tarife, price);
 }
 
 function tierInfo(u, tarifeKey) {
@@ -867,41 +756,6 @@ window.exportSecilenlerXlsx = async function () {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
-async function buildXlsxBlob(rows) {
-  function colLetter(n) {
-    let s = '';
-    while (n > 0) { s = String.fromCharCode(64 + (n % 26 || 26)) + s; n = Math.floor((n - 1) / 26); }
-    return s;
-  }
-  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-
-  const sst = [], sstMap = {};
-  function strIdx(val) {
-    const s = String(val);
-    if (sstMap[s] == null) { sstMap[s] = sst.length; sst.push(s); }
-    return sstMap[s];
-  }
-
-  const sheetRows = rows.map((row, ri) =>
-    `<row r="${ri + 1}">${row.map((val, ci) => {
-      const ref = colLetter(ci + 1) + (ri + 1);
-      if (val == null || val === '') return `<c r="${ref}"/>`;
-      if (typeof val === 'number') return `<c r="${ref}"><v>${val}</v></c>`;
-      return `<c r="${ref}" t="s"><v>${strIdx(val)}</v></c>`;
-    }).join('')}</row>`
-  ).join('');
-
-  const zip = new JSZip();
-  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
-  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
-  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Seçilen Ürünler" sheetId="1" r:id="rId1"/></sheets></workbook>`);
-  zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
-  zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
-  zip.file('xl/sharedStrings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map(s => `<si><t>${esc(s)}</t></si>`).join('')}</sst>`);
-  zip.file('xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts><font><sz val="11"/><name val="Calibri"/></font></fonts><fills><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`);
-
-  return await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-}
 
 // Kullanıcının kendi girdiği bir satış fiyatının hangi komisyon aralığına
 // düştüğünü bulup, o aralığın komisyonuyla anlık kâr hesaplar.
@@ -1479,187 +1333,6 @@ loadYildizFromStorage();
 applyMaliyetKayitlari(activeUrunler);
 updateHint();
 updateStatusUI();
-// --- Barem İndirimi -------------------------------------------------------
-// Kargo kademesi ve komisyon fiyat aralıkları eşik bazlı olduğundan, eşiğin
-// hemen üstünde kalan bir satış fiyatını eşiğin altına çekmek kimi üründe
-// fiyattan kaybedileni kargo/komisyondan fazlasıyla geri kazandırır.
-// Hesaplama çekirdeği: baremIndirimAnalizi() — assets/calc.js.
-
-const BAREM_AYAR_KEY = 'trendyol_barem_ayar_v1';
-// "Yakınlık" sınırı: bundan fazla indirim gerektiren barem, yuvarlama değil
-// fiyat kırma sayılır ve önerilmez. Örnek 240₺ → 199₺ indirimi %17.1'dir.
-let baremMaxIndirim = 20;
-const selectedBarem = new Set(); // dışa aktarım için seçilen ürün index'leri
-
-function loadBaremAyar() {
-  try {
-    const raw = localStorage.getItem(BAREM_AYAR_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d && d.maxIndirim > 0) baremMaxIndirim = +d.maxIndirim;
-  } catch (e) {}
-}
-
-window.setBaremMaxIndirim = function (val) {
-  const n = parseFloat(val);
-  if (!(n > 0)) { document.getElementById('baremMaxIndirim').value = baremMaxIndirim; return; }
-  baremMaxIndirim = n;
-  localStorage.setItem(BAREM_AYAR_KEY, JSON.stringify({ maxIndirim: baremMaxIndirim }));
-  renderBaremModal();
-};
-
-// Bir ürünün aday barem eşikleri. Kargo eşikleri sipariş toplamına ('toplam'),
-// ürünün kendi komisyon aralıklarının üst sınırları birim fiyata ('birim') bakar.
-function baremEsikleri(u) {
-  const baremler = [
-    { esik: kargoAyar.esik1, kapsam: 'toplam', tip: 'kargo', etiket: `Kargo ${kargoAyar.kargo2}₺→${kargoAyar.kargo1}₺` },
-    { esik: kargoAyar.esik2, kapsam: 'toplam', tip: 'kargo', etiket: `Kargo ${kargoAyar.kargo3}₺→${kargoAyar.kargo2}₺` },
-  ];
-  for (const t of tierTanimlari(u)) {
-    if (t.maxPrice == null || !t.komisyon) continue;
-    baremler.push({ esik: t.maxPrice, kapsam: 'birim', tip: 'komisyon', etiket: `${t.num}. Aralık · %${t.komisyon}` });
-  }
-  return baremler;
-}
-
-// Ürünün güncel satış fiyatı için barem indirimi analizi. Mevcut durum ürünün
-// kendi güncel komisyonuyla, adaylar ise indirimli fiyatın düştüğü aralığın
-// komisyonuyla (tierForPrice, özel fiyat sorgulamayla aynı mantık) hesaplanır.
-function baremAnaliz(u) {
-  if (!u || !(u.guncel_tsf > 0) || !(u.maliyet > 0) || !u.guncel_komisyon) return null;
-  return baremIndirimAnalizi({
-    birimFiyat: u.guncel_tsf,
-    maliyet: u.maliyet,
-    kdvPct: KDV_PCT,
-    hizmet: hizmetAyar,
-    mevcutKomisyon: u.guncel_komisyon,
-    maxIndirimYuzdesi: baremMaxIndirim,
-    kargoIcin,
-    komisyonIcin: (fiyat) => tierForPrice(u, fiyat).komisyon,
-    baremler: baremEsikleri(u),
-  });
-}
-
-// Panelde gösterilecek satırlar: her ürünün her barem adayı ayrı satır olur,
-// böylece bir üründe hem kargo hem komisyon baremi varsa ikisi de görünür.
-function baremSatirlari({ sadeceKarli = true, q = '' } = {}) {
-  const satirlar = [];
-  activeUrunler.forEach((u, idx) => {
-    if (q && !`${u.urun} ${u.model || ''} ${u.barkod || ''}`.toLowerCase().includes(q)) return;
-    const analiz = baremAnaliz(u);
-    if (!analiz) return;
-    for (const aday of analiz.adaylar) {
-      if (sadeceKarli && aday.karFarki <= 0) continue;
-      satirlar.push({ idx, u, mevcut: analiz.mevcut, aday, key: `${idx}|${aday.birimFiyat}` });
-    }
-  });
-  return satirlar.sort((a, b) => b.aday.karFarki - a.aday.karFarki);
-}
-
-window.renderBaremModal = function () {
-  const q = document.getElementById('baremSearch').value.trim().toLowerCase();
-  const sadeceKarli = document.getElementById('baremSadeceKarli').checked;
-  const satirlar = baremSatirlari({ sadeceKarli, q });
-
-  const body = document.getElementById('baremModalBody');
-  if (satirlar.length === 0) {
-    body.innerHTML = `<tr><td colspan="9" class="barem-bos">${
-      sadeceKarli
-        ? `Kârı artıran bir barem indirimi bulunamadı. Ürünlerin maliyeti girilmiş olmalı; "En fazla indirim" sınırını (%${baremMaxIndirim}) yükseltmeyi ya da "Yalnızca kârı artıranlar" filtresini kapatmayı deneyin.`
-        : 'Gösterilecek barem adayı yok — ürünlerin maliyeti ve güncel komisyonu girilmiş olmalı.'
-    }</td></tr>`;
-  } else {
-    body.innerHTML = satirlar.map(({ idx, u, mevcut, aday, key }) => {
-      const farkCls = aday.karFarki >= 0 ? 'barem-pos' : 'barem-neg';
-      const mevcutCls = mevcut.kar >= 0 ? 'barem-pos' : 'barem-neg';
-      const yeniCls = aday.kar >= 0 ? 'barem-pos' : 'barem-neg';
-      const adetBilgi = aday.adet > 1 ? `<div class="barem-alt">${aday.adet} adet · toplam ${tl(aday.siparisToplami)}</div>` : '';
-      const mevcutAdet = mevcut.adet > 1 ? `<div class="barem-alt">${mevcut.adet} adet · toplam ${tl(mevcut.siparisToplami)}</div>` : '';
-      const etiketler = aday.baremler.map(b => `<span class="barem-etiket">${b.etiket}</span>`).join('');
-      return `<tr>
-        <td>${u.urun}<div class="barem-alt">Barkod: ${u.barkod || '-'} · Maliyet: ${tl(u.maliyet)}</div></td>
-        <td class="num">${tl(mevcut.birimFiyat)}<div class="barem-alt">%${mevcut.komisyon} · kargo ${tl(mevcut.kargo)}</div>${mevcutAdet}</td>
-        <td class="num ${mevcutCls}">${tl(mevcut.kar)}<div class="barem-alt">${pc(mevcut.karOrani)}</div></td>
-        <td class="num"><span class="barem-hedef">${tl(aday.birimFiyat)}</span><div class="barem-alt">%${aday.komisyon} · kargo ${tl(aday.kargo)}</div>${adetBilgi}</td>
-        <td class="num">${tl(aday.indirimTutari)}<div class="barem-alt">${pc(aday.indirimYuzdesi)}</div></td>
-        <td class="num ${yeniCls}">${tl(aday.kar)}<div class="barem-alt">${pc(aday.karOrani)}</div></td>
-        <td class="num ${farkCls}">${aday.karFarki >= 0 ? '+' : ''}${tl(aday.karFarki)}</td>
-        <td>${etiketler}</td>
-        <td class="num"><input type="checkbox" ${selectedBarem.has(key) ? 'checked' : ''} onchange="toggleBaremSec('${key}', this)"></td>
-      </tr>`;
-    }).join('');
-  }
-
-  const karli = baremSatirlari({ sadeceKarli: true });
-  const urunSayisi = new Set(karli.map(r => r.idx)).size;
-  document.getElementById('baremDurum').textContent =
-    `${activeUrunler.length} üründen ${urunSayisi} tanesinde kârı artıran ${karli.length} barem indirimi var (en fazla %${baremMaxIndirim} indirimle).`;
-  updateBaremSecimBar();
-};
-
-window.toggleBaremSec = function (key, el) {
-  if (el.checked) selectedBarem.add(key); else selectedBarem.delete(key);
-  updateBaremSecimBar();
-};
-
-function updateBaremSecimBar() {
-  const btn = document.getElementById('baremSecimIndir');
-  btn.style.display = selectedBarem.size > 0 ? '' : 'none';
-  document.getElementById('baremSecimSayisi').textContent = selectedBarem.size;
-}
-
-window.exportBaremSecilenlerXlsx = async function () {
-  if (!selectedBarem.size) return;
-  const rows = [[
-    'Ürün', 'Model', 'Barkod', 'Maliyet (₺)',
-    'Mevcut Fiyat (₺)', 'Mevcut Komisyon (%)', 'Mevcut Adet', 'Mevcut Sipariş Toplamı (₺)', 'Mevcut Kargo (₺)', 'Mevcut Kâr (₺)', 'Mevcut Kâr Oranı (%)',
-    'Önerilen Fiyat (₺)', 'İndirim (₺)', 'İndirim (%)', 'Önerilen Komisyon (%)', 'Önerilen Adet', 'Önerilen Sipariş Toplamı (₺)', 'Önerilen Kargo (₺)', 'Yeni Kâr (₺)', 'Yeni Kâr Oranı (%)', 'Kâr Farkı (₺)',
-    'Barem',
-  ]];
-  const r2 = (x) => Math.round(x * 100) / 100;
-  const r1 = (x) => Math.round(x * 10) / 10;
-
-  // Satırlar seçim anındaki değil, indirme anındaki güncel ayarlarla yeniden
-  // hesaplanır (kargo/hizmet ya da tarife arada değişmiş olabilir).
-  const keys = [...selectedBarem].sort((a, b) => (+a.split('|')[0]) - (+b.split('|')[0]));
-  for (const key of keys) {
-    const [idxStr, fiyatStr] = key.split('|');
-    const u = activeUrunler[+idxStr];
-    if (!u) continue;
-    const analiz = baremAnaliz(u);
-    const aday = analiz && analiz.adaylar.find(a => a.birimFiyat === parseFloat(fiyatStr));
-    if (!aday) continue;
-    const m = analiz.mevcut;
-    rows.push([
-      u.urun, u.model || '', String(u.barkod || ''), u.maliyet,
-      m.birimFiyat, m.komisyon, m.adet, m.siparisToplami, m.kargo, r2(m.kar), r1(m.karOrani),
-      aday.birimFiyat, aday.indirimTutari, aday.indirimYuzdesi, aday.komisyon, aday.adet, aday.siparisToplami, aday.kargo, r2(aday.kar), r1(aday.karOrani), r2(aday.karFarki),
-      aday.baremler.map(b => b.etiket).join(' + '),
-    ]);
-  }
-
-  if (rows.length === 1) return;
-  const blob = await buildXlsxBlob(rows);
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'barem-indirimi.xlsx';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-};
-
-window.openBaremModal = function () {
-  document.getElementById('baremModal').classList.remove('hidden');
-  document.getElementById('baremSearch').value = '';
-  document.getElementById('baremMaxIndirim').value = baremMaxIndirim;
-  document.getElementById('baremMarjBilgi').textContent = `${BAREM_MARJI.toFixed(2)}₺`;
-  renderBaremModal();
-};
-
-window.closeBaremModal = function () {
-  document.getElementById('baremModal').classList.add('hidden');
-};
-
-loadBaremAyar();
 updateTarifeAvailability();
 setTarife(tarife);
 

@@ -15,12 +15,18 @@ Ayrıntılar için `CONTRIBUTING.md`.
 
 ## Proje yapısı
 
-Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/link yok.
+İki sayfalık statik site. `index.html` ana çalışma sayfasıdır; `indirim/` altındaki
+barem indirimi sayfası ondan bağımsız açılır ve **aynı localStorage'ı paylaşır**
+(ürün verisi, maliyet kayıtları, kargo/hizmet ayarı). Ortak mantık `assets/`
+altındaki modüllerde tek kaynaktan tutulur — iki sayfaya kopyalanmaz.
 
 | Yol | Açıklama |
 |-----|----------|
-| `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (tek sayfa) |
-| `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır): `computeMaliyet()`, `zorunluSiparisAdedi()`, `baremIndirimAnalizi()` |
+| `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (ana sayfa) |
+| `indirim/index.html` | ⬇️ Barem İndirimi sayfası (ana sayfadan link ile açılır) |
+| `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır): `computeMaliyet()`, `zorunluSiparisAdedi()`, `baremIndirimAnalizi()`, `kargoKademesi()`, `tarifeTierleri()`, `tarifeTierForPrice()` |
+| `assets/ortak.js` | İki sayfanın ortak kullandığı localStorage anahtarları, veri okuma yardımcıları (`readUrunler`, `readKargoHizmet`, `applyMaliyetKayitlari`) ve `tl`/`pc` biçimlendiricileri |
+| `assets/xlsx-writer.js` | Satır dizisinden .xlsx Blob üreten yazıcı (`buildXlsxBlob`) — iki sayfa da dışa aktarımda kullanır |
 | `assets/urunler-data.js` | Varsayılan ürün verisi (Excel'den içe aktarıldı; kullanıcı yeni dosya yüklemezse bu kullanılır) |
 | `assets/xlsx-reader.js` | Tarayıcıda .xlsx dosyası okuyup `URUNLER` formatına çeviren ayrıştırıcı (JSZip + native DOMParser/TextDecoder) |
 | `assets/maliyet-xlsx-reader.js` | Maliyet Girişi için "Barkod No" + "Alış Tutarı (KDV)" kolonlu .xlsx dosyalarını barkod → maliyet eşlemesine çeviren ayrıştırıcı (xlsx-reader.js ile aynı yöntem, bilinçli olarak bağımsız modül — bkz. dosya başındaki not) |
@@ -28,7 +34,7 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 | `assets/vendor/jszip.min.js` | Vendorlanmış JSZip (ZIP açma) — SheetJS gibi hazır kütüphaneler bazı Türkçe karakterleri (Ç, Ğ) yanlış çözdüğü için bilinçli olarak kullanılmıyor |
 | `tests/calc.test.js` | Referans senaryo ve kenar durum testleri |
 | `.github/workflows/ci.yml` | PR/branch testleri |
-| `.github/workflows/deploy.yml` | `main` → GitHub Pages deploy (JS import'larına cache-busting sürüm etiketi de bu adımda uygulanır) |
+| `.github/workflows/deploy.yml` | `main` → GitHub Pages deploy (JS import'larına cache-busting sürüm etiketi de bu adımda, **tüm `*.html` dosyalarına** uygulanır) |
 
 ## Hesaplama mantığı (özet)
 
@@ -92,7 +98,7 @@ tarife verisi `u.tarifeler["<gün>"] = { tarih, k: [k1,k2,k3,k4] }` şeklinde
 saklanır; arayüzdeki tarife sekmeleri (`index.html`, `updateTarifeAvailability()`)
 bu anahtarlardan dinamik olarak üretilir.
 
-## Barem İndirimi (⬇️ Barem İndirimi paneli)
+## Barem İndirimi (`indirim/index.html`)
 
 Kargo kademesi ve komisyon fiyat aralıkları **eşik bazlı** arttığından, bir
 eşiğin hemen üstünde kalan satış fiyatını eşiğin altına çekmek kimi üründe
@@ -120,9 +126,14 @@ Her aday, mevcut durumla aynı formülle (zorunlu adet dahil sipariş toplamı
 komisyonuyla (`tierForPrice()`) hesaplanır. `maxIndirimYuzdesi` (panelde
 **En fazla indirim**, varsayılan %20, `trendyol_barem_ayar_v1`'de saklanır) bundan
 fazla indirim gerektiren eşikleri eler — amaç yakın bir bareme yuvarlamak, fiyatı
-dibe çekmek değil. Panel her ürünün her adayını ayrı satır olarak gösterir,
-seçilenler Excel'e aktarılabilir. Panel yalnızca okur; ürün nesnelerine hiçbir
-şey yazmaz.
+dibe çekmek değil. Sayfa her ürünün her adayını ayrı satır olarak gösterir,
+seçilenler Excel'e aktarılabilir.
+
+Sayfa localStorage'ı yalnızca **okur** (kendi `trendyol_barem_ayar_v1` anahtarı
+hariç): ürün verisini, maliyet kayıtlarını ve kargo/hizmet ayarını ana sayfanın
+kaydettiği şekilde alır, hiçbirini değiştirmez. Tarife seçimi sayfanın kendi
+sekmelerinden yapılır ve komisyon aralıkları buna göre çözülür. Ana sayfadaki
+hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 

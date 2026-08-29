@@ -211,3 +211,52 @@ export function baremIndirimAnalizi(p) {
   const enIyi = adaylar.length > 0 && adaylar[0].karFarki > 0 ? adaylar[0] : null;
   return { mevcut, adaylar, enIyi };
 }
+
+// ---------------------------------------------------------------------------
+// Tarife / kargo kademeleri (saf yardımcılar)
+// ---------------------------------------------------------------------------
+// Hem index.html hem indirim/index.html aynı aralık ve kademe tanımlarını
+// kullanır; tek kaynak olsun diye çekirdekte durur. Değişken durum (seçili
+// tarife, kullanıcının kargo ayarı) parametre olarak verilir.
+
+/**
+ * Sipariş toplamına düşen kargo kademesi. Kargo bedeli gönderi başına bir kez
+ * alındığından kademe birim fiyata değil siparişin tamamına bakar.
+ * @param {number} siparisToplami Birim fiyat × zorunlu sipariş adedi
+ * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
+ */
+export function kargoKademesi(siparisToplami, ayar) {
+  if (siparisToplami < ayar.esik1) return ayar.kargo1;
+  if (siparisToplami <= ayar.esik2) return ayar.kargo2;
+  return ayar.kargo3;
+}
+
+/**
+ * Bir ürünün seçili tarifedeki 4 fiyat aralığını (komisyon dilimini) döner.
+ * Kâr hesabı içermez; aralıklar en üstten en alta doğru azalan ve bitişiktir.
+ * @param {object} u        Ürün
+ * @param {string} tarifeKey Tarife grubu anahtarı (ör. '3', '7')
+ */
+export function tarifeTierleri(u, tarifeKey) {
+  const grup = u.tarifeler && u.tarifeler[tarifeKey];
+  const k = grup ? grup.k : [0, 0, 0, 0];
+  return [
+    { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
+    { num: 2, komisyon: k[1], rangeText: `${u.f2_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f2_alt, maxPrice: u.f2_ust },
+    { num: 3, komisyon: k[2], rangeText: `${u.f3_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f3_alt, maxPrice: u.f3_ust },
+    { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
+  ];
+}
+
+/**
+ * Verilen satış fiyatının hangi fiyat aralığına (komisyon dilimine) düştüğü.
+ * Aralıklar azalan ve bitişik olduğundan fiyatın karşıladığı en üst aralık
+ * kullanılır; en düşük aralığın da altındaysa yine en düşük aralık döner.
+ */
+export function tarifeTierForPrice(u, tarifeKey, price) {
+  const tiers = tarifeTierleri(u, tarifeKey);
+  for (const t of tiers) {
+    if (t.minPrice != null && price >= t.minPrice) return t;
+  }
+  return tiers[tiers.length - 1];
+}
