@@ -72,11 +72,33 @@
     altına inilir (240₺ → 199₺). Kâr her zaman zorunlu adet dahil <b>sipariş toplamı</b> üzerinden hesaplanır.
     <b>Komisyon oranı değişmez</b> — ürünün güncel komisyonu her iki senaryoda da aynı; komisyon
     tarifesindeki fiyat aralıkları bu hesaba karışmaz. Ürün verisi, maliyetler ve kargo/hizmet ayarı
-    ana sayfayla ortaktır.
+    ana sayfayla ortaktır. En üstteki tablo ise tersini gösterir: bir siparişte <b>kaç adet</b> satılırsa
+    sipariş toplamı kargo eşiklerini geçer ve kargo kademesi yükselir.
   </div>
 
   <div class="filtreler">
     <input type="text" id="baremSearch" placeholder="🔍 Ürün adı veya barkod ara..." oninput="renderBarem()">
+  </div>
+
+  <div class="grup">
+    <div class="grup-baslik">Kargo baremini kaç adette geçer
+      <span class="grup-not">bir siparişte kaç adet satılırsa kargo kademesi yükselir</span>
+    </div>
+    <div class="barem-durum" id="esikDurum"></div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th class="num">Birim Fiyat</th>
+            <th class="num">Zorunlu Adet</th>
+            <th class="num" id="esikBaslik1"></th>
+            <th class="num" id="esikBaslik2"></th>
+          </tr>
+        </thead>
+        <tbody id="esikBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="grup">
@@ -128,7 +150,7 @@
 
 <script src="../assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
-import { baremIndirimAnalizi, BAREM_MARJI, kargoKademesi, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI } from '../assets/calc.js?v=__BUILD_VERSION__';
+import { baremIndirimAnalizi, BAREM_MARJI, kargoKademesi, kargoEsikAdetleri, adetliSiparisKari, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI } from '../assets/calc.js?v=__BUILD_VERSION__';
 import { URUNLER } from '../assets/urunler-data.js?v=__BUILD_VERSION__';
 import { KDV_PCT, tl, pc, applyMaliyetKayitlari, readKargoHizmet, readUrunler } from '../assets/ortak.js?v=__BUILD_VERSION__';
 import { buildXlsxBlob } from '../assets/xlsx-writer.js?v=__BUILD_VERSION__';
@@ -230,8 +252,55 @@ function renderGrup(altGrup, bodyId, durumId, q) {
     : 'Aday yok.';
 }
 
+// Kargo eşiklerini kaçıncı adette geçtiği. Kâr, o adetteki siparişin kârıdır
+// (zorunlu adet değil, eşiği geçen adet üzerinden hesaplanır).
+function esikHucresi(u, e) {
+  if (e.adet == null) return '<span class="barem-alt">—</span>';
+  const kargoBilgi = e.oncekiKargo != null
+    ? `kargo ${tl(e.oncekiKargo)} → ${tl(e.kargo)}`
+    : `kargo ${tl(e.kargo)} (tek adette zaten geçiyor)`;
+  let karBilgi = '<div class="barem-alt">maliyet/komisyon yok</div>';
+  if (u.maliyet > 0 && u.guncel_komisyon) {
+    const c = adetliSiparisKari({
+      birimFiyat: u.guncel_tsf, adet: e.adet, maliyet: u.maliyet,
+      komisyon: u.guncel_komisyon, kdvPct: KDV_PCT, hizmet: hizmetAyar, kargoIcin,
+    });
+    const cls = c.kar >= 0 ? 'barem-pos' : 'barem-neg';
+    karBilgi = `<div class="barem-alt">kâr <span class="${cls}">${tl(c.kar)}</span> · ${pc(c.karOrani)}</div>`;
+  }
+  return `<span class="barem-hedef">${e.adet} adet</span>
+    <div class="barem-alt">toplam ${tl(e.siparisToplami)} · ${kargoBilgi}</div>${karBilgi}`;
+}
+
+function renderEsikTablosu(q) {
+  document.getElementById('esikBaslik1').textContent = `${tl(kargoAyar.esik1)} eşiği`;
+  document.getElementById('esikBaslik2').textContent = `${tl(kargoAyar.esik2)} eşiği`;
+
+  const satirlar = aktifUrunler.filter(u =>
+    u.guncel_tsf > 0 && (!q || `${u.urun} ${u.model || ''} ${u.barkod || ''}`.toLowerCase().includes(q)));
+
+  const body = document.getElementById('esikBody');
+  body.innerHTML = satirlar.length
+    ? satirlar.map(u => {
+        const [e1, e2] = kargoEsikAdetleri(u.guncel_tsf, kargoAyar);
+        const zorunlu = zorunluSiparisAdedi(u.guncel_tsf);
+        return `<tr>
+          <td>${u.urun}<div class="barem-alt">Barkod: ${u.barkod || '-'} · Maliyet: ${u.maliyet > 0 ? tl(u.maliyet) : '-'}</div></td>
+          <td class="num">${tl(u.guncel_tsf)}</td>
+          <td class="num">${zorunlu}<div class="barem-alt">toplam ${tl(u.guncel_tsf * zorunlu)}</div></td>
+          <td class="num">${esikHucresi(u, e1)}</td>
+          <td class="num">${esikHucresi(u, e2)}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" class="barem-bos">Gösterilecek ürün yok.</td></tr>';
+
+  document.getElementById('esikDurum').textContent =
+    `${satirlar.length} ürün · kargo kademeleri: ${tl(kargoAyar.esik1)} altı ${tl(kargoAyar.kargo1)}, ${tl(kargoAyar.esik1)}–${tl(kargoAyar.esik2)} arası ${tl(kargoAyar.kargo2)}, üstü ${tl(kargoAyar.kargo3)}.`;
+}
+
 window.renderBarem = function () {
   const q = document.getElementById('baremSearch').value.trim().toLowerCase();
+  renderEsikTablosu(q);
   renderGrup(true, 'baremBodyAlt', 'baremDurumAlt', q);
   renderGrup(false, 'baremBodyUst', 'baremDurumUst', q);
   updateBaremSecimBar();

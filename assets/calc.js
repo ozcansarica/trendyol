@@ -125,11 +125,17 @@ export function zorunluSiparisAdedi(birimFiyat) {
   return 1;
 }
 
-// Tek bir birim fiyat için siparişin (zorunlu adet dahil) kârını hesaplar.
-function senaryoHesapla(birimFiyat, p) {
-  const adetIcin = p.adetIcin || zorunluSiparisAdedi;
-  const adet = adetIcin(birimFiyat);
-  const siparisToplami = round2(birimFiyat * adet);
+/**
+ * Belirli bir adetteki siparişin kârı. Adet dışarıdan verilir — zorunlu sipariş
+ * adedi de olabilir, "kargo baremini geçen adet" gibi başka bir sayı da.
+ * @param {object} p
+ * @param {number} p.birimFiyat, @param {number} p.adet, @param {number} p.maliyet
+ * @param {number} p.komisyon, @param {number} p.kdvPct, @param {number} p.hizmet
+ * @param {(siparisToplami:number)=>number} p.kargoIcin
+ */
+export function adetliSiparisKari(p) {
+  const adet = p.adet;
+  const siparisToplami = round2(p.birimFiyat * adet);
   const kargo = p.kargoIcin(siparisToplami);
   const c = computeMaliyet({
     satis: siparisToplami,
@@ -140,9 +146,15 @@ function senaryoHesapla(birimFiyat, p) {
     hizmet: p.hizmet,
   });
   return {
-    birimFiyat, adet, siparisToplami, kargo,
+    birimFiyat: p.birimFiyat, adet, siparisToplami, kargo,
     kar: c.kar, karOrani: c.karOrani,
   };
+}
+
+// Tek bir birim fiyat için siparişin (zorunlu adet dahil) kârını hesaplar.
+function senaryoHesapla(birimFiyat, p) {
+  const adetIcin = p.adetIcin || zorunluSiparisAdedi;
+  return adetliSiparisKari({ ...p, birimFiyat, adet: adetIcin(birimFiyat) });
 }
 
 // Bir barem eşiğini hedef birim fiyata çevirir.
@@ -233,6 +245,54 @@ export function kargoKademesi(siparisToplami, ayar) {
   if (siparisToplami < ayar.esik1) return ayar.kargo1;
   if (siparisToplami <= ayar.esik2) return ayar.kargo2;
   return ayar.kargo3;
+}
+
+// Bir koşulu sağlayan en küçük adedi bulur. Analitik tahminden başlanır, sonra
+// koşul sağlanana kadar yukarı / gereksiz büyükse aşağı düzeltilir; böylece
+// kuruş yuvarlamaları (round2) yüzünden bir adet şaşmaz.
+const MAX_ADET_ARAMA = 100000;
+function ilkAdet(kosul, birimFiyat, tahmin) {
+  let n = Math.max(1, Math.ceil(tahmin - 1e-9));
+  while (n > 1 && kosul(round2((n - 1) * birimFiyat))) n--;
+  let adim = 0;
+  while (!kosul(round2(n * birimFiyat)) && adim++ < MAX_ADET_ARAMA) n++;
+  return adim >= MAX_ADET_ARAMA ? null : n;
+}
+
+/**
+ * Bir birim fiyatın kargo kademesi eşiklerini kaçıncı adette geçtiğini bulur.
+ * Eşik koşulları kargoKademesi() ile birebir aynıdır: ikinci kademe için
+ * sipariş toplamı esik1'e EŞİT ya da üstünde, üçüncü kademe için esik2'nin
+ * ÜSTÜNDE olmalıdır.
+ *
+ * Dönen `kargo`, o adetteki GERÇEK kademedir — varsayılan bir sonraki kademe
+ * değil. Pahalı ürünlerde tek bir adet artışı iki eşiği birden geçebilir
+ * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde, kargo doğrudan 98₺).
+ *
+ * @param {number} birimFiyat
+ * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
+ * @returns {Array<{esik:number, adet:number|null, siparisToplami:number|null,
+ *   kargo:number|null, oncekiKargo:number|null}>}
+ *   `oncekiKargo` bir eksik adetteki kademedir (adet 1 ise null — o eşik zaten
+ *   tek adette geçiliyor). Makul adette geçilemeyen eşikte adet null döner.
+ */
+export function kargoEsikAdetleri(birimFiyat, ayar) {
+  const p = +birimFiyat;
+  if (!(p > 0)) return [];
+  const esikler = [
+    { esik: ayar.esik1, kosul: (t) => t >= ayar.esik1 },
+    { esik: ayar.esik2, kosul: (t) => t > ayar.esik2 },
+  ];
+  return esikler.map(({ esik, kosul }) => {
+    const adet = ilkAdet(kosul, p, esik / p);
+    if (adet == null) return { esik, adet: null, siparisToplami: null, kargo: null, oncekiKargo: null };
+    const siparisToplami = round2(adet * p);
+    return {
+      esik, adet, siparisToplami,
+      kargo: kargoKademesi(siparisToplami, ayar),
+      oncekiKargo: adet > 1 ? kargoKademesi(round2((adet - 1) * p), ayar) : null,
+    };
+  });
 }
 
 /**
