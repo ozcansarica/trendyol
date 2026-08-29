@@ -20,7 +20,7 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 | Yol | Açıklama |
 |-----|----------|
 | `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (tek sayfa) |
-| `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır) |
+| `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır): `computeMaliyet()`, `zorunluSiparisAdedi()`, `baremIndirimAnalizi()` |
 | `assets/urunler-data.js` | Varsayılan ürün verisi (Excel'den içe aktarıldı; kullanıcı yeni dosya yüklemezse bu kullanılır) |
 | `assets/xlsx-reader.js` | Tarayıcıda .xlsx dosyası okuyup `URUNLER` formatına çeviren ayrıştırıcı (JSZip + native DOMParser/TextDecoder) |
 | `assets/maliyet-xlsx-reader.js` | Maliyet Girişi için "Barkod No" + "Alış Tutarı (KDV)" kolonlu .xlsx dosyalarını barkod → maliyet eşlemesine çeviren ayrıştırıcı (xlsx-reader.js ile aynı yöntem, bilinçli olarak bağımsız modül — bkz. dosya başındaki not) |
@@ -33,11 +33,16 @@ Tek sayfalık site — `index.html` tek çalışma sayfasıdır, başka sayfa/li
 ## Hesaplama mantığı (özet)
 
 Girdiler KDV **dahil** verilir. KDV sabit **%20**: `r = 20 / 120`.
-Kargo, satış fiyatına göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`, `>350₺→98₺`.
+Kargo, **sipariş toplamına** göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`,
+`>350₺→98₺`. Kargo bedeli gönderi başına bir kez alındığından kademe de birim
+fiyata değil siparişin tamamına (birim fiyat × zorunlu sipariş adedi) bakar
+(`kargoIcin()`, `index.html`). Kademeler `📦 Kargo/Hizmet Tanımı` panelinden
+değiştirilebilir; varsayılan eşiklerde zorunlu adetli en yüksek sipariş toplamı
+150₺ olduğundan bu ayrım ancak eşik 150₺'nin altına çekilirse fark yaratır.
 
 **Zorunlu sipariş adedi:** Düşük fiyatlı ürünlerde Trendyol tek adet siparişe
 izin vermiyor; müşteri en az belirli bir adet almak zorunda
-(`zorunluSiparisAdedi()`, `index.html`): `0–25₺→6`, `25–35₺→4`, `35–50₺→3`,
+(`zorunluSiparisAdedi()`, `assets/calc.js`): `0–25₺→6`, `25–35₺→4`, `35–50₺→3`,
 `50–75₺→2`, `>75₺→1` (kural yok). Kargo bedeli olduğu gibi (sipariş başına,
 adede bölünmeden) uygulanır; yalnızca `computeMaliyet()`'e verilen **satış**
 ve **maliyet (alış)** tutarları bu adetle çarpılır — böylece Kâr/Kâr Oranı,
@@ -86,6 +91,38 @@ kolonları sabit değil, dinamik olarak algılanır (`assets/xlsx-reader.js`,
 tarife verisi `u.tarifeler["<gün>"] = { tarih, k: [k1,k2,k3,k4] }` şeklinde
 saklanır; arayüzdeki tarife sekmeleri (`index.html`, `updateTarifeAvailability()`)
 bu anahtarlardan dinamik olarak üretilir.
+
+## Barem İndirimi (⬇️ Barem İndirimi paneli)
+
+Kargo kademesi ve komisyon fiyat aralıkları **eşik bazlı** arttığından, bir
+eşiğin hemen üstünde kalan satış fiyatını eşiğin altına çekmek kimi üründe
+fiyattan kaybedileni kargo/komisyondan fazlasıyla geri kazandırır: 240₺'lik bir
+sipariş 199₺'ye indirilince kargo 78₺ → 42₺ düşer, komisyon da satışla orantılı
+azalır. Panel bu senaryoları tarayıp mevcut durumla karşılaştırır.
+
+Çekirdek `baremIndirimAnalizi()` (`assets/calc.js`) saf bir fonksiyondur; kargo,
+komisyon ve adet bilgisini enjekte edilen fonksiyonlardan alır. Aday eşikler
+iki kapsamda tanımlanır (`baremEsikleri()`, `index.html`):
+
+| Kapsam | Eşik kaynağı | Hedef fiyat |
+|--------|--------------|-------------|
+| `'toplam'` | Kargo kademesi eşikleri (`kargoAyar.esik1/esik2`) — sipariş toplamına bakar | Eşik − `BAREM_MARJI` (1₺): `200₺ → 199₺` |
+| `'birim'` | Ürünün komisyon fiyat aralıklarının üst sınırları (`f2_ust/f3_ust/f4_ust`) — birim fiyata bakar | Aralığın üst sınırının kendisi ("X ₺ ve altı" tanımlı olduğu için) |
+
+`'toplam'` kapsamda hedef sipariş toplamı adede bölünerek birim fiyata çevrilir;
+birim fiyat düşünce zorunlu sipariş adedi artabildiğinden sabit noktaya
+yakınsanır ve kuruş küsuratı **aşağı** kırpılır (aksi halde toplam eşiği aşardı).
+Yakınsamayan eşik elenir.
+
+Her aday, mevcut durumla aynı formülle (zorunlu adet dahil sipariş toplamı
+üzerinden) hesaplanıp **kâr farkına** göre sıralanır; mevcut durum ürünün kendi
+`guncel_komisyon`'uyla, adaylar ise indirimli fiyatın düştüğü aralığın
+komisyonuyla (`tierForPrice()`) hesaplanır. `maxIndirimYuzdesi` (panelde
+**En fazla indirim**, varsayılan %20, `trendyol_barem_ayar_v1`'de saklanır) bundan
+fazla indirim gerektiren eşikleri eler — amaç yakın bir bareme yuvarlamak, fiyatı
+dibe çekmek değil. Panel her ürünün her adayını ayrı satır olarak gösterir,
+seçilenler Excel'e aktarılabilir. Panel yalnızca okur; ürün nesnelerine hiçbir
+şey yazmaz.
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 
