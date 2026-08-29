@@ -45,8 +45,10 @@ kaynaktan tutulur — sayfalara kopyalanmaz.
 ## Hesaplama mantığı (özet)
 
 Girdiler KDV **dahil** verilir. KDV sabit **%20**: `r = 20 / 120`.
-Kargo, **sipariş toplamına** göre otomatik kademeli: `<200₺→42₺`, `200–350₺→78₺`,
-`>350₺→98₺`. Kargo bedeli gönderi başına bir kez alındığından kademe de birim
+Kargo, **sipariş toplamına** göre otomatik kademeli: `<200₺→42₺`,
+`200–349,99₺→78₺`, `≥350₺→98₺`. **Eşiğe oturan tutar üst kademeye girer** — iki
+eşikte de aynı kural, yani alt kademede kalmak için eşiğin altında olmak gerekir
+(tam 200₺ → 78₺, tam 350₺ → 98₺). Kargo bedeli gönderi başına bir kez alındığından kademe de birim
 fiyata değil siparişin tamamına (birim fiyat × zorunlu sipariş adedi) bakar
 (`kargoIcin()`, `index.html`). Kademeler `📦 Kargo/Hizmet Tanımı` panelinden
 değiştirilebilir; varsayılan eşiklerde zorunlu adetli en yüksek sipariş toplamı
@@ -187,10 +189,9 @@ gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
 tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Amaç **en az
 indirimle** eşiğin altına inmek olduğundan hedef yuvarlanmaz, eşiğin
 `kargoKademesi()`'deki tam sınırıdır: ikinci kademeye girmemek için toplam
-`esik1`'in **altında** olmalı → hedef `esik1 − KURUS` = **199,99₺**; üçüncü
-kademeye girmemek için `esik2`'ye **eşit** olabilir → hedef **tam 350₺**.
-Böylece 8 adette tam 200₺'ye oturan bir siparişte 1 kuruşluk indirim kargoyu
-78₺'den 42₺'ye düşürür. (`marj` parametresiyle yuvarlanmış bir hedef de
+eşiğin **altında** olmalı → hedef `eşik − KURUS` (200₺ → **199,99₺**,
+350₺ → **349,99₺**). Böylece tam eşiğe oturan bir siparişte 1 kuruşluk indirim
+kargoyu bir alt kademeye düşürür (25₺ × 8 = 200₺ → 42₺; 25₺ × 14 = 350₺ → 78₺). (`marj` parametresiyle yuvarlanmış bir hedef de
 istenebilir; barem indirimi sayfasının `BAREM_MARJI` = 1₺ ile 199₺'ye
 yuvarlaması bilinçli olarak ayrıdır — orada amaç en az indirim değil, fiyatı
 yakın bir barem noktasına çekmektir.) Gösterilen kargo, o adetteki **gerçek** kademedir —
