@@ -101,40 +101,41 @@ bu anahtarlardan dinamik olarak üretilir.
 
 ## Barem İndirimi (`indirim/index.html`)
 
-Kargo kademesi ve komisyon fiyat aralıkları **eşik bazlı** arttığından, bir
-eşiğin hemen üstünde kalan satış fiyatını eşiğin altına çekmek kimi üründe
-fiyattan kaybedileni kargo/komisyondan fazlasıyla geri kazandırır: 240₺'lik bir
-sipariş 199₺'ye indirilince kargo 78₺ → 42₺ düşer, komisyon da satışla orantılı
-azalır. Panel bu senaryoları tarayıp mevcut durumla karşılaştırır.
+Kargo bedeli sipariş toplamına göre **kademeli** arttığından, bir kargo eşiğinin
+hemen üstünde kalan siparişi eşiğin altına çekmek fiyattan kaybedileni kargodan
+(ve satışla orantılı düşen komisyondan) fazlasıyla geri kazandırabilir: 240₺'lik
+bir sipariş 199₺'ye indirilince kargo 78₺ → 42₺ düşer. Sayfa bu senaryoları
+tarayıp mevcut durumla karşılaştırır.
 
-Çekirdek `baremIndirimAnalizi()` (`assets/calc.js`) saf bir fonksiyondur; kargo,
-komisyon ve adet bilgisini enjekte edilen fonksiyonlardan alır. Aday eşikler
-iki kapsamda tanımlanır (`baremEsikleri()`, `index.html`):
+**Komisyon tarifesiyle ilgisi yoktur.** Ürünün `guncel_komisyon`'u hem mevcut hem
+indirimli senaryoda aynen kullanılır; indirimli fiyat başka bir tarife aralığına
+düşse bile oran değişmez. Komisyon fiyat aralıkları (1.–4. aralık) ana tablonun
+konusudur, bu sayfanın değil — bu yüzden sayfada tarife seçimi de yoktur.
 
-| Kapsam | Eşik kaynağı | Hedef fiyat |
-|--------|--------------|-------------|
-| `'toplam'` | Kargo kademesi eşikleri (`kargoAyar.esik1/esik2`) — sipariş toplamına bakar | Eşik − `BAREM_MARJI` (1₺): `200₺ → 199₺` |
-| `'birim'` | Ürünün komisyon fiyat aralıklarının üst sınırları (`f2_ust/f3_ust/f4_ust`) — birim fiyata bakar | Aralığın üst sınırının kendisi ("X ₺ ve altı" tanımlı olduğu için) |
+Çekirdek `baremIndirimAnalizi()` (`assets/calc.js`) saf bir fonksiyondur; kargo ve
+adet bilgisini enjekte edilen fonksiyonlardan, komisyonu tek bir `komisyon`
+parametresinden alır. Aday eşikler kargo kademesi eşikleridir
+(`kargoAyar.esik1/esik2`, varsayılan 200₺ ve 350₺) ve **sipariş toplamına**
+uygulanır; hedef tutar eşiğin `BAREM_MARJI` (1₺) altıdır → `200₺ → 199₺`.
 
-`'toplam'` kapsamda hedef sipariş toplamı adede bölünerek birim fiyata çevrilir;
-birim fiyat düşünce zorunlu sipariş adedi artabildiğinden sabit noktaya
-yakınsanır ve kuruş küsuratı **aşağı** kırpılır (aksi halde toplam eşiği aşardı).
-Yakınsamayan eşik elenir.
+Hedef sipariş toplamı adede bölünerek birim fiyata çevrilir; birim fiyat düşünce
+zorunlu sipariş adedi artabildiğinden sabit noktaya yakınsanır ve kuruş küsuratı
+**aşağı** kırpılır (aksi halde toplam eşiği aşardı). Yakınsamayan eşik elenir.
 
 Her aday, mevcut durumla aynı formülle (zorunlu adet dahil sipariş toplamı
-üzerinden) hesaplanıp **kâr farkına** göre sıralanır; mevcut durum ürünün kendi
-`guncel_komisyon`'uyla, adaylar ise indirimli fiyatın düştüğü aralığın
-komisyonuyla (`tierForPrice()`) hesaplanır. `maxIndirimYuzdesi` (panelde
-**En fazla indirim**, varsayılan %20, `trendyol_barem_ayar_v1`'de saklanır) bundan
-fazla indirim gerektiren eşikleri eler — amaç yakın bir bareme yuvarlamak, fiyatı
-dibe çekmek değil. Sayfa her ürünün her adayını ayrı satır olarak gösterir,
-seçilenler Excel'e aktarılabilir.
+üzerinden) hesaplanıp **kâr farkına** göre sıralanır. `maxIndirimYuzdesi`
+(panelde **En fazla indirim**, varsayılan %20, `trendyol_barem_ayar_v1`'de
+saklanır) bundan fazla indirim gerektiren eşikleri eler — amaç yakın bir bareme
+yuvarlamak, fiyatı dibe çekmek değil.
+
+Pratikte 200₺ eşiği için kâr sınırı, kargo tasarrufunun (36₺) indirim tutarını
+karşıladığı yerdir: maliyet 100₺ varsayımıyla %15 komisyonda ~241₺, %20'de ~245₺,
+%30'da ~251₺ ve altındaki fiyatlarda yuvarlamak kârlı; üstünde zararlı.
 
 Sayfa localStorage'ı yalnızca **okur** (kendi `trendyol_barem_ayar_v1` anahtarı
 hariç): ürün verisini, maliyet kayıtlarını ve kargo/hizmet ayarını ana sayfanın
-kaydettiği şekilde alır, hiçbirini değiştirmez. Tarife seçimi sayfanın kendi
-sekmelerinden yapılır ve komisyon aralıkları buna göre çözülür. Ana sayfadaki
-hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.
+kaydettiği şekilde alır, hiçbirini değiştirmez. Ana sayfadaki hesaplamaları,
+Maliyet Girişi'ni veya diğer panelleri etkilemez.
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 
