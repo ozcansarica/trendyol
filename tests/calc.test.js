@@ -43,9 +43,10 @@ test('kargo satıcıya ait değilse maliyete girmez', () => {
 // --- Barem indirimi -------------------------------------------------------
 
 // Testlerde kullanılan varsayılan kargo kademesi (index.html'deki kargoAyar):
-// <200₺ → 42₺, 200–350₺ → 78₺, >350₺ → 98₺ — sipariş toplamına uygulanır.
+// <200₺ → 42₺, 200–349,99₺ → 78₺, ≥350₺ → 98₺ — sipariş toplamına uygulanır.
+// Eşiğe oturan tutar üst kademeye girer (iki eşikte de aynı kural).
 const kargoIcinTest = (siparisToplami) =>
-  siparisToplami < 200 ? 42 : (siparisToplami <= 350 ? 78 : 98);
+  siparisToplami < 200 ? 42 : (siparisToplami < 350 ? 78 : 98);
 
 // Zorunlu adet eşikleri, 'birim' kapsamlı barem adayı olarak.
 const adetBaremleri = ZORUNLU_ADET_BAREMLERI.map(b => ({ esik: b.esik, kapsam: 'birim', adet: b.adet }));
@@ -204,22 +205,25 @@ test('kargo eşik adetleri: eşiği geçen en küçük adedi bulur', () => {
   assert.equal(ucuncu.kargo, 98);
 });
 
-test('kargo eşik adetleri: eşiğe tam oturan tutar ikinci kademeye girer', () => {
-  // kargoKademesi: toplam < esik1 → kargo1, esik1 ≤ toplam ≤ esik2 → kargo2.
-  // 10 × 20 = 200, yani tam eşik zaten 78₺ kademesinde.
+test('kargo kademesi: eşiğe oturan tutar iki eşikte de üst kademeye girer', () => {
+  assert.equal(kargoKademesi(199.99, kargoAyarTest), 42);
+  assert.equal(kargoKademesi(200, kargoAyarTest), 78);   // tam eşik → üst kademe
+  assert.equal(kargoKademesi(349.99, kargoAyarTest), 78);
+  assert.equal(kargoKademesi(350, kargoAyarTest), 98);   // tam eşik → üst kademe
+});
+
+test('kargo eşik adetleri: eşiğe tam oturan adet o eşiği geçmiş sayılır', () => {
+  // 10 × 20 = 200 → 78₺ kademesi.
   const [ikinci] = kargoEsikAdetleri(20, kargoAyarTest);
   assert.equal(ikinci.adet, 10);
   assert.equal(ikinci.siparisToplami, 200);
-  assert.equal(kargoKademesi(200, kargoAyarTest), 78);
-  assert.equal(kargoKademesi(199.99, kargoAyarTest), 42);
-});
+  assert.equal(ikinci.kargo, 78);
 
-test('kargo eşik adetleri: üçüncü kademe için eşiğin üstüne çıkmak gerekir', () => {
-  // 350₺ tam eşik hâlâ ikinci kademe (kargo2); geçmek için üstüne çıkmalı.
+  // 10 × 35 = 350 → 98₺ kademesi.
   const [, ucuncu] = kargoEsikAdetleri(35, kargoAyarTest);
-  assert.equal(kargoKademesi(350, kargoAyarTest), 78);
-  assert.equal(ucuncu.adet, 11); // 10 × 35 = 350 yetmez, 11 × 35 = 385
-  assert.equal(ucuncu.siparisToplami, 385);
+  assert.equal(ucuncu.adet, 10);
+  assert.equal(ucuncu.siparisToplami, 350);
+  assert.equal(ucuncu.kargo, 98);
 });
 
 test('kargo eşik adetleri: her eşik için bulunan adet gerçekten o kademeyi verir', () => {
@@ -227,9 +231,9 @@ test('kargo eşik adetleri: her eşik için bulunan adet gerçekten o kademeyi v
     const [ikinci, ucuncu] = kargoEsikAdetleri(fiyat, kargoAyarTest);
     // Bulunan adet eşiği gerçekten geçmeli, bir eksiği geçmemeli.
     assert.ok(ikinci.siparisToplami >= 200, `${fiyat}₺ × ${ikinci.adet} 200₺'yi geçmeli`);
-    assert.ok(ucuncu.siparisToplami > 350, `${fiyat}₺ × ${ucuncu.adet} 350₺'yi geçmeli`);
+    assert.ok(ucuncu.siparisToplami >= 350, `${fiyat}₺ × ${ucuncu.adet} 350₺'ye ulaşmalı`);
     if (ikinci.adet > 1) assert.ok(round2((ikinci.adet - 1) * fiyat) < 200, `${fiyat}₺ için ${ikinci.adet} en küçük adet olmalı`);
-    if (ucuncu.adet > 1) assert.ok(round2((ucuncu.adet - 1) * fiyat) <= 350, `${fiyat}₺ için ${ucuncu.adet} en küçük adet olmalı`);
+    if (ucuncu.adet > 1) assert.ok(round2((ucuncu.adet - 1) * fiyat) < 350, `${fiyat}₺ için ${ucuncu.adet} en küçük adet olmalı`);
     // Gösterilen kargo, o adetteki gerçek kademe olmalı.
     for (const e of [ikinci, ucuncu]) {
       assert.equal(e.kargo, kargoKademesi(e.siparisToplami, kargoAyarTest));
@@ -284,22 +288,30 @@ test('altında kalmak: en az indirim, hedef yuvarlanmadan tam sınıra iner', ()
   assert.equal(ikinci.altindaKalmak.birimFiyat, 99.99);
   assert.ok(ikinci.altindaKalmak.birimFiyat * ikinci.adet < kargoAyarTest.esik1);
 
-  // 350₺ eşiğinde sınır eşiğin kendisidir (≤ 350 hâlâ alt kademe), kuruş inmez.
+  // 350₺ eşiğinde de aynı kural: tam 350₺ üst kademedir, altı 349,99₺'dir.
   assert.equal(ucuncu.adet, 3);
-  assert.equal(ucuncu.altindaKalmak.siparisToplami, 350);
-  assert.equal(ucuncu.altindaKalmak.indirimTutari, 10); // 360 − 350
+  assert.equal(ucuncu.altindaKalmak.siparisToplami, 349.99);
+  assert.equal(ucuncu.altindaKalmak.indirimTutari, 10.01); // 360 − 349,99
   assert.equal(ucuncu.altindaKalmak.kargo, 78);
 });
 
 test('altında kalmak: eşiğe tam oturan toplamda bir kuruş indirim yeter', () => {
   // 25₺ × 8 = 200,00₺ tam eşik → 78₺ kademesinde. 1 kuruş indirim 199,99₺'ye
   // indirip kargoyu 42₺'ye çeker.
-  const [ikinci] = kargoEsikAdetleri(25, kargoAyarTest);
+  const [ikinci, ucuncu] = kargoEsikAdetleri(25, kargoAyarTest);
   assert.equal(ikinci.siparisToplami, 200);
   assert.equal(ikinci.kargo, 78);
   assert.equal(ikinci.altindaKalmak.indirimTutari, 0.01);
   assert.equal(ikinci.altindaKalmak.siparisToplami, 199.99);
   assert.equal(ikinci.altindaKalmak.kargo, 42);
+
+  // 25₺ × 14 = 350,00₺ tam eşik → 98₺ kademesinde; orada da 1 kuruş yeter.
+  assert.equal(ucuncu.adet, 14);
+  assert.equal(ucuncu.siparisToplami, 350);
+  assert.equal(ucuncu.kargo, 98);
+  assert.equal(ucuncu.altindaKalmak.indirimTutari, 0.01);
+  assert.equal(ucuncu.altindaKalmak.siparisToplami, 349.99);
+  assert.equal(ucuncu.altindaKalmak.kargo, 78);
 });
 
 test('altında kalmak: hedef toplam eşiği aşmaz ve alt kademeyi verir', () => {
@@ -309,7 +321,7 @@ test('altında kalmak: hedef toplam eşiği aşmaz ve alt kademeyi verir', () =>
       if (!e.altindaKalmak) continue;
       const a = e.altindaKalmak;
       // Hedef, eşiğin kendi kuralındaki tam sınır: 200₺ için 199,99₺, 350₺ için 350₺.
-      assert.equal(a.siparisToplami, e.esik === 200 ? 199.99 : 350);
+      assert.equal(a.siparisToplami, round2(e.esik - 0.01));
       // Ve gerçekten geçilen kademenin altında kalmalı.
       assert.equal(a.kargo, kargoKademesi(a.siparisToplami, kargoAyarTest));
       assert.ok(a.kargo < e.kargo, `${fiyat}₺ ${e.esik}₺ eşiği: ${a.kargo}₺ < ${e.kargo}₺ olmalı`);

@@ -289,7 +289,7 @@
             <div class="kargo-input-group"><input type="number" id="khKargo2" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
           </div>
           <div class="kargo-row">
-            <span class="kargo-lbl">&gt; <span id="khEsik2Label">350</span> ₺ → kargo</span>
+            <span class="kargo-lbl"><span id="khEsik2Label">350</span> ₺ ve üstü → kargo</span>
             <div class="kargo-input-group"><input type="number" id="khKargo3" step="0.01" min="0" class="kargo-input"><span class="kargo-unit">₺</span></div>
           </div>
         </div>
@@ -384,7 +384,7 @@ function persistActiveUrunler() {
 function updateHint() {
   const el = document.getElementById('settingsHint');
   if (!el) return;
-  el.textContent = `KDV %20 sabit. Hizmet bedeli: ${hizmetAyar.toFixed(2)}₺. Kargo (sipariş toplamına göre): <${kargoAyar.esik1}₺→${kargoAyar.kargo1}₺, ${kargoAyar.esik1}–${kargoAyar.esik2}₺→${kargoAyar.kargo2}₺, >${kargoAyar.esik2}₺→${kargoAyar.kargo3}₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.`;
+  el.textContent = `KDV %20 sabit. Hizmet bedeli: ${hizmetAyar.toFixed(2)}₺. Kargo (sipariş toplamına göre): <${kargoAyar.esik1}₺→${kargoAyar.kargo1}₺, ${kargoAyar.esik1}₺ ve üstü→${kargoAyar.kargo2}₺, ${kargoAyar.esik2}₺ ve üstü→${kargoAyar.kargo3}₺ (eşiğe oturan tutar üst kademeye girer). Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.`;
 }
 
 function updateStatusUI() {

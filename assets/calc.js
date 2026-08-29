@@ -245,12 +245,17 @@ export function baremIndirimAnalizi(p) {
 /**
  * Sipariş toplamına düşen kargo kademesi. Kargo bedeli gönderi başına bir kez
  * alındığından kademe birim fiyata değil siparişin tamamına bakar.
+ *
+ * Her iki eşik de aynı şekilde çalışır: toplam eşiğe EŞİTSE üst kademeye
+ * girilir. Alt kademede kalmak için eşiğin altında olmak gerekir — tam 200₺
+ * ikinci kademedir (78₺), tam 350₺ üçüncü kademedir (98₺).
+ *
  * @param {number} siparisToplami Birim fiyat × zorunlu sipariş adedi
  * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
  */
 export function kargoKademesi(siparisToplami, ayar) {
   if (siparisToplami < ayar.esik1) return ayar.kargo1;
-  if (siparisToplami <= ayar.esik2) return ayar.kargo2;
+  if (siparisToplami < ayar.esik2) return ayar.kargo2;
   return ayar.kargo3;
 }
 
@@ -268,21 +273,19 @@ function ilkAdet(kosul, birimFiyat, tahmin) {
 
 /**
  * Bir birim fiyatın kargo kademesi eşiklerini kaçıncı adette geçtiğini bulur.
- * Eşik koşulları kargoKademesi() ile birebir aynıdır: ikinci kademe için
- * sipariş toplamı esik1'e EŞİT ya da üstünde, üçüncü kademe için esik2'nin
- * ÜSTÜNDE olmalıdır.
+ * Eşik koşulları kargoKademesi() ile birebir aynıdır: bir üst kademeye girmek
+ * için sipariş toplamı eşiğe EŞİT ya da üstünde olmalıdır (iki eşikte de aynı).
  *
  * Dönen `kargo`, o adetteki GERÇEK kademedir — varsayılan bir sonraki kademe
  * değil. Pahalı ürünlerde tek bir adet artışı iki eşiği birden geçebilir
- * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde, kargo doğrudan 98₺).
+ * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğini geçtiğinden kargo doğrudan 98₺).
  *
  * Her eşik için ayrıca `altindaKalmak` döner: o adette baremin ALTINDA kalmak
  * için **sipariş toplamından** düşülmesi gereken EN AZ indirim. İndirim birim
  * fiyata değil sepet toplamına uygulandığından hedef tutar tam tutturulabilir
- * (birim fiyata bölüp aşağı kırpma gerekmez). Hedef yuvarlanmaz, eşiğin kendi
- * kuralındaki tam sınırdır — ikinci kademeye girmemek için toplam esik1'in
- * ALTINDA olmalı (hedef = esik1 − 1 kuruş, 200₺ → 199,99₺), üçüncü kademeye
- * girmemek için esik2'ye EŞİT olabilir (hedef = esik2, tam 350₺).
+ * (birim fiyata bölüp aşağı kırpma gerekmez). Hedef yuvarlanmaz, tam sınırdır:
+ * alt kademede kalmak için toplam eşiğin ALTINDA olmalı, yani hedef = eşik −
+ * 1 kuruş (200₺ → 199,99₺, 350₺ → 349,99₺).
  *
  * @param {number} birimFiyat
  * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
@@ -298,14 +301,14 @@ export function kargoEsikAdetleri(birimFiyat, ayar, marj) {
   const p = +birimFiyat;
   if (!(p > 0)) return [];
   const pay = marj != null ? +marj : KURUS;
-  const esikler = [
-    // İkinci kademe: toplam esik1'e eşit ya da üstündeyse girilir → altında
-    // kalmak için eşiğin bir kuruş altına inmek yeterlidir (199,99₺).
-    { esik: ayar.esik1, kosul: (t) => t >= ayar.esik1, hedefToplam: round2(ayar.esik1 - pay) },
-    // Üçüncü kademe: yalnızca esik2'nin ÜSTÜNDE girilir → eşiğin kendisi hâlâ
-    // alt kademede, hedef tam olarak esik2.
-    { esik: ayar.esik2, kosul: (t) => t > ayar.esik2, hedefToplam: ayar.esik2 },
-  ];
+  // İki eşik de aynı kuralla çalışır: toplam eşiğe eşit ya da üstündeyse üst
+  // kademeye girilir, dolayısıyla altında kalmak için eşiğin bir kuruş altına
+  // inmek yeterlidir (200₺ → 199,99₺, 350₺ → 349,99₺).
+  const esikler = [ayar.esik1, ayar.esik2].map(esik => ({
+    esik,
+    kosul: (t) => t >= esik,
+    hedefToplam: round2(esik - pay),
+  }));
   return esikler.map(({ esik, kosul, hedefToplam }) => {
     const adet = ilkAdet(kosul, p, esik / p);
     if (adet == null) {

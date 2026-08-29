@@ -186,7 +186,8 @@ window.render = function () {
   el('bas1').textContent = `${tl(kargoAyar.esik1)} eşiği`;
   el('bas2').textContent = `${tl(kargoAyar.esik2)} eşiği`;
   el('esikNot').textContent = `Kademeler: ${tl(kargoAyar.esik1)} altı ${tl(kargoAyar.kargo1)}, `
-    + `${tl(kargoAyar.esik1)}–${tl(kargoAyar.esik2)} arası ${tl(kargoAyar.kargo2)}, üstü ${tl(kargoAyar.kargo3)}.`;
+    + `${tl(kargoAyar.esik1)} ve üstü ${tl(kargoAyar.kargo2)}, ${tl(kargoAyar.esik2)} ve üstü ${tl(kargoAyar.kargo3)} `
+    + `— eşiğe oturan tutar üst kademeye girer, bu yüzden altında kalmak için bir kuruş inmek gerekir.`;
 
   const tarih = kayit && kayit.uploadedAt ? new Date(kayit.uploadedAt).toLocaleString('tr-TR') : '';
   el('kaynak').textContent = urunler.length
