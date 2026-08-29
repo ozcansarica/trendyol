@@ -269,28 +269,54 @@ function ilkAdet(kosul, birimFiyat, tahmin) {
  * değil. Pahalı ürünlerde tek bir adet artışı iki eşiği birden geçebilir
  * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde, kargo doğrudan 98₺).
  *
+ * Her eşik için ayrıca `altindaKalmak` döner: o adette baremin ALTINDA kalmak
+ * için gereken birim fiyat ve indirim. Hedef sipariş toplamı eşiğin kendi
+ * kuralına göre belirlenir — ikinci kademeye girmemek için toplam esik1'in
+ * ALTINDA olmalı (hedef = esik1 − marj), üçüncü kademeye girmemek için esik2'ye
+ * EŞİT olabilir (hedef = esik2).
+ *
  * @param {number} birimFiyat
  * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
+ * @param {number} [marj=BAREM_MARJI] 'altında kalma' hedefinde eşiğin altına
+ *   inilirken bırakılan pay (200₺ → 199₺)
  * @returns {Array<{esik:number, adet:number|null, siparisToplami:number|null,
- *   kargo:number|null, oncekiKargo:number|null}>}
+ *   kargo:number|null, oncekiKargo:number|null, altindaKalmak:object|null}>}
  *   `oncekiKargo` bir eksik adetteki kademedir (adet 1 ise null — o eşik zaten
  *   tek adette geçiliyor). Makul adette geçilemeyen eşikte adet null döner.
  */
-export function kargoEsikAdetleri(birimFiyat, ayar) {
+export function kargoEsikAdetleri(birimFiyat, ayar, marj) {
   const p = +birimFiyat;
   if (!(p > 0)) return [];
+  const pay = marj != null ? +marj : BAREM_MARJI;
   const esikler = [
-    { esik: ayar.esik1, kosul: (t) => t >= ayar.esik1 },
-    { esik: ayar.esik2, kosul: (t) => t > ayar.esik2 },
+    // İkinci kademe: toplam esik1'e eşit ya da üstündeyse girilir → altında
+    // kalmak için eşiğin bir tık altına inmek gerekir.
+    { esik: ayar.esik1, kosul: (t) => t >= ayar.esik1, hedefToplam: round2(ayar.esik1 - pay) },
+    // Üçüncü kademe: yalnızca esik2'nin ÜSTÜNDE girilir → eşiğin kendisi hâlâ
+    // alt kademede, hedef tam olarak esik2.
+    { esik: ayar.esik2, kosul: (t) => t > ayar.esik2, hedefToplam: ayar.esik2 },
   ];
-  return esikler.map(({ esik, kosul }) => {
+  return esikler.map(({ esik, kosul, hedefToplam }) => {
     const adet = ilkAdet(kosul, p, esik / p);
-    if (adet == null) return { esik, adet: null, siparisToplami: null, kargo: null, oncekiKargo: null };
+    if (adet == null) {
+      return { esik, adet: null, siparisToplami: null, kargo: null, oncekiKargo: null, altindaKalmak: null };
+    }
     const siparisToplami = round2(adet * p);
+    // Aynı adette baremin altında kalmak için gereken birim fiyat. Küsurat
+    // aşağı kırpılır, yoksa toplam hedefi aşıp barem yine geçilirdi.
+    const hedefBirim = floor2(hedefToplam / adet);
+    const altindaKalmak = hedefBirim > 0 && hedefBirim < p ? {
+      birimFiyat: hedefBirim,
+      siparisToplami: round2(hedefBirim * adet),
+      kargo: kargoKademesi(round2(hedefBirim * adet), ayar),
+      indirimTutari: round2(p - hedefBirim),
+      indirimYuzdesi: round2((p - hedefBirim) / p * 100),
+    } : null;
     return {
       esik, adet, siparisToplami,
       kargo: kargoKademesi(siparisToplami, ayar),
       oncekiKargo: adet > 1 ? kargoKademesi(round2((adet - 1) * p), ayar) : null,
+      altindaKalmak,
     };
   });
 }

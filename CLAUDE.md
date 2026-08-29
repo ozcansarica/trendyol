@@ -152,6 +152,14 @@ sonraki kademe değil: pahalı ürünlerde tek adet artışı iki eşiği birden
 geçebilir (199₺ × 2 = 398₺ → kargo doğrudan 42₺'den 98₺'ye çıkar). Kâr, zorunlu
 adetle değil o eşiği geçen adetle hesaplanır (`adetliSiparisKari()`).
 
+Her eşik için ayrıca **o adette baremin altında kalmak için gereken indirim**
+(`altindaKalmak`) gösterilir: gereken birim fiyat, indirim tutarı ve yüzdesi.
+Hedef sipariş toplamı eşiğin kendi kuralına göre belirlenir — ikinci kademeye
+girmemek için toplam `esik1`'in **altında** olmalı (hedef = `esik1 − BAREM_MARJI`,
+200₺ → 199₺), üçüncü kademeye girmemek için `esik2`'ye **eşit** olabilir
+(hedef = `esik2`, yani tam 350₺). Birim fiyat küsuratı aşağı kırpılır, yoksa
+toplam hedefi aşıp barem yine geçilirdi.
+
 Sayfa localStorage'ı yalnızca **okur**: ürün verisini, maliyet kayıtlarını ve
 kargo/hizmet ayarını ana sayfanın kaydettiği şekilde alır, hiçbirini değiştirmez.
 Ana sayfadaki hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.

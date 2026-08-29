@@ -44,6 +44,8 @@
   .barem-hedef { font-weight: 800; color: var(--navy); }
   .barem-etiket { display: inline-block; font-size: 9.5px; font-weight: 700; color: var(--muted); background: #f1f3f7; padding: 1px 6px; border-radius: 20px; margin: 1px 3px 1px 0; }
   .barem-alt { font-size: 10.5px; color: var(--muted); font-weight: 500; }
+  .barem-alti { margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--line); font-size: 11px; color: var(--orange); font-weight: 600; }
+  .barem-alti b { color: var(--orange-d); }
   .barem-bos { padding: 26px 16px; color: var(--muted); font-size: 12.5px; }
 </style>
 </head>
@@ -82,7 +84,7 @@
 
   <div class="grup">
     <div class="grup-baslik">Kargo baremini kaç adette geçer
-      <span class="grup-not">bir siparişte kaç adet satılırsa kargo kademesi yükselir</span>
+      <span class="grup-not">bir siparişte kaç adet satılırsa kargo kademesi yükselir — ve o adette baremin altında kalmak için gereken indirim</span>
     </div>
     <div class="barem-durum" id="esikDurum"></div>
     <div class="tablewrap">
@@ -268,8 +270,15 @@ function esikHucresi(u, e) {
     const cls = c.kar >= 0 ? 'barem-pos' : 'barem-neg';
     karBilgi = `<div class="barem-alt">kâr <span class="${cls}">${tl(c.kar)}</span> · ${pc(c.karOrani)}</div>`;
   }
+  // Aynı adette baremin altında kalmak için gereken indirim.
+  const a = e.altindaKalmak;
+  const altiBilgi = a
+    ? `<div class="barem-alti">Altında kalmak: <b>−${tl(a.indirimTutari)}</b> (${pc(a.indirimYuzdesi)})
+         <div class="barem-alt">birim ${tl(a.birimFiyat)} · toplam ${tl(a.siparisToplami)} · kargo ${tl(a.kargo)}</div>
+       </div>`
+    : '';
   return `<span class="barem-hedef">${e.adet} adet</span>
-    <div class="barem-alt">toplam ${tl(e.siparisToplami)} · ${kargoBilgi}</div>${karBilgi}`;
+    <div class="barem-alt">toplam ${tl(e.siparisToplami)} · ${kargoBilgi}</div>${karBilgi}${altiBilgi}`;
 }
 
 function renderEsikTablosu(q) {
