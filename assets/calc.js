@@ -270,10 +270,12 @@ function ilkAdet(kosul, birimFiyat, tahmin) {
  * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde, kargo doğrudan 98₺).
  *
  * Her eşik için ayrıca `altindaKalmak` döner: o adette baremin ALTINDA kalmak
- * için gereken birim fiyat ve indirim. Hedef sipariş toplamı eşiğin kendi
- * kuralına göre belirlenir — ikinci kademeye girmemek için toplam esik1'in
- * ALTINDA olmalı (hedef = esik1 − marj), üçüncü kademeye girmemek için esik2'ye
- * EŞİT olabilir (hedef = esik2).
+ * için **sipariş toplamından** düşülmesi gereken indirim. İndirim birim fiyata
+ * değil sepet toplamına uygulandığından hedef tutar tam tutturulabilir (birim
+ * fiyata bölüp aşağı kırpma gerekmez). Hedef, eşiğin kendi kuralına göre
+ * belirlenir — ikinci kademeye girmemek için toplam esik1'in ALTINDA olmalı
+ * (hedef = esik1 − marj), üçüncü kademeye girmemek için esik2'ye EŞİT olabilir
+ * (hedef = esik2).
  *
  * @param {number} birimFiyat
  * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
@@ -302,15 +304,15 @@ export function kargoEsikAdetleri(birimFiyat, ayar, marj) {
       return { esik, adet: null, siparisToplami: null, kargo: null, oncekiKargo: null, altindaKalmak: null };
     }
     const siparisToplami = round2(adet * p);
-    // Aynı adette baremin altında kalmak için gereken birim fiyat. Küsurat
-    // aşağı kırpılır, yoksa toplam hedefi aşıp barem yine geçilirdi.
-    const hedefBirim = floor2(hedefToplam / adet);
-    const altindaKalmak = hedefBirim > 0 && hedefBirim < p ? {
-      birimFiyat: hedefBirim,
-      siparisToplami: round2(hedefBirim * adet),
-      kargo: kargoKademesi(round2(hedefBirim * adet), ayar),
-      indirimTutari: round2(p - hedefBirim),
-      indirimYuzdesi: round2((p - hedefBirim) / p * 100),
+    // Aynı adette baremin altında kalmak için sipariş toplamından düşülecek
+    // indirim. Sepet toplamına uygulandığından hedef tutar tam tutturulur.
+    const indirimTutari = round2(siparisToplami - hedefToplam);
+    const altindaKalmak = hedefToplam > 0 && indirimTutari > 0 ? {
+      siparisToplami: round2(hedefToplam),
+      kargo: kargoKademesi(round2(hedefToplam), ayar),
+      indirimTutari,
+      indirimYuzdesi: round2(indirimTutari / siparisToplami * 100),
+      birimFiyat: round2(hedefToplam / adet), // bilgi amaçlı: indirim sonrası birim karşılığı
     } : null;
     return {
       esik, adet, siparisToplami,

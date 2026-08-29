@@ -15,15 +15,21 @@ Ayrıntılar için `CONTRIBUTING.md`.
 
 ## Proje yapısı
 
-İki sayfalık statik site. `index.html` ana çalışma sayfasıdır; `indirim/` altındaki
-barem indirimi sayfası ondan bağımsız açılır ve **aynı localStorage'ı paylaşır**
-(ürün verisi, maliyet kayıtları, kargo/hizmet ayarı). Ortak mantık `assets/`
-altındaki modüllerde tek kaynaktan tutulur — iki sayfaya kopyalanmaz.
+Statik site, üç bölüm. `index.html` ana çalışma sayfasıdır; `indirim/` altındaki
+barem indirimi sayfası ondan link ile açılır ve **aynı localStorage'ı paylaşır**
+(ürün verisi, maliyet kayıtları, kargo/hizmet ayarı). `kargo-barem/` ise
+**tamamen bağımsız** bir araçtır: kendi Excel şablonu, kendi yükleme sayfası ve
+kendi localStorage anahtarı vardır; ana sayfadan link verilmez ve verisi ana
+sayfayla paylaşılmaz. Ortak *mantık* `assets/` altındaki modüllerde tek
+kaynaktan tutulur — sayfalara kopyalanmaz.
 
 | Yol | Açıklama |
 |-----|----------|
 | `index.html` | Ürün Fiyat Aralığı & Maliyet Tablosu (ana sayfa) |
 | `indirim/index.html` | ⬇️ Barem İndirimi sayfası (ana sayfadan link ile açılır) |
+| `kargo-barem/index.html` | 📦 Kargo Barem tablosu (bağımsız araç — link verilmez, doğrudan URL ile açılır) |
+| `kargo-barem/yukle.html` | 📤 Kargo Barem'in kendi ürün yükleme sayfası |
+| `assets/aktif-pasif-xlsx-reader.js` | Trendyol "Aktif-Pasif Ürün" export'unu (Barkod No · Ürün Adı · Alış/Satış Tutarı (KDV) · Komisyon Oranı · Ürün Resim) ürün listesine çeviren ayrıştırıcı — Kargo Barem'in tek veri kaynağı (aynı yöntem, bağımsız modül) |
 | `assets/calc.js` | Hesaplama çekirdeği (tarayıcı + testler ortak kullanır): `computeMaliyet()`, `zorunluSiparisAdedi()`, `baremIndirimAnalizi()`, `kargoKademesi()`, `tarifeTierleri()`, `tarifeTierForPrice()` |
 | `assets/ortak.js` | İki sayfanın ortak kullandığı localStorage anahtarları, veri okuma yardımcıları (`readUrunler`, `readKargoHizmet`, `applyMaliyetKayitlari`) ve `tl`/`pc` biçimlendiricileri |
 | `assets/xlsx-writer.js` | Satır dizisinden .xlsx Blob üreten yazıcı (`buildXlsxBlob`) — iki sayfa da dışa aktarımda kullanır |
@@ -142,27 +148,44 @@ Her ürünün her barem adayı ayrı satır olur ve grup içinde **kâr farkına
 sıralanır; kârı düşüren adaylar da listelenir (filtre yoktur), seçilenler
 Excel'e aktarılabilir.
 
-**Kargo baremini kaç adette geçer** (sayfanın en üstündeki tablo) bunun tersini
-gösterir: bir siparişte kaç adet satılırsa sipariş toplamı kargo eşiklerini geçer
-ve kargo kademesi yükselir (`kargoEsikAdetleri()`, `assets/calc.js`). Eşik
-koşulları `kargoKademesi()` ile birebir aynıdır — ikinci kademe için toplam
-`esik1`'e **eşit ya da üstünde**, üçüncü kademe için `esik2`'nin **üstünde**
-olmalıdır. Gösterilen kargo, o adetteki **gerçek** kademedir, varsayılan bir
-sonraki kademe değil: pahalı ürünlerde tek adet artışı iki eşiği birden
-geçebilir (199₺ × 2 = 398₺ → kargo doğrudan 42₺'den 98₺'ye çıkar). Kâr, zorunlu
-adetle değil o eşiği geçen adetle hesaplanır (`adetliSiparisKari()`).
-
-Her eşik için ayrıca **o adette baremin altında kalmak için gereken indirim**
-(`altindaKalmak`) gösterilir: gereken birim fiyat, indirim tutarı ve yüzdesi.
-Hedef sipariş toplamı eşiğin kendi kuralına göre belirlenir — ikinci kademeye
-girmemek için toplam `esik1`'in **altında** olmalı (hedef = `esik1 − BAREM_MARJI`,
-200₺ → 199₺), üçüncü kademeye girmemek için `esik2`'ye **eşit** olabilir
-(hedef = `esik2`, yani tam 350₺). Birim fiyat küsuratı aşağı kırpılır, yoksa
-toplam hedefi aşıp barem yine geçilirdi.
-
 Sayfa localStorage'ı yalnızca **okur**: ürün verisini, maliyet kayıtlarını ve
 kargo/hizmet ayarını ana sayfanın kaydettiği şekilde alır, hiçbirini değiştirmez.
 Ana sayfadaki hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.
+
+## Kargo Barem (`kargo-barem/`, bağımsız araç)
+
+Sitedeki diğer sayfalardan **bilinçli olarak kopuk** bir araçtır: ana sayfadan
+link verilmez, ana sayfanın ürün verisini/maliyet kayıtlarını/kargo ayarını ne
+okur ne yazar. Kendi verisini `trendyol_kargo_barem_urunler_v1` anahtarında
+tutar ve kargo/hizmet için `ortak.js`'teki **varsayılanları** kullanır. Yalnızca
+hesaplama modülleri (`calc.js`, `ortak.js`) ortaktır.
+
+| Sayfa | İş |
+|-------|-----|
+| `kargo-barem/yukle.html` | "Aktif-Pasif Ürün" .xlsx yükler (`parseAktifPasifXlsx()`), şablonu gösterir, atlanan satırları listeler, yüklü veriyi silmeye izin verir |
+| `kargo-barem/index.html` | Tabloyu gösterir; veri yoksa yükleme sayfasına yönlendirir |
+
+Şablon (kolonlar isimle eşleştirilir, sıra önemsizdir; zorunlular **kalın**):
+**Barkod No** · Ürün Adı · Alış Tutarı (KDV) · **Satış Tutarı (KDV)** ·
+**Komisyon Oranı** · Ürün Resim. Alış tutarı boşsa ürün listelenir ama kâr
+hesaplanmaz.
+
+Tablo her ürün için iki kargo eşiğini ayrı ayrı, her biri **iki sütun** hâlinde
+gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
+
+| Sütun | İçerik |
+|-------|--------|
+| **Geçiş Adedi** | Sipariş toplamının o eşiği geçtiği en küçük adet; toplam, kargonun nereden nereye çıktığı ve o adetteki kâr |
+| **Altında Kalmak İçin İndirim** | Aynı adette baremin altında kalmak için **sipariş toplamından** düşülecek indirim (₺ ve %), indirim sonrası toplam/kargo ve indirimli kâr |
+
+İndirim birim fiyata değil **sepet toplamına** uygulanır; bu yüzden hedef tutar
+tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Hedef, eşiğin
+`kargoKademesi()`'deki kendi kuralına göre belirlenir: ikinci kademeye girmemek
+için toplam `esik1`'in **altında** olmalı (hedef = `esik1 − BAREM_MARJI`,
+200₺ → 199₺); üçüncü kademeye girmemek için `esik2`'ye **eşit** olabilir
+(hedef = tam 350₺). Gösterilen kargo, o adetteki **gerçek** kademedir —
+pahalı üründe tek adet artışı iki eşiği birden geçebilir (199₺ × 2 = 398₺ →
+kargo doğrudan 42₺'den 98₺'ye).
 
 ## Maliyet Girişi (kalıcı maliyet kaydı)
 
