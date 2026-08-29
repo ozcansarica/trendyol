@@ -184,11 +184,16 @@ gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
 | **Altında Kalmak İçin İndirim** | Aynı adette baremin altında kalmak için **sipariş toplamından** düşülecek indirim (₺ ve %), indirim sonrası toplam/kargo ve indirimli kâr |
 
 İndirim birim fiyata değil **sepet toplamına** uygulanır; bu yüzden hedef tutar
-tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Hedef, eşiğin
-`kargoKademesi()`'deki kendi kuralına göre belirlenir: ikinci kademeye girmemek
-için toplam `esik1`'in **altında** olmalı (hedef = `esik1 − BAREM_MARJI`,
-200₺ → 199₺); üçüncü kademeye girmemek için `esik2`'ye **eşit** olabilir
-(hedef = tam 350₺). Gösterilen kargo, o adetteki **gerçek** kademedir —
+tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Amaç **en az
+indirimle** eşiğin altına inmek olduğundan hedef yuvarlanmaz, eşiğin
+`kargoKademesi()`'deki tam sınırıdır: ikinci kademeye girmemek için toplam
+`esik1`'in **altında** olmalı → hedef `esik1 − KURUS` = **199,99₺**; üçüncü
+kademeye girmemek için `esik2`'ye **eşit** olabilir → hedef **tam 350₺**.
+Böylece 8 adette tam 200₺'ye oturan bir siparişte 1 kuruşluk indirim kargoyu
+78₺'den 42₺'ye düşürür. (`marj` parametresiyle yuvarlanmış bir hedef de
+istenebilir; barem indirimi sayfasının `BAREM_MARJI` = 1₺ ile 199₺'ye
+yuvarlaması bilinçli olarak ayrıdır — orada amaç en az indirim değil, fiyatı
+yakın bir barem noktasına çekmektir.) Gösterilen kargo, o adetteki **gerçek** kademedir —
 pahalı üründe tek adet artışı iki eşiği birden geçebilir (199₺ × 2 = 398₺ →
 kargo doğrudan 42₺'den 98₺'ye).
 

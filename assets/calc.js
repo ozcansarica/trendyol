@@ -84,8 +84,15 @@ export function computeMaliyet(p) {
 // senaryoda da o kullanılır. Komisyon tarifesindeki fiyat aralıkları (1.–4.
 // aralık) barem indirimiyle ilgili değildir; onlar ana tablonun konusudur.
 
-// Bir 'toplam' eşiğinin altına inerken bırakılan pay (200₺ eşiği → 199₺ hedef).
+// Barem indirimi 'toplam' kapsamda eşiğin altına inerken bırakılan pay
+// (200₺ eşiği → 199₺ hedef). Burada amaç fiyatı yakın bir barem noktasına
+// YUVARLAMAK olduğu için pay 1₺'dir.
 export const BAREM_MARJI = 1;
+
+// "Baremin hemen altında kalmak" hesabında ise amaç en az indirimle eşiğin
+// altına inmektir; bu yüzden yuvarlama yapılmaz, tam sınıra (bir kuruş altına)
+// inilir: 200₺ eşiği → 199,99₺.
+export const KURUS = 0.01;
 
 /**
  * Zorunlu sipariş adedi baremleri: birim fiyat eşiği → o eşikte (ve altında)
@@ -270,17 +277,18 @@ function ilkAdet(kosul, birimFiyat, tahmin) {
  * (199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde, kargo doğrudan 98₺).
  *
  * Her eşik için ayrıca `altindaKalmak` döner: o adette baremin ALTINDA kalmak
- * için **sipariş toplamından** düşülmesi gereken indirim. İndirim birim fiyata
- * değil sepet toplamına uygulandığından hedef tutar tam tutturulabilir (birim
- * fiyata bölüp aşağı kırpma gerekmez). Hedef, eşiğin kendi kuralına göre
- * belirlenir — ikinci kademeye girmemek için toplam esik1'in ALTINDA olmalı
- * (hedef = esik1 − marj), üçüncü kademeye girmemek için esik2'ye EŞİT olabilir
- * (hedef = esik2).
+ * için **sipariş toplamından** düşülmesi gereken EN AZ indirim. İndirim birim
+ * fiyata değil sepet toplamına uygulandığından hedef tutar tam tutturulabilir
+ * (birim fiyata bölüp aşağı kırpma gerekmez). Hedef yuvarlanmaz, eşiğin kendi
+ * kuralındaki tam sınırdır — ikinci kademeye girmemek için toplam esik1'in
+ * ALTINDA olmalı (hedef = esik1 − 1 kuruş, 200₺ → 199,99₺), üçüncü kademeye
+ * girmemek için esik2'ye EŞİT olabilir (hedef = esik2, tam 350₺).
  *
  * @param {number} birimFiyat
  * @param {{esik1:number, esik2:number, kargo1:number, kargo2:number, kargo3:number}} ayar
- * @param {number} [marj=BAREM_MARJI] 'altında kalma' hedefinde eşiğin altına
- *   inilirken bırakılan pay (200₺ → 199₺)
+ * @param {number} [marj=KURUS] 'altında kalma' hedefinde eşiğin altına inilirken
+ *   bırakılan pay. Varsayılan bir kuruştur (en az indirim); yuvarlanmış bir
+ *   fiyat noktası isteniyorsa büyütülebilir.
  * @returns {Array<{esik:number, adet:number|null, siparisToplami:number|null,
  *   kargo:number|null, oncekiKargo:number|null, altindaKalmak:object|null}>}
  *   `oncekiKargo` bir eksik adetteki kademedir (adet 1 ise null — o eşik zaten
@@ -289,10 +297,10 @@ function ilkAdet(kosul, birimFiyat, tahmin) {
 export function kargoEsikAdetleri(birimFiyat, ayar, marj) {
   const p = +birimFiyat;
   if (!(p > 0)) return [];
-  const pay = marj != null ? +marj : BAREM_MARJI;
+  const pay = marj != null ? +marj : KURUS;
   const esikler = [
     // İkinci kademe: toplam esik1'e eşit ya da üstündeyse girilir → altında
-    // kalmak için eşiğin bir tık altına inmek gerekir.
+    // kalmak için eşiğin bir kuruş altına inmek yeterlidir (199,99₺).
     { esik: ayar.esik1, kosul: (t) => t >= ayar.esik1, hedefToplam: round2(ayar.esik1 - pay) },
     // Üçüncü kademe: yalnızca esik2'nin ÜSTÜNDE girilir → eşiğin kendisi hâlâ
     // alt kademede, hedef tam olarak esik2.
@@ -312,7 +320,10 @@ export function kargoEsikAdetleri(birimFiyat, ayar, marj) {
       kargo: kargoKademesi(round2(hedefToplam), ayar),
       indirimTutari,
       indirimYuzdesi: round2(indirimTutari / siparisToplami * 100),
-      birimFiyat: round2(hedefToplam / adet), // bilgi amaçlı: indirim sonrası birim karşılığı
+      // Bilgi amaçlı: indirim sonrası birim karşılığı. Aşağı kırpılır — yukarı
+      // yuvarlansa (199,99 / 2 = 99,995 → 100,00) birim × adet eşiğe geri
+      // çıkar ve yanıltıcı olurdu.
+      birimFiyat: floor2(hedefToplam / adet),
     } : null;
     return {
       esik, adet, siparisToplami,
