@@ -280,6 +280,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     <span class="hk-lbl" style="white-space:nowrap;color:var(--grn);margin-left:6px">Sonraki Kâr Oranı:</span>
     <input id="indSonrakiKarInp" class="hk-inp" type="number" min="0" step="1" value="0" style="-moz-appearance:textfield;border-color:var(--grn)">
     <span class="hk-lbl" style="color:var(--grn)">%</span>
+    <button id="indOnlyBetterBtn" class="tbtn" onclick="toggleIndOnlyBetter()" title="Sadece indirim sonrası kâr oranı mevcut kâr oranından yüksek olan kombinasyonları göster" style="white-space:nowrap;margin-left:6px">↑ Yeni &gt; Mevcut</button>
     <button class="tbtn" onclick="downloadIndExcel()" style="margin-left:auto">📥 Excel İndir</button>
     <button class="tbtn" onclick="toggleIndirimli()">✕ Kapat</button>
   </div>
@@ -1720,7 +1721,7 @@ var kombN = 2;  // 2, 3 veya 4
 var KOMB_AUTO_LIMIT = {3: 80, 4: 40};  // arama yoksa en iyi N ürün seçilir
 
 function _invalidateKomb() { kombData = null; }
-function _invalidateInd() { indData = null; indSortCol = null; indSortDir = 1; }
+function _invalidateInd() { indData = null; indSortCol = null; indSortDir = 1; indOnlyBetter = false; document.getElementById('indOnlyBetterBtn') && document.getElementById('indOnlyBetterBtn').classList.remove('act'); }
 
 function _urunKarOrani(u) {
   var pf = getPF(), rv = 20/120;
@@ -2106,6 +2107,7 @@ var indP2Fiyat = 0;
 var indP2FiyatMax = 0;
 var indSortCol = null;
 var indSortDir = 1;
+var indOnlyBetter = false;
 
 function _indExtraCol() { return false; }
 
@@ -2330,6 +2332,9 @@ function _indList() {
   if (indSonrakiKar > 0) {
     result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && r >= indSonrakiKar; });
   }
+  if (indOnlyBetter) {
+    result = result.filter(function(p){ var r = _indBaremKarOraniFor(p); return r !== null && p.karOrani !== null && r > p.karOrani; });
+  }
   if (indSortCol) {
     result = result.slice().sort(function(a, b) {
       var av = _indSortVal(a, indSortCol);
@@ -2354,6 +2359,7 @@ function _renderIndTabs() {
       if (indP2FiyatMax > 0 && (!p.prods[1] || p.prods[1].s > indP2FiyatMax)) continue;
       if (indHedefIndirim > 0 && (p.karOrani === null || p.karOrani < indHedefIndirim)) continue;
       if (indSonrakiKar > 0) { var r = _indBaremKarOraniFor(p); if (r === null || r < indSonrakiKar) continue; }
+      if (indOnlyBetter) { var rb = _indBaremKarOraniFor(p); if (rb === null || p.karOrani === null || rb <= p.karOrani) continue; }
       cnt++;
     }
     return cnt;
@@ -2374,6 +2380,13 @@ function setIndTier(key) {
   indOffset = 0;
   _renderIndTabs();
   renderInd();
+}
+
+function toggleIndOnlyBetter() {
+  indOnlyBetter = !indOnlyBetter;
+  document.getElementById('indOnlyBetterBtn').classList.toggle('act', indOnlyBetter);
+  indOffset = 0;
+  if (indData) { _renderIndTabs(); renderInd(); }
 }
 
 function setIndSort(col) {
