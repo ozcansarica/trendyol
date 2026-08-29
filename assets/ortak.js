@@ -77,12 +77,3 @@ export function readUrunler(varsayilan) {
   }
   return { urunler: varsayilan, meta: null };
 }
-
-// Kullanılabilir tarife gruplarını (ör. ['3', '4', '7']) ürün verisinden çıkarır.
-export function tarifeAnahtarlari(urunler) {
-  const set = new Set();
-  for (const u of urunler) {
-    for (const k of Object.keys(u.tarifeler || {})) set.add(k);
-  }
-  return [...set].sort((a, b) => (+a) - (+b));
-}

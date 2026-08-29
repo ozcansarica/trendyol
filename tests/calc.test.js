@@ -61,13 +61,9 @@ test('zorunlu sipariş adedi baremleri', () => {
 
 test('barem indirimi: 240₺ → 199₺ kargo eşiğinin altına inince kâr artar', () => {
   const r = baremIndirimAnalizi({
-    birimFiyat: 240, maliyet: 100, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 240, maliyet: 100, komisyon: 20, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: () => 20,
-    baremler: [
-      { esik: 200, kapsam: 'toplam', tip: 'kargo' },
-      { esik: 350, kapsam: 'toplam', tip: 'kargo' },
-    ],
+    baremler: [{ esik: 200 }, { esik: 350 }],
   });
 
   assert.equal(r.mevcut.kargo, 78);
@@ -84,43 +80,40 @@ test('barem indirimi: 240₺ → 199₺ kargo eşiğinin altına inince kâr art
   assert.equal(r.enIyi, a);
 });
 
+test('barem indirimi: komisyon indirimli senaryoda da aynı kalır', () => {
+  // Komisyon tarifesindeki fiyat aralıkları bu hesaba karışmaz; indirimli
+  // fiyat başka bir aralığa düşse bile ürünün güncel komisyonu kullanılır.
+  const r = baremIndirimAnalizi({
+    birimFiyat: 240, maliyet: 100, komisyon: 20, kdvPct: 20, hizmet: 13.19,
+    kargoIcin: kargoIcinTest,
+    baremler: [{ esik: 200 }],
+  });
+  const a = r.adaylar[0];
+  // Komisyon = satış × %20, iki senaryoda da aynı oran.
+  assert.equal(round2(r.mevcut.siparisToplami * 0.20), 48);
+  assert.equal(round2(a.siparisToplami * 0.20), 39.8);
+});
+
 test('barem indirimi: kârı düşüren aday enIyi olarak seçilmez', () => {
   // Düşük komisyonda 41₺'lik fiyat indirimi, kargo (36₺) + komisyon kazancından
   // büyük kalır; aday yine listelenir ama enIyi olarak seçilmez.
   const r = baremIndirimAnalizi({
-    birimFiyat: 240, maliyet: 100, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 240, maliyet: 100, komisyon: 8, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: () => 8,
-    baremler: [{ esik: 200, kapsam: 'toplam', tip: 'kargo' }],
+    baremler: [{ esik: 200 }],
   });
   assert.equal(r.adaylar.length, 1);
   assert.equal(round2(r.adaylar[0].karFarki), -1.09);
   assert.equal(r.enIyi, null);
 });
 
-test('barem indirimi: birim kapsamlı eşik (komisyon aralığı) tam eşiğe iner', () => {
-  const r = baremIndirimAnalizi({
-    birimFiyat: 180, maliyet: 60, kdvPct: 20, hizmet: 13.19,
-    kargoIcin: kargoIcinTest,
-    komisyonIcin: (fiyat) => (fiyat <= 150 ? 15 : 25),
-    mevcutKomisyon: 25,
-    baremler: [{ esik: 150, kapsam: 'birim', tip: 'komisyon' }],
-  });
-  assert.equal(r.mevcut.komisyon, 25);
-  assert.equal(r.adaylar.length, 1);
-  // 'birim' kapsamda aralıklar "X ₺ ve altı" tanımlı → hedef eşiğin kendisi.
-  assert.equal(r.adaylar[0].birimFiyat, 150);
-  assert.equal(r.adaylar[0].komisyon, 15);
-});
-
 test('barem indirimi: zorunlu adet artınca hedef toplam yine eşiğin altında kalır', () => {
   // 60₺ eşiği: birim fiyat düştükçe zorunlu adet 1 → 2 → 4 → 6 büyür,
   // hedef birim fiyat da adede bölünerek sabit noktaya yakınsar.
   const r = baremIndirimAnalizi({
-    birimFiyat: 80, maliyet: 20, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 80, maliyet: 20, komisyon: 20, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: () => 20,
-    baremler: [{ esik: 60, kapsam: 'toplam' }],
+    baremler: [{ esik: 60 }],
   });
   const a = r.adaylar[0];
   assert.equal(a.adet, 6);
@@ -129,38 +122,33 @@ test('barem indirimi: zorunlu adet artınca hedef toplam yine eşiğin altında 
   assert.ok(a.siparisToplami < 60, 'sipariş toplamı barem eşiğinin altında kalmalı');
 });
 
-test('barem indirimi: aynı fiyata denk gelen baremler tek adayda birleşir', () => {
+test('barem indirimi: aynı fiyata denk gelen eşikler tek adayda birleşir', () => {
   const r = baremIndirimAnalizi({
-    birimFiyat: 240, maliyet: 100, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 240, maliyet: 100, komisyon: 20, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: () => 20,
-    baremler: [
-      { esik: 200, kapsam: 'toplam', tip: 'kargo' },
-      { esik: 199, kapsam: 'birim', tip: 'komisyon' }, // aynı hedef: 199₺
-    ],
+    baremler: [{ esik: 200, etiket: 'a' }, { esik: 200, etiket: 'b' }],
   });
   assert.equal(r.adaylar.length, 1);
   assert.equal(r.adaylar[0].baremler.length, 2);
 });
 
-test('barem indirimi: komisyonu bilinmeyen fiyat için aday üretilmez', () => {
+test('barem indirimi: komisyonu bilinmeyen ürün için analiz yapılmaz', () => {
   const r = baremIndirimAnalizi({
-    birimFiyat: 240, maliyet: 100, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 240, maliyet: 100, komisyon: 0, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: (fiyat) => (fiyat > 200 ? 20 : 0), // 199₺'de komisyon tanımsız
-    baremler: [{ esik: 200, kapsam: 'toplam' }],
+    baremler: [{ esik: 200 }],
   });
+  assert.equal(r.mevcut, null);
   assert.equal(r.adaylar.length, 0);
   assert.equal(r.enIyi, null);
 });
 
-test('barem indirimi: maxIndirimYuzdesi uzak baremleri eler', () => {
+test('barem indirimi: maxIndirimYuzdesi uzak eşikleri eler', () => {
   const ortak = {
-    birimFiyat: 240, maliyet: 100, kdvPct: 20, hizmet: 13.19,
+    birimFiyat: 240, maliyet: 100, komisyon: 20, kdvPct: 20, hizmet: 13.19,
     kargoIcin: kargoIcinTest,
-    komisyonIcin: () => 20,
     // 200₺ eşiği %17.08, 150₺ eşiği %37.92 indirim gerektirir.
-    baremler: [{ esik: 200, kapsam: 'toplam' }, { esik: 150, kapsam: 'toplam' }],
+    baremler: [{ esik: 200 }, { esik: 150 }],
   };
   assert.equal(baremIndirimAnalizi(ortak).adaylar.length, 2);
 

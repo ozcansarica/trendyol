@@ -66,21 +66,16 @@ export function computeMaliyet(p) {
 // ---------------------------------------------------------------------------
 // Barem indirimi
 // ---------------------------------------------------------------------------
-// Maliyet kalemlerinin bir kısmı (kargo, komisyon) fiyat eşiklerine göre
-// kademeli artar. Bir eşiğin hemen üstünde kalan sipariş, eşiğin altına
-// çekildiğinde fiyattan kaybedilenden fazlasını kargo/komisyondan geri
-// kazanabilir: 240₺'lik sipariş 199₺'ye indirilince kargo kademesi 78₺ → 42₺,
-// komisyon da satışla orantılı düştüğü için toplam kâr artabilir.
+// Kargo bedeli sipariş toplamına göre kademeli arttığından, bir kargo eşiğinin
+// hemen üstünde kalan sipariş eşiğin altına çekildiğinde fiyattan kaybedilenden
+// fazlasını geri kazanabilir: 240₺'lik sipariş 199₺'ye indirilince kargo
+// 78₺ → 42₺ düşer, komisyon da satışla orantılı azalır.
 //
-// Barem eşikleri iki kapsamda olur:
-//   'toplam' — kargo eşikleri gibi sipariş toplamına bakanlar. Kargo bir alt
-//              kademeye düşmesi için toplamın eşiğin ALTINDA olması gerekir,
-//              bu yüzden hedef tutar = eşik − BAREM_MARJI (200 → 199).
-//   'birim'  — komisyon fiyat aralıkları gibi birim fiyata bakanlar. Aralıklar
-//              "X ₺ ve altı" tanımlı olduğundan hedef birim fiyat = eşiğin
-//              kendisi.
+// Komisyon oranı bu hesapta sabittir — ürünün güncel komisyonu neyse indirimli
+// senaryoda da o kullanılır. Komisyon tarifesindeki fiyat aralıkları (1.–4.
+// aralık) barem indirimiyle ilgili değildir; onlar ana tablonun konusudur.
 
-// Bir 'toplam' eşiğinin altına inerken bırakılan pay (200₺ eşiği → 199₺ hedef).
+// Kargo eşiğinin altına inerken bırakılan pay (200₺ eşiği → 199₺ hedef tutar).
 export const BAREM_MARJI = 1;
 
 // Adet ↔ birim fiyat sabit noktası için üst iterasyon sınırı (bkz.
@@ -88,7 +83,7 @@ export const BAREM_MARJI = 1;
 // artınca hedefi tutturan birim fiyat yeniden düşer.
 const MAX_ADET_ITERASYON = 6;
 
-// Barem hedefinin aşılmaması için kuruş küsuratı her zaman aşağı kırpılır
+// Hedef sipariş toplamı aşılmasın diye kuruş küsuratı her zaman aşağı kırpılır
 // (199 / 6 = 33.1666… → 33.16; yukarı yuvarlansa toplam 199.02 ile eşiği aşardı).
 function floor2(x) {
   return Math.floor(x * 100 + 1e-9) / 100;
@@ -111,34 +106,29 @@ export function zorunluSiparisAdedi(birimFiyat) {
 }
 
 // Tek bir birim fiyat için siparişin (zorunlu adet dahil) kârını hesaplar.
-// Komisyon bilinmiyorsa (aralık tanımsız/0) kâr hesaplanamaz → null.
-function senaryoHesapla(birimFiyat, p, komisyonOverride) {
+function senaryoHesapla(birimFiyat, p) {
   const adetIcin = p.adetIcin || zorunluSiparisAdedi;
   const adet = adetIcin(birimFiyat);
   const siparisToplami = round2(birimFiyat * adet);
-  const komisyon = komisyonOverride != null ? +komisyonOverride : p.komisyonIcin(birimFiyat);
-  if (!komisyon) return null;
   const kargo = p.kargoIcin(siparisToplami);
   const c = computeMaliyet({
     satis: siparisToplami,
     alis: p.maliyet * adet,
-    komPct: komisyon,
+    komPct: p.komisyon,
     kdvPct: p.kdvPct,
     kargo,
     hizmet: p.hizmet,
   });
   return {
-    birimFiyat, adet, siparisToplami, komisyon, kargo,
+    birimFiyat, adet, siparisToplami, kargo,
     kar: c.kar, karOrani: c.karOrani,
   };
 }
 
-// Bir barem hedef tutarını birim fiyata çevirir. 'toplam' kapsamda hedef
-// sipariş toplamı olduğundan adede bölünür; adet de birim fiyata bağlı
-// olduğundan sabit noktaya yakınsanır. Yakınsamazsa (adet ile fiyat birbirini
-// kovalıyorsa) o barem tutturulamaz → null.
-function hedefBirimFiyat(hedefTutar, kapsam, p) {
-  if (kapsam !== 'toplam') return floor2(hedefTutar);
+// Hedef sipariş toplamını birim fiyata çevirir. Birim fiyat düşünce zorunlu
+// sipariş adedi artabildiğinden sabit noktaya yakınsanır; yakınsamazsa (adet
+// ile fiyat birbirini kovalıyorsa) o eşik tutturulamaz → null.
+function hedefBirimFiyat(hedefTutar, p) {
   const adetIcin = p.adetIcin || zorunluSiparisAdedi;
   let adet = adetIcin(p.birimFiyat);
   for (let i = 0; i < MAX_ADET_ITERASYON; i++) {
@@ -151,21 +141,21 @@ function hedefBirimFiyat(hedefTutar, kapsam, p) {
 }
 
 /**
- * Mevcut satış fiyatını, altında kalan barem eşiklerinin hemen altına çeken
+ * Mevcut satış fiyatını, altında kalan kargo eşiklerinin hemen altına çeken
  * indirim senaryolarını üretir ve her birini mevcut durumla karşılaştırır.
  *
  * @param {object} p
  * @param {number} p.birimFiyat Mevcut birim satış fiyatı (KDV dahil)
  * @param {number} p.maliyet    Birim alış maliyeti (KDV dahil)
+ * @param {number} p.komisyon   Komisyon yüzdesi — mevcut ve indirimli senaryoda aynı
  * @param {number} p.kdvPct     KDV yüzdesi
  * @param {number} p.hizmet     Hizmet bedeli (KDV dahil, sipariş başına)
- * @param {Array<{esik:number, kapsam:'toplam'|'birim', tip?:string, etiket?:string}>} p.baremler
- * @param {(siparisToplami:number)=>number} p.kargoIcin      Sipariş toplamına göre kargo
- * @param {(birimFiyat:number)=>number} p.komisyonIcin       Birim fiyata göre komisyon %
- * @param {(birimFiyat:number)=>number} [p.adetIcin]         Varsayılan: zorunluSiparisAdedi
- * @param {number} [p.mevcutKomisyon] Mevcut fiyatın bilinen komisyonu (ör. güncel komisyon)
+ * @param {Array<{esik:number, etiket?:string}>} p.baremler Sipariş toplamına
+ *   uygulanan kargo eşikleri
+ * @param {(siparisToplami:number)=>number} p.kargoIcin Sipariş toplamına göre kargo
+ * @param {(birimFiyat:number)=>number} [p.adetIcin]    Varsayılan: zorunluSiparisAdedi
  * @param {number} [p.maxIndirimYuzdesi] Bu orandan fazla indirim gerektiren
- *   baremler elenir — amaç "yakın" bir eşiğe yuvarlamak, fiyatı dibe çekmek
+ *   eşikler elenir — amaç "yakın" bir eşiğe yuvarlamak, fiyatı dibe çekmek
  *   değil. Verilmezse sınır uygulanmaz.
  * @param {number} [p.marj=BAREM_MARJI]
  * @returns {{mevcut:object|null, adaylar:object[], enIyi:object|null}}
@@ -173,19 +163,19 @@ function hedefBirimFiyat(hedefTutar, kapsam, p) {
  *   aday varsa doludur.
  */
 export function baremIndirimAnalizi(p) {
+  if (!p.komisyon) return { mevcut: null, adaylar: [], enIyi: null };
   const marj = p.marj != null ? +p.marj : BAREM_MARJI;
   const maxIndirim = p.maxIndirimYuzdesi != null ? +p.maxIndirimYuzdesi : null;
-  const mevcut = senaryoHesapla(round2(p.birimFiyat), p, p.mevcutKomisyon);
-  if (!mevcut) return { mevcut: null, adaylar: [], enIyi: null };
+  const mevcut = senaryoHesapla(round2(p.birimFiyat), p);
 
-  const fiyataGore = new Map(); // aynı birim fiyata denk gelen baremler tek adayda birleşir
+  const fiyataGore = new Map(); // aynı birim fiyata denk gelen eşikler tek adayda birleşir
   for (const barem of (p.baremler || [])) {
     const esik = +barem.esik;
     if (!(esik > 0)) continue;
-    const hedefTutar = barem.kapsam === 'toplam' ? round2(esik - marj) : esik;
+    const hedefTutar = round2(esik - marj);
     if (!(hedefTutar > 0)) continue;
 
-    const birim = hedefBirimFiyat(hedefTutar, barem.kapsam, p);
+    const birim = hedefBirimFiyat(hedefTutar, p);
     if (birim == null || birim <= 0) continue;
     if (birim >= mevcut.birimFiyat) continue; // indirim değil, atla
 
@@ -196,7 +186,6 @@ export function baremIndirimAnalizi(p) {
     if (varolan) { varolan.baremler.push(barem); continue; }
 
     const s = senaryoHesapla(birim, p);
-    if (!s) continue;
     fiyataGore.set(birim, {
       ...s,
       baremler: [barem],
