@@ -145,6 +145,10 @@
   .ozel-sec-btn { margin-top: 5px; width: 100%; background: #aaa; color: #fff; border: none; border-radius: 6px; padding: 3px 0; font-size: 11px; font-weight: 600; cursor: pointer; }
   .ozel-sec-btn.selected { background: var(--orange); }
   .ozel-sec-btn:hover { opacity: .85; }
+  .v-grp { display: flex; align-items: center; gap: 5px; }
+  .guncel-sec-btn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #e0e0e0; color: #aaa; border: none; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; padding: 0; }
+  .guncel-sec-btn.selected { background: var(--orange); color: #fff; }
+  .guncel-sec-btn:hover { opacity: .8; }
 </style>
 </head>
 <body>
@@ -682,9 +686,10 @@ function render() {
         <div class="row"><span class="k">Kâr Oranı</span><span class="v ${gCls}">${pc(gC.karOrani)}</span></div>`;
     }
 
+    const isGuncelSel = selectedGuncelFiyat.has(idx);
     const fiyatCell = `
       <div class="fiyat-cell">
-        <div class="row"><span class="k">Satış Fiyatı</span><span class="v">${tl(u.guncel_tsf)}</span></div>
+        <div class="row"><span class="k">Satış Fiyatı</span><span class="v-grp"><span class="v">${tl(u.guncel_tsf)}</span><button class="guncel-sec-btn${isGuncelSel ? ' selected' : ''}" onclick="toggleGuncelSec(${idx})">✓</button></span></div>
         <div class="row"><span class="k">Kom. Esas Fiyat</span><span class="v">${tl(u.komisyon_fiyat)}</span></div>
         <div class="row"><span class="k">Güncel Komisyon</span><span class="v komisyon">%${u.guncel_komisyon}</span></div>
         ${guncelKarHtml}
@@ -725,9 +730,10 @@ function render() {
 
 const selectedTiers = new Map(); // anahtar: "urunIdx-tierNum" → tarife string
 const selectedOzelFiyat = new Map(); // idx → {price, komisyon, tierNum, kar, karOrani, zorunluAdet, secilenTarife}
+const selectedGuncelFiyat = new Set(); // idx — güncel satış fiyatı seçimi
 
 function updateSecimBar() {
-  const n = selectedTiers.size + selectedOzelFiyat.size;
+  const n = selectedTiers.size + selectedOzelFiyat.size + selectedGuncelFiyat.size;
   const btn = document.getElementById('secimIndir');
   btn.style.display = n > 0 ? '' : 'none';
   document.getElementById('secimSayisi').textContent = n;
@@ -741,8 +747,16 @@ window.toggleTierSec = function (idx, tierNum) {
   updateSecimBar();
 };
 
+window.toggleGuncelSec = function (idx) {
+  if (selectedGuncelFiyat.has(idx)) selectedGuncelFiyat.delete(idx); else selectedGuncelFiyat.add(idx);
+  const sel = selectedGuncelFiyat.has(idx);
+  const btn = document.querySelector(`.guncel-sec-btn[onclick="toggleGuncelSec(${idx})"]`);
+  if (btn) { btn.classList.toggle('selected', sel); }
+  updateSecimBar();
+};
+
 window.exportSecilenlerXlsx = async function () {
-  if (!selectedTiers.size && !selectedOzelFiyat.size) return;
+  if (!selectedTiers.size && !selectedOzelFiyat.size && !selectedGuncelFiyat.size) return;
 
   const headers = [
     'Ürün', 'Model', 'Barkod', 'Stok', 'Maliyet (₺)',
@@ -779,6 +793,20 @@ window.exportSecilenlerXlsx = async function () {
       d.komisyon, d.price, d.zorunluAdet,
       Math.round(d.kar * 100) / 100,
       Math.round(d.karOrani * 10) / 10,
+    ]);
+  }
+
+  for (const idx of selectedGuncelFiyat) {
+    const u = activeUrunler[idx];
+    if (!u || !u.guncel_tsf) continue;
+    const gAdet = zorunluSiparisAdedi(u.guncel_tsf);
+    const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf), hizmet: hizmetAyar });
+    rows.push([
+      u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
+      tarife ? `${tarife} Günlük` : '', 'Güncel Fiyat',
+      u.guncel_komisyon, u.guncel_tsf, gAdet,
+      Math.round(gC.kar * 100) / 100,
+      Math.round(gC.karOrani * 10) / 10,
     ]);
   }
 
