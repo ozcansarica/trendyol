@@ -32,7 +32,7 @@
   .databar { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: var(--navy); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .upload-btn:hover { background: #2b3a52; }
-  .maliyet-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .maliyet-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; color: var(--navy); border: 1.5px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;text-decoration: none; }
   .maliyet-btn:hover { border-color: var(--orange); color: var(--orange); }
   .databar .status { font-size: 12px; color: var(--navy); font-weight: 600; }
   .databar .status b { color: var(--orange); }
@@ -167,6 +167,7 @@
     <input type="file" id="fileInput" accept=".xlsx" style="display:none">
     <button class="maliyet-btn" onclick="openMaliyetModal()">💰 Maliyet Girişi</button>
     <button class="maliyet-btn" onclick="openYildizModal()">⭐ Yıldızlı Ürün Fiyatları</button>
+    <a class="maliyet-btn" href="./indirim/">⬇️ Barem İndirimi</a>
     <button class="maliyet-btn" onclick="openKargoModal()">📦 Kargo/Hizmet Tanımı</button>
     <button id="secimIndir" class="indir-btn" onclick="exportSecilenlerXlsx()" style="display:none">📥 Seçilenleri İndir (<span id="secimSayisi">0</span>)</button>
     <span class="status" id="dataStatus"></span>
@@ -304,91 +305,53 @@
 
 <script src="./assets/vendor/jszip.min.js?v=__BUILD_VERSION__"></script>
 <script type="module">
-import { computeMaliyet } from './assets/calc.js?v=__BUILD_VERSION__';
+import { computeMaliyet, zorunluSiparisAdedi, kargoKademesi, tarifeTierleri, tarifeTierForPrice } from './assets/calc.js?v=__BUILD_VERSION__';
+import {
+  KDV_PCT, STORAGE_KEY, MALIYET_KEY, KARGO_HIZMET_KEY, VARSAYILAN_KARGO_AYAR, VARSAYILAN_HIZMET,
+  tl, pc, loadMaliyetKayitlari, maliyetAnahtari, applyMaliyetKayitlari, readKargoHizmet, readUrunler,
+} from './assets/ortak.js?v=__BUILD_VERSION__';
+import { buildXlsxBlob } from './assets/xlsx-writer.js?v=__BUILD_VERSION__';
 import { URUNLER } from './assets/urunler-data.js?v=__BUILD_VERSION__';
 import { parseUrunlerXlsx } from './assets/xlsx-reader.js?v=__BUILD_VERSION__';
 import { parseMaliyetXlsx } from './assets/maliyet-xlsx-reader.js?v=__BUILD_VERSION__';
 import { parseYildizliUrunXlsx } from './assets/yildizli-urun-xlsx-reader.js?v=__BUILD_VERSION__';
-
-const tl = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '₺';
-const pc = x => x.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 
 const CAT_EMOJI = {
   'Toka':'💇','Anahtarlık':'🔑','Balon':'🎈','Maket Bıçak':'🔪','Eğitici Oyuncak':'🧩','Cetvel':'📏',
   'Askılık':'🧥','Karakter Figür Oyuncak':'🎭','Bijuteri Kolye':'📿','Oyun Hamuru':'🎨','Temizlik Bezi':'🧹','Pasta Cila':'✨',
 };
 
-const KDV_PCT = 20; // Trendyol satışlarında sabit %20 KDV
-
 // Kargo / Hizmet Bedeli — kullanıcı tarafından özelleştirilebilir, localStorage'da saklanır
-const KARGO_HIZMET_KEY = 'trendyol_kargo_hizmet_v1';
-let kargoAyar = { esik1: 200, esik2: 350, kargo1: 42, kargo2: 78, kargo3: 98 };
-let hizmetAyar = 13.19;
+let kargoAyar = { ...VARSAYILAN_KARGO_AYAR };
+let hizmetAyar = VARSAYILAN_HIZMET;
 
 function loadKargoHizmet() {
-  try {
-    const raw = localStorage.getItem(KARGO_HIZMET_KEY);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    if (d.kargoAyar) kargoAyar = { ...kargoAyar, ...d.kargoAyar };
-    if (d.hizmetAyar != null) hizmetAyar = +d.hizmetAyar;
-  } catch (e) {}
+  ({ kargoAyar, hizmetAyar } = readKargoHizmet());
 }
 function saveKargoHizmetStorage() {
   localStorage.setItem(KARGO_HIZMET_KEY, JSON.stringify({ kargoAyar, hizmetAyar }));
 }
 
-// Kargo: satış fiyatına göre otomatik kademe
-function kargoIcin(satisFiyati) {
-  if (satisFiyati < kargoAyar.esik1) return kargoAyar.kargo1;
-  if (satisFiyati <= kargoAyar.esik2) return kargoAyar.kargo2;
-  return kargoAyar.kargo3;
+// Kargo: sipariş toplamına göre otomatik kademe (kargoKademesi(), calc.js).
+// Kargo bedeli gönderi başına bir kez alındığından kademe de birim fiyata
+// değil, siparişin tamamına (birim fiyat × zorunlu sipariş adedi) bakar.
+function kargoIcin(siparisToplami) {
+  return kargoKademesi(siparisToplami, kargoAyar);
 }
 
-// Zorunlu sipariş adedi: düşük fiyatlı ürünlerde Trendyol tek adet siparişe
-// izin vermiyor, müşteri en az bu adedi almak zorunda. Kargo bedeli sipariş
-// (gönderi) başına alındığından, birim başına düşen gerçek kargo maliyeti bu
-// adede bölünerek hesaplanmalı (bkz. tierInfo()).
-function zorunluSiparisAdedi(satisFiyati) {
-  if (satisFiyati <= 25) return 6;
-  if (satisFiyati <= 35) return 4;
-  if (satisFiyati <= 50) return 3;
-  if (satisFiyati <= 75) return 2;
-  return 1;
-}
+// zorunluSiparisAdedi() calc.js'te (tarayıcı + testler ortak çekirdek).
 
-const STORAGE_KEY = 'trendyol_urunler_data_v1';
 let activeUrunler = URUNLER;
 let activeMeta = null; // { fileName, uploadedAt } — yüklenmiş bir dosya varsa dolu
 
 function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const saved = JSON.parse(raw);
-    if (!saved || !Array.isArray(saved.urunler) || saved.urunler.length === 0) return;
-    activeUrunler = saved.urunler;
-    activeMeta = { fileName: saved.fileName, uploadedAt: saved.uploadedAt };
-  } catch {
-    // bozuk veri varsa sessizce varsayılana düş
-  }
+  ({ urunler: activeUrunler, meta: activeMeta } = readUrunler(URUNLER));
 }
 
 // Maliyet kayıt defteri: barkoda göre bir kere girilen maliyetler burada
 // saklanır ve her veri yüklemesinde (varsayılan veya yeni Excel) otomatik
 // uygulanır — böylece haftalık Excel'ler fiyat/komisyon değiştirse de
 // maliyeti yeniden girmeye gerek kalmaz.
-const MALIYET_KEY = 'trendyol_maliyet_kayitlari_v1';
-
-function loadMaliyetKayitlari() {
-  try {
-    const raw = localStorage.getItem(MALIYET_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
 function saveMaliyetKaydi(anahtar, maliyet) {
   const kayitlar = loadMaliyetKayitlari();
   kayitlar[anahtar] = maliyet;
@@ -405,20 +368,6 @@ function saveMaliyetKayitlariBulk(map) {
 }
 
 // Eşleştirme anahtarı: önce barkod, yoksa model kodu, o da yoksa ürün adı.
-function maliyetAnahtari(u) {
-  return String(u.barkod || u.model || u.urun || '').trim();
-}
-
-// Kayıtlı maliyetleri verilen ürün dizisine uygular (barkoda göre eşleştirir).
-function applyMaliyetKayitlari(urunler) {
-  const kayitlar = loadMaliyetKayitlari();
-  for (const u of urunler) {
-    const anahtar = maliyetAnahtari(u);
-    if (anahtar && kayitlar[anahtar] != null) u.maliyet = kayitlar[anahtar];
-  }
-  return urunler;
-}
-
 // activeUrunler üzerindeki (maliyet gibi) güncellemeleri STORAGE_KEY'deki
 // kayıtlı ürün verisine yansıtır, fileName/uploadedAt meta verisini korur.
 function persistActiveUrunler() {
@@ -435,7 +384,7 @@ function persistActiveUrunler() {
 function updateHint() {
   const el = document.getElementById('settingsHint');
   if (!el) return;
-  el.textContent = `KDV %20 sabit. Hizmet bedeli: ${hizmetAyar.toFixed(2)}₺. Kargo: <${kargoAyar.esik1}₺→${kargoAyar.kargo1}₺, ${kargoAyar.esik1}–${kargoAyar.esik2}₺→${kargoAyar.kargo2}₺, >${kargoAyar.esik2}₺→${kargoAyar.kargo3}₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.`;
+  el.textContent = `KDV %20 sabit. Hizmet bedeli: ${hizmetAyar.toFixed(2)}₺. Kargo (sipariş toplamına göre): <${kargoAyar.esik1}₺→${kargoAyar.kargo1}₺, ${kargoAyar.esik1}–${kargoAyar.esik2}₺→${kargoAyar.kargo2}₺, >${kargoAyar.esik2}₺→${kargoAyar.kargo3}₺. Düşük fiyatlı ürünlerde zorunlu sipariş adedi (0–25₺→6, 25–35₺→4, 35–50₺→3, 50–75₺→2 adet) maliyet ve satış tutarına uygulanır; kâr o siparişin toplamıdır. Yeşil çerçeve = o üründe en yüksek kâr oranını veren aralık.`;
 }
 
 function updateStatusUI() {
@@ -616,25 +565,14 @@ window.setTarife = function (t) {
 // Bir ürünün 4 fiyat aralığının sınırlarını ve seçili tarifedeki komisyon
 // oranlarını döner (kâr hesabı içermez — tierInfo() ve tierForPrice() ortak kullanır).
 function tierTanimlari(u, tarifeKey) {
-  const grup = u.tarifeler && u.tarifeler[tarifeKey !== undefined ? tarifeKey : tarife];
-  const k = grup ? grup.k : [0, 0, 0, 0];
-  return [
-    { num: 1, komisyon: k[0], rangeText: `${u.f1_alt.toFixed(2)} ₺ ve üstü`, minPrice: u.f1_alt, maxPrice: null },
-    { num: 2, komisyon: k[1], rangeText: `${u.f2_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f2_alt, maxPrice: u.f2_ust },
-    { num: 3, komisyon: k[2], rangeText: `${u.f3_ust.toFixed(2)} ₺ ve altı`, minPrice: u.f3_alt, maxPrice: u.f3_ust },
-    { num: 4, komisyon: k[3], rangeText: `${u.f4_ust.toFixed(2)} ₺ ve altı`, minPrice: null, maxPrice: u.f4_ust },
-  ];
+  return tarifeTierleri(u, tarifeKey !== undefined ? tarifeKey : tarife);
 }
 
 // Girilen özel bir satış fiyatının hangi fiyat aralığına (komisyon dilimine)
 // düştüğünü bulur. Aralıklar en üstten (1. Aralık) en alta (4. Aralık) doğru
 // azalan ve bitişik olduğundan, fiyatın karşıladığı ilk (en üst) aralık kullanılır.
 function tierForPrice(u, price) {
-  const tiers = tierTanimlari(u);
-  for (const t of tiers) {
-    if (t.minPrice != null && price >= t.minPrice) return t;
-  }
-  return tiers[tiers.length - 1]; // en düşük aralığın da altındaysa yine en düşük aralık kullanılır
+  return tarifeTierForPrice(u, tarife, price);
 }
 
 function tierInfo(u, tarifeKey) {
@@ -646,7 +584,7 @@ function tierInfo(u, tarifeKey) {
     if (i === 0) sellPrice = Math.max(t.minPrice, u.guncel_tsf);
     else sellPrice = t.maxPrice;
     const zorunluAdet = zorunluSiparisAdedi(sellPrice);
-    const kargo = kargoIcin(sellPrice); // kargo gönderi başına sabit, adede bölünmez
+    const kargo = kargoIcin(sellPrice * zorunluAdet); // kademe sipariş toplamına göre, bedel gönderi başına tek
     // Zorunlu sipariş adedi kadar ürün aynı siparişte satıldığından, maliyet
     // ve satış tutarı bu adetle çarpılarak siparişin gerçek kârı hesaplanır.
     const c = computeMaliyet({ satis: sellPrice * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
@@ -680,7 +618,7 @@ function render() {
     let guncelKarHtml = '';
     if (u.guncel_tsf && u.guncel_komisyon && u.maliyet) {
       const gAdet = zorunluSiparisAdedi(u.guncel_tsf);
-      const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf), hizmet: hizmetAyar });
+      const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf * gAdet), hizmet: hizmetAyar });
       const gCls = gC.karOrani >= 0 ? 'pos' : 'neg';
       guncelKarHtml = `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${gCls}">${tl(gC.kar)}</span></div>
         <div class="row"><span class="k">Kâr Oranı</span><span class="v ${gCls}">${pc(gC.karOrani)}</span></div>`;
@@ -800,7 +738,7 @@ window.exportSecilenlerXlsx = async function () {
     const u = activeUrunler[idx];
     if (!u || !u.guncel_tsf) continue;
     const gAdet = zorunluSiparisAdedi(u.guncel_tsf);
-    const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf), hizmet: hizmetAyar });
+    const gC = computeMaliyet({ satis: u.guncel_tsf * gAdet, alis: u.maliyet * gAdet, komPct: u.guncel_komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(u.guncel_tsf * gAdet), hizmet: hizmetAyar });
     rows.push([
       u.urun, u.model || '', String(u.barkod || ''), u.stok, u.maliyet,
       tarife ? `${tarife} Günlük` : '', 'Güncel Fiyat',
@@ -818,41 +756,6 @@ window.exportSecilenlerXlsx = async function () {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
-async function buildXlsxBlob(rows) {
-  function colLetter(n) {
-    let s = '';
-    while (n > 0) { s = String.fromCharCode(64 + (n % 26 || 26)) + s; n = Math.floor((n - 1) / 26); }
-    return s;
-  }
-  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-
-  const sst = [], sstMap = {};
-  function strIdx(val) {
-    const s = String(val);
-    if (sstMap[s] == null) { sstMap[s] = sst.length; sst.push(s); }
-    return sstMap[s];
-  }
-
-  const sheetRows = rows.map((row, ri) =>
-    `<row r="${ri + 1}">${row.map((val, ci) => {
-      const ref = colLetter(ci + 1) + (ri + 1);
-      if (val == null || val === '') return `<c r="${ref}"/>`;
-      if (typeof val === 'number') return `<c r="${ref}"><v>${val}</v></c>`;
-      return `<c r="${ref}" t="s"><v>${strIdx(val)}</v></c>`;
-    }).join('')}</row>`
-  ).join('');
-
-  const zip = new JSZip();
-  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
-  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
-  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Seçilen Ürünler" sheetId="1" r:id="rId1"/></sheets></workbook>`);
-  zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
-  zip.file('xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
-  zip.file('xl/sharedStrings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map(s => `<si><t>${esc(s)}</t></si>`).join('')}</sst>`);
-  zip.file('xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts><font><sz val="11"/><name val="Calibri"/></font></fonts><fills><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`);
-
-  return await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-}
 
 // Kullanıcının kendi girdiği bir satış fiyatının hangi komisyon aralığına
 // düştüğünü bulup, o aralığın komisyonuyla anlık kâr hesaplar.
@@ -876,7 +779,7 @@ window.ozelFiyatHesapla = function (input) {
   }
 
   const zorunluAdet = zorunluSiparisAdedi(price);
-  const kargo = kargoIcin(price);
+  const kargo = kargoIcin(price * zorunluAdet);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: u.maliyet * zorunluAdet, komPct: t.komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
   const isSel = selectedOzelFiyat.has(idx) && selectedOzelFiyat.get(idx).price === price;
@@ -1131,7 +1034,7 @@ function yildizKarHesapla(barkod, u, veri, price) {
   }
 
   const zorunluAdet = zorunluSiparisAdedi(price);
-  const kargo = kargoIcin(price);
+  const kargo = kargoIcin(price * zorunluAdet);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   return { durum: 'ok', price, kar: c.kar, karOrani: c.karOrani, zorunluAdet, komisyon };
 }
@@ -1169,7 +1072,7 @@ function yildizFiyatCell(barkod, u, veri) {
     const mal = yildizMaliyetBul(barkod, u);
     if (mal == null) return '';
     const adet = zorunluSiparisAdedi(price);
-    const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price), hizmet: hizmetAyar });
+    const c = computeMaliyet({ satis: price * adet, alis: mal * adet, komPct: komisyon, kdvPct: KDV_PCT, kargo: kargoIcin(price * adet), hizmet: hizmetAyar });
     const cls = c.karOrani >= 0 ? 'pos' : 'neg';
     return `<div class="row"><span class="k">Kâr Tutarı</span><span class="v ${cls}">${tl(c.kar)}</span></div>
     <div class="row"><span class="k">Kâr Oranı</span><span class="v ${cls}">${pc(c.karOrani)}</span></div>`;
@@ -1235,7 +1138,7 @@ window.ozelFiyatHesaplaYildizModal = function (input) {
     return;
   }
   const zorunluAdet = zorunluSiparisAdedi(price);
-  const kargo = kargoIcin(price);
+  const kargo = kargoIcin(price * zorunluAdet);
   const c = computeMaliyet({ satis: price * zorunluAdet, alis: maliyet * zorunluAdet, komPct: komisyon, kdvPct: KDV_PCT, kargo, hizmet: hizmetAyar });
   const karCls = c.karOrani >= 0 ? 'pos' : 'neg';
   const bEsc = String(barkod).replace(/"/g, '&quot;');
