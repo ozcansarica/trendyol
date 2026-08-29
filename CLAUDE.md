@@ -142,6 +142,16 @@ Her ürünün her barem adayı ayrı satır olur ve grup içinde **kâr farkına
 sıralanır; kârı düşüren adaylar da listelenir (filtre yoktur), seçilenler
 Excel'e aktarılabilir.
 
+**Kargo baremini kaç adette geçer** (sayfanın en üstündeki tablo) bunun tersini
+gösterir: bir siparişte kaç adet satılırsa sipariş toplamı kargo eşiklerini geçer
+ve kargo kademesi yükselir (`kargoEsikAdetleri()`, `assets/calc.js`). Eşik
+koşulları `kargoKademesi()` ile birebir aynıdır — ikinci kademe için toplam
+`esik1`'e **eşit ya da üstünde**, üçüncü kademe için `esik2`'nin **üstünde**
+olmalıdır. Gösterilen kargo, o adetteki **gerçek** kademedir, varsayılan bir
+sonraki kademe değil: pahalı ürünlerde tek adet artışı iki eşiği birden
+geçebilir (199₺ × 2 = 398₺ → kargo doğrudan 42₺'den 98₺'ye çıkar). Kâr, zorunlu
+adetle değil o eşiği geçen adetle hesaplanır (`adetliSiparisKari()`).
+
 Sayfa localStorage'ı yalnızca **okur**: ürün verisini, maliyet kayıtlarını ve
 kargo/hizmet ayarını ana sayfanın kaydettiği şekilde alır, hiçbirini değiştirmez.
 Ana sayfadaki hesaplamaları, Maliyet Girişi'ni veya diğer panelleri etkilemez.

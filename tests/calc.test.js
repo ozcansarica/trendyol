@@ -2,7 +2,7 @@
 // Çalıştırma:  node --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeMaliyet, round2, hizmetBedeli, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI, baremIndirimAnalizi } from '../assets/calc.js';
+import { computeMaliyet, round2, hizmetBedeli, zorunluSiparisAdedi, ZORUNLU_ADET_BAREMLERI, baremIndirimAnalizi, kargoEsikAdetleri, kargoKademesi, adetliSiparisKari } from '../assets/calc.js';
 
 test('referans senaryo (satis 189, alis 30, kom %22.5, kdv %20, kargo 42)', () => {
   const r = computeMaliyet({ satis: 189, alis: 30, komPct: 22.5, kdvPct: 20, kargo: 42 });
@@ -187,4 +187,84 @@ test('barem indirimi: komisyonu bilinmeyen ürün için analiz yapılmaz', () =>
   assert.equal(r.mevcut, null);
   assert.equal(r.adaylar.length, 0);
   assert.equal(r.enIyi, null);
+});
+
+// --- Kargo eşiğini kaç adette geçer ---------------------------------------
+
+const kargoAyarTest = { esik1: 200, esik2: 350, kargo1: 42, kargo2: 78, kargo3: 98 };
+
+test('kargo eşik adetleri: eşiği geçen en küçük adedi bulur', () => {
+  const [ikinci, ucuncu] = kargoEsikAdetleri(60, kargoAyarTest);
+  assert.equal(ikinci.adet, 4);            // 4 × 60 = 240 ≥ 200
+  assert.equal(ikinci.siparisToplami, 240);
+  assert.equal(ikinci.kargo, 78);
+  assert.equal(ikinci.oncekiKargo, 42); // 3 × 60 = 180 → hâlâ 42₺
+  assert.equal(ucuncu.adet, 6);            // 6 × 60 = 360 > 350
+  assert.equal(ucuncu.siparisToplami, 360);
+  assert.equal(ucuncu.kargo, 98);
+});
+
+test('kargo eşik adetleri: eşiğe tam oturan tutar ikinci kademeye girer', () => {
+  // kargoKademesi: toplam < esik1 → kargo1, esik1 ≤ toplam ≤ esik2 → kargo2.
+  // 10 × 20 = 200, yani tam eşik zaten 78₺ kademesinde.
+  const [ikinci] = kargoEsikAdetleri(20, kargoAyarTest);
+  assert.equal(ikinci.adet, 10);
+  assert.equal(ikinci.siparisToplami, 200);
+  assert.equal(kargoKademesi(200, kargoAyarTest), 78);
+  assert.equal(kargoKademesi(199.99, kargoAyarTest), 42);
+});
+
+test('kargo eşik adetleri: üçüncü kademe için eşiğin üstüne çıkmak gerekir', () => {
+  // 350₺ tam eşik hâlâ ikinci kademe (kargo2); geçmek için üstüne çıkmalı.
+  const [, ucuncu] = kargoEsikAdetleri(35, kargoAyarTest);
+  assert.equal(kargoKademesi(350, kargoAyarTest), 78);
+  assert.equal(ucuncu.adet, 11); // 10 × 35 = 350 yetmez, 11 × 35 = 385
+  assert.equal(ucuncu.siparisToplami, 385);
+});
+
+test('kargo eşik adetleri: her eşik için bulunan adet gerçekten o kademeyi verir', () => {
+  for (const fiyat of [19.18, 20, 35, 49.9, 60, 75, 199, 249, 375]) {
+    const [ikinci, ucuncu] = kargoEsikAdetleri(fiyat, kargoAyarTest);
+    // Bulunan adet eşiği gerçekten geçmeli, bir eksiği geçmemeli.
+    assert.ok(ikinci.siparisToplami >= 200, `${fiyat}₺ × ${ikinci.adet} 200₺'yi geçmeli`);
+    assert.ok(ucuncu.siparisToplami > 350, `${fiyat}₺ × ${ucuncu.adet} 350₺'yi geçmeli`);
+    if (ikinci.adet > 1) assert.ok(round2((ikinci.adet - 1) * fiyat) < 200, `${fiyat}₺ için ${ikinci.adet} en küçük adet olmalı`);
+    if (ucuncu.adet > 1) assert.ok(round2((ucuncu.adet - 1) * fiyat) <= 350, `${fiyat}₺ için ${ucuncu.adet} en küçük adet olmalı`);
+    // Gösterilen kargo, o adetteki gerçek kademe olmalı.
+    for (const e of [ikinci, ucuncu]) {
+      assert.equal(e.kargo, kargoKademesi(e.siparisToplami, kargoAyarTest));
+    }
+  }
+});
+
+test('kargo eşik adetleri: bir adet artışı iki eşiği birden geçebilir', () => {
+  // 199₺ × 2 = 398₺ hem 200₺ hem 350₺ eşiğinin üstünde; 200₺ eşiği satırında
+  // gösterilen kargo, varsayılan 78₺ değil o adetteki gerçek kademe olmalı.
+  const [ikinci, ucuncu] = kargoEsikAdetleri(199, kargoAyarTest);
+  assert.equal(ikinci.adet, 2);
+  assert.equal(ikinci.siparisToplami, 398);
+  assert.equal(ikinci.kargo, 98);
+  assert.equal(ucuncu.adet, 2);
+  assert.equal(ucuncu.kargo, 98);
+});
+
+test('kargo eşik adetleri: tek adette geçilen eşikte oncekiKargo null', () => {
+  const [ikinci] = kargoEsikAdetleri(249, kargoAyarTest);
+  assert.equal(ikinci.adet, 1);
+  assert.equal(ikinci.oncekiKargo, null);
+});
+
+test('kargo eşik adetleri: geçersiz fiyatta boş döner', () => {
+  assert.deepEqual(kargoEsikAdetleri(0, kargoAyarTest), []);
+  assert.deepEqual(kargoEsikAdetleri(-5, kargoAyarTest), []);
+});
+
+test('adetliSiparisKari: adet dışarıdan verilir, kargo toplamdan bulunur', () => {
+  const kargoIcin = (t) => kargoKademesi(t, kargoAyarTest);
+  const r = adetliSiparisKari({ birimFiyat: 60, adet: 4, maliyet: 15, komisyon: 20, kdvPct: 20, hizmet: 13.19, kargoIcin });
+  assert.equal(r.adet, 4);
+  assert.equal(r.siparisToplami, 240);
+  assert.equal(r.kargo, 78); // zorunlu adet 2 olsa da 4 adette kargo kademesi yükseliyor
+  const c = computeMaliyet({ satis: 240, alis: 60, komPct: 20, kdvPct: 20, kargo: 78, hizmet: 13.19 });
+  assert.equal(r.kar, c.kar);
 });
