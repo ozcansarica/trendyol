@@ -127,13 +127,13 @@
         </tr>
         <tr>
           <th class="num grup-esik">Geçiş Adedi</th>
-          <th class="num grup-esik">Kargo</th>
+          <th class="num grup-esik">Sipariş Toplamı</th>
           <th class="num grup-esik">Kâr Oranı</th>
           <th class="num grup-indirim">İndirim Oranı</th>
           <th class="num grup-indirim">İndirim Tutarı</th>
           <th class="num grup-indirim">İndirimli Kâr Oranı</th>
           <th class="num grup-esik">Geçiş Adedi</th>
-          <th class="num grup-esik">Kargo</th>
+          <th class="num grup-esik">Sipariş Toplamı</th>
           <th class="num grup-esik">Kâr Oranı</th>
           <th class="num grup-indirim">İndirim Oranı</th>
           <th class="num grup-indirim">İndirim Tutarı</th>
@@ -263,15 +263,8 @@ function esikHucreleri(u, e) {
       + '<td class="num indirim"><span class="alt">—</span></td>'.repeat(3);
   }
 
-  const kargoHucre = `<td class="num">
-      <span class="vurgu">${tl(e.kargo)}</span>
-      <div class="alt">${e.oncekiKargo != null ? `önce ${tl(e.oncekiKargo)}` : 'tek adette geçiyor'}</div>
-    </td>`;
-  const gecis = `<td class="num">
-      <span class="vurgu">${e.adet} adet</span>
-      <div class="alt">toplam ${tl(e.siparisToplami)}</div>
-    </td>`
-    + kargoHucre
+  const gecis = `<td class="num"><span class="vurgu">${e.adet} adet</span></td>`
+    + `<td class="num"><span class="vurgu">${tl(e.siparisToplami)}</span></td>`
     + karHucresi(gecisKari(u, e.adet), '');
 
   const a = e.altindaKalmak;
