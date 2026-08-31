@@ -200,6 +200,12 @@ gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
 19 sütun tek ekrana sığsın diye tablo `table-layout: fixed` + `colgroup` yüzdeleriyle
 kurulur ve başlıklar kısa tutulur; 1280px genişlikte bile yatay kaydırma olmaz.
 
+**İndirim ₺** hücresindeki kutuyla her indirim ayrı ayrı seçilebilir (anahtar:
+ürün index'i + eşik, böylece seçim arama/sıralama/sekme değişse de korunur);
+seçilen dört hücre birden vurgulanır ve **📥 Seçilenleri İndir** ile
+`kargo-barem-indirimleri.xlsx` olarak dışa aktarılır. Satırlar dışa aktarım
+anındaki kargo/hizmet ayarıyla yeniden hesaplanır.
+
 İndirim birim fiyata değil **sepet toplamına** uygulanır; bu yüzden hedef tutar
 tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Amaç **en az
 indirimle** eşiğin altına inmek olduğundan hedef yuvarlanmaz, eşiğin
