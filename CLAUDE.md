@@ -190,12 +190,15 @@ gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
 
 | Sütun | İçerik |
 |-------|--------|
-| **Geçiş Adedi** | Sipariş toplamının o eşiği geçtiği en küçük adet |
-| **Sipariş Toplamı** | O adetteki sipariş toplamı |
-| **Kâr Oranı** / **Kâr Tutarı** | O adetteki kâr |
-| **İndirim Oranı** | Aynı adette baremin altında kalmak için gereken indirimin yüzdesi |
-| **İndirim Tutarı** | Aynı indirimin **sipariş toplamından** düşülecek tutarı (altında indirim sonrası toplam) |
-| **İndirimli Kâr Oranı** / **İndirimli Kâr Tutarı** | İndirim uygulandığındaki kâr |
+| **Adet** | Sipariş toplamının o eşiği geçtiği en küçük adet |
+| **Toplam** | O adetteki sipariş toplamı |
+| **Kâr %** / **Kâr ₺** | O adetteki kâr |
+| **İndirim %** | Aynı adette baremin altında kalmak için gereken indirimin yüzdesi |
+| **İndirim ₺** | Aynı indirimin **sipariş toplamından** düşülecek tutarı (altında indirim sonrası toplam) |
+| **İnd. Kâr %** / **İnd. Kâr ₺** | İndirim uygulandığındaki kâr |
+
+19 sütun tek ekrana sığsın diye tablo `table-layout: fixed` + `colgroup` yüzdeleriyle
+kurulur ve başlıklar kısa tutulur; 1280px genişlikte bile yatay kaydırma olmaz.
 
 İndirim birim fiyata değil **sepet toplamına** uygulanır; bu yüzden hedef tutar
 tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Amaç **en az
