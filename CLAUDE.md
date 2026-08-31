@@ -191,7 +191,12 @@ gösterir (`kargoEsikAdetleri()`, `assets/calc.js`):
 | Sütun | İçerik |
 |-------|--------|
 | **Geçiş Adedi** | Sipariş toplamının o eşiği geçtiği en küçük adet; toplam, kargonun nereden nereye çıktığı ve o adetteki kâr |
-| **Altında Kalmak İçin İndirim** | Aynı adette baremin altında kalmak için **sipariş toplamından** düşülecek indirim (₺ ve %), indirim sonrası toplam/kargo ve indirimli kâr |
+| **İndirim Oranı** | Aynı adette baremin altında kalmak için gereken indirimin yüzdesi |
+| **İndirim Tutarı** | Aynı indirimin **sipariş toplamından** düşülecek tutarı ve indirim sonrası toplam |
+| **Kâr Oranı** | İndirim uygulandığındaki kâr oranı (altında kâr tutarı) |
+
+İndirim sütunlarında kargo gösterilmez — kargo geçişi zaten "Geçiş Adedi"
+sütununda vardır.
 
 İndirim birim fiyata değil **sepet toplamına** uygulanır; bu yüzden hedef tutar
 tam tutturulur (birim fiyata bölüp aşağı kırpmaya gerek kalmaz). Amaç **en az
