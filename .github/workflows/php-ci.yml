@@ -19,10 +19,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: PHP kurulumu (8.2)
+      - name: PHP kurulumu (8.3)
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           extensions: pdo, pdo_mysql, mbstring, json, zip
           coverage: none
 
