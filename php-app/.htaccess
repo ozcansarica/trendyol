@@ -1,0 +1,11 @@
+# Hassas dosyalar web'den okunamasın (Apache). Nginx kullanıyorsanız
+# aynı kuralları sunucu yapılandırmasına ekleyin:
+#   location ~ /\.(env|git) { deny all; }  location ~ \.(sql|lock|log|md)$ { deny all; }
+#   location ~ ^/(tests|vendor)/ { deny all; }
+Options -Indexes
+
+<FilesMatch "^\.|\.(sql|lock|log|md)$|^composer\.json$">
+    Require all denied
+</FilesMatch>
+
+RedirectMatch 404 ^/(.*/)?(tests|vendor)/

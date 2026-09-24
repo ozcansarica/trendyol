@@ -17,26 +17,13 @@ requireLogin();
 $kullaniciId = (int)authUser()['id'];
 
 function geriDon(string $tip, string $mesaj): never {
-    $_SESSION['sosyal_bildirim'] = [$tip, $mesaj];
-    header('Location: sosyal.php');
-    exit;
-}
-
-/** Facebook uygulamasındaki "Geçerli OAuth Yönlendirme URI'leri" ile birebir aynı olmalı. */
-function facebookYonlendirmeUrl(): string {
-    $taban = rtrim(env('APP_URL'), '/');
-    if ($taban === '') {
-        $https = ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off';
-        $taban = ($https ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST']
-               . rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'])), '/');
-    }
-    return $taban . '/facebook_callback.php';
+    yonlendir('sosyal.php', $tip, $mesaj);
 }
 
 try {
     sosyalSemaKur();
-    if (!FacebookGraph::yapilandirildi()) geriDon('hata', 'Facebook uygulaması yapılandırılmamış (.env: FB_APP_ID, FB_APP_SECRET).');
-    if (!sosyalAnahtarVarMi())            geriDon('hata', '.env içinde APP_KEY tanımlı değil; token\'lar şifrelenemez.');
+    if (!FacebookGraph::yapilandirildi()) geriDon('hata', 'Facebook uygulaması henüz yapılandırılmamış. Yöneticiniz Admin → Sistem Ayarları\'ndan App ID ve App Secret girmelidir.');
+    if (!sosyalAnahtarVarMi())            geriDon('hata', 'Uygulama anahtarı oluşturulamadı; veritabanı bağlantısını kontrol edin.');
     $fb = FacebookGraph::ayarlardan();
 
     if (isset($_GET['baslat'])) {
