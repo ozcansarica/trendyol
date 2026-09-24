@@ -815,6 +815,7 @@ input[type="file"]{display:none;}
     <a href="?action=ayarlar" class="<?= $action==='ayarlar'?'active':'' ?>"><span>⚙️</span> Ayarlar / API</a>
     <div class="sep">Araçlar</div>
     <a href="?action=karsilastir" class="<?= $action==='karsilastir'?'active':'' ?>"><span>⚖️</span> Mağaza Karşılaştır</a>
+    <a href="sosyal.php"><span>📣</span> Sosyal Paylaşım</a>
     <a href="logout.php" style="position:absolute;bottom:15px;left:0;right:0"><span>🚪</span> Çıkış Yap</a>
 </div>
 
