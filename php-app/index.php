@@ -257,6 +257,15 @@ if (!$dbError) {
     if (!authMagaza()) { header('Location: magaza_sec.php'); exit; }
 }
 
+// Planlı sosyal medya paylaşımları: cron kurulmamışsa site ziyaretleriyle
+// yayınlanır (yanıt gönderildikten sonra, dakikada en fazla bir kez)
+if (!$dbError) {
+    register_shutdown_function(function () {
+        require_once __DIR__ . '/SosyalMedya.php';
+        webCronCalistir();
+    });
+}
+
 // Autoload ve diğer require'lar
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/TrendyolApi.php';
@@ -816,6 +825,7 @@ input[type="file"]{display:none;}
     <div class="sep">Araçlar</div>
     <a href="?action=karsilastir" class="<?= $action==='karsilastir'?'active':'' ?>"><span>⚖️</span> Mağaza Karşılaştır</a>
     <a href="sosyal.php"><span>📣</span> Sosyal Paylaşım</a>
+    <a href="hesabim.php"><span>👤</span> Hesabım</a>
     <a href="logout.php" style="position:absolute;bottom:15px;left:0;right:0"><span>🚪</span> Çıkış Yap</a>
 </div>
 

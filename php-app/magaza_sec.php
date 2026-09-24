@@ -65,7 +65,7 @@ p{color:#9099c4;font-size:13px;margin-bottom:24px;}
 </head>
 <body>
 <div class="box">
-    <div class="logout">👤 <?= htmlspecialchars($user['ad'] ?: $user['email']) ?> · <a href="logout.php">Çıkış</a></div>
+    <div class="logout">👤 <?= htmlspecialchars($user['ad'] ?: $user['email']) ?> · <a href="hesabim.php">Hesabım</a><?php if (isAdmin()): ?> · <a href="admin.php">Admin Paneli</a><?php endif; ?> · <a href="logout.php">Çıkış</a></div>
     <?php if ($error): ?><div class="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
     <?php if ($magazalar): ?>

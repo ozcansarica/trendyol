@@ -13,33 +13,24 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/SosyalMedya.php';
+require_once __DIR__ . '/arayuz.php';
 requireLogin();
 
 $kullaniciId = (int)authUser()['id'];
 $magaza      = authMagaza();
-$bildirim    = $_SESSION['sosyal_bildirim'] ?? null;
-unset($_SESSION['sosyal_bildirim']);
-
-if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
-$csrf = $_SESSION['csrf'];
-
-function yonlendir(string $tip, string $mesaj): never {
-    $_SESSION['sosyal_bildirim'] = [$tip, $mesaj];
-    header('Location: sosyal.php');
-    exit;
-}
-function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+$csrf        = csrfToken();
 
 try {
-    sosyalSemaKur();
+    tumSemayiKur();
 } catch (PDOException $e) {
     http_response_code(500);
     exit('Veritabanı hatası: ' . h($e->getMessage()));
 }
+webCronTetikle();
 
 // ---- Aksiyonlar ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) yonlendir('hata', 'Oturum doğrulaması başarısız, sayfayı yenileyip tekrar deneyin.');
+    if (!csrfDogrula()) yonlendir('sosyal.php', 'hata', 'Oturum doğrulaması başarısız, sayfayı yenileyip tekrar deneyin.');
     $act = $_POST['act'] ?? '';
     $id  = (int)($_POST['id'] ?? 0);
 
@@ -66,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 array_merge([$kullaniciId], $hesapIdler)), 'id');
             if (count($gecerli) !== count(array_unique($hesapIdler))) $hatalar[] = 'Seçilen hesaplardan biri geçersiz ya da aktif değil.';
         }
-        if ($hatalar) yonlendir('hata', implode(' ', $hatalar));
+        if ($hatalar) yonlendir('sosyal.php', 'hata', implode(' ', $hatalar));
 
         $yeniIdler = [];
         foreach ($gecerli as $hid) {
@@ -80,35 +71,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($hemen) {
             $ozet = paylasimKuyrugunuIsle(null, count($yeniIdler), $yeniIdler);
             $tip  = $ozet['gonderildi'] === count($yeniIdler) ? 'basari' : 'hata';
-            yonlendir($tip, "Paylaşım sonucu: {$ozet['gonderildi']} yayınlandı"
+            yonlendir('sosyal.php', $tip, "Paylaşım sonucu: {$ozet['gonderildi']} yayınlandı"
                 . ($ozet['ertelendi'] ? ", {$ozet['ertelendi']} tekrar denenecek" : '')
                 . ($ozet['hata'] ? ", {$ozet['hata']} başarısız (ayrıntı aşağıda)" : '') . '.');
         }
-        yonlendir('basari', '🗓️ ' . count($yeniIdler) . ' paylaşım ' . date('d.m.Y H:i', strtotime($zaman)) . ' için planlandı.');
+        yonlendir('sosyal.php', 'basari', '🗓️ ' . count($yeniIdler) . ' paylaşım ' . date('d.m.Y H:i', strtotime($zaman)) . ' için planlandı.');
     }
     elseif ($act === 'iptal') {
         DB::exec("UPDATE sosyal_paylasimlar SET durum='iptal' WHERE id=? AND kullanici_id=? AND durum='bekliyor'", [$id, $kullaniciId]);
-        yonlendir('basari', 'Paylaşım iptal edildi.');
+        yonlendir('sosyal.php', 'basari', 'Paylaşım iptal edildi.');
     }
     elseif ($act === 'tekrar') {
         DB::exec("UPDATE sosyal_paylasimlar SET durum='bekliyor', deneme_sayisi=0, hata_mesaji=NULL, planlanan_zaman=?
                   WHERE id=? AND kullanici_id=? AND durum IN ('hata','iptal')", [simdi(), $id, $kullaniciId]);
-        yonlendir('basari', 'Paylaşım tekrar kuyruğa alındı; bir dakika içinde yayınlanır.');
+        yonlendir('sosyal.php', 'basari', 'Paylaşım tekrar kuyruğa alındı; bir dakika içinde yayınlanır.');
     }
     elseif ($act === 'sil') {
         DB::exec("DELETE FROM sosyal_paylasimlar WHERE id=? AND kullanici_id=? AND durum<>'gonderiliyor'", [$id, $kullaniciId]);
-        yonlendir('basari', 'Paylaşım kaydı silindi (Facebook\'taki gönderi etkilenmez).');
+        yonlendir('sosyal.php', 'basari', 'Paylaşım kaydı silindi (Facebook\'taki gönderi etkilenmez).');
     }
     elseif ($act === 'hesap_durum') {
         DB::exec("UPDATE sosyal_hesaplar SET durum=IF(durum='aktif','pasif','aktif'), guncelleme=?
                   WHERE id=? AND kullanici_id=? AND durum IN ('aktif','pasif')", [simdi(), $id, $kullaniciId]);
-        yonlendir('basari', 'Hesap durumu güncellendi.');
+        yonlendir('sosyal.php', 'basari', 'Hesap durumu güncellendi.');
     }
     elseif ($act === 'hesap_sil') {
         DB::exec("DELETE FROM sosyal_hesaplar WHERE id=? AND kullanici_id=?", [$id, $kullaniciId]);
-        yonlendir('basari', 'Hesap kaldırıldı; bekleyen paylaşımları da silindi.');
+        yonlendir('sosyal.php', 'basari', 'Hesap kaldırıldı; bekleyen paylaşımları da silindi.');
     }
-    yonlendir('hata', 'Bilinmeyen işlem.');
+    yonlendir('sosyal.php', 'hata', 'Bilinmeyen işlem.');
 }
 
 // ---- Veriler ----
@@ -140,32 +131,8 @@ $durumEtiket = [
 ];
 $varsayilanSablon = "{urun_adi}\n\n💰 {fiyat}\n\n🛒 Hemen incele: {link}";
 ?>
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sosyal Paylaşım</title>
+<?php panelBasla('📣 Sosyal Paylaşım', ayar('site_adi'), kullaniciMenusu(), 'sosyal'); ?>
 <style>
-:root{--primary:#f27a1a;--bg:#0f1117;--bg2:#1a1d2e;--bg3:#252840;--card:#1e2035;--border:#2e3150;--text:#e8eaf6;--text2:#9099c4;--green:#2ecc71;--red:#e74c3c;--blue:#3498db;--fb:#1877f2;}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;font-size:14px;padding:24px;max-width:1200px;margin:0 auto;}
-a{color:var(--primary);}
-.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap;}
-.page-title{font-size:22px;font-weight:700;}.page-title span{color:var(--primary);}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
-.card-title{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-.alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;line-height:1.5;}
-.alert-success{background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.35);color:var(--green);}
-.alert-danger{background:rgba(231,76,60,.12);border:1px solid rgba(231,76,60,.35);color:#ff8a7d;}
-.alert-info{background:rgba(52,152,219,.1);border:1px solid rgba(52,152,219,.3);color:#8fc7ee;}
-.alert code{background:var(--bg3);padding:1px 5px;border-radius:4px;color:var(--text);}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;cursor:pointer;text-decoration:none;}
-.btn:hover{border-color:var(--primary);}
-.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff;}
-.btn-fb{background:var(--fb);border-color:var(--fb);color:#fff;}
-.btn-sm{padding:4px 9px;font-size:12px;}
-.btn[disabled]{opacity:.5;cursor:not-allowed;}
 .hesaplar{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
 .hesap{display:flex;gap:10px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;}
 .hesap img,.hesap .ph{width:40px;height:40px;border-radius:50%;flex-shrink:0;background:var(--fb);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;}
@@ -173,15 +140,7 @@ a{color:var(--primary);}
 .hesap .ad{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hesap .alt{font-size:11px;color:var(--text2);margin-top:2px;}
 .hesap form{display:inline;}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;}
-.badge-green{background:rgba(46,204,113,.15);color:var(--green);}.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
-.badge-orange{background:rgba(242,122,26,.15);color:var(--primary);}.badge-gray{background:rgba(144,153,196,.12);color:var(--text2);}
-.badge-blue{background:rgba(52,152,219,.15);color:var(--blue);}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
-.form-group label{font-size:12px;color:var(--text2);font-weight:500;}
-input[type=text],input[type=url],input[type=datetime-local],select,textarea{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;outline:none;font-family:inherit;width:100%;}
-input:focus,select:focus,textarea:focus{border-color:var(--primary);}
 textarea{min-height:140px;resize:vertical;}
 .secim{display:flex;flex-wrap:wrap;gap:8px;}
 .secim label{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);}
@@ -192,35 +151,23 @@ textarea{min-height:140px;resize:vertical;}
 .onizleme .metin{padding:0 12px 12px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.4;}
 .onizleme img{width:100%;max-height:360px;object-fit:cover;display:block;}
 .onizleme .link{padding:10px 12px;background:#f0f2f5;font-size:12px;color:#65676b;word-break:break-all;}
-table{width:100%;border-collapse:collapse;}
-th{text-align:left;padding:9px 10px;font-size:11px;text-transform:uppercase;color:var(--text2);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;}
-td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;}
 td .ozet{max-width:380px;white-space:pre-wrap;word-break:break-word;max-height:4.2em;overflow:hidden;}
 td .hata{color:#ff8a7d;font-size:11px;margin-top:4px;max-width:380px;}
 td img.kucuk{width:48px;height:48px;object-fit:cover;border-radius:6px;}
 td form{display:inline;}
-.tablo-kap{overflow-x:auto;}
-.bos{color:var(--text2);text-align:center;padding:24px;}
-@media(max-width:820px){body{padding:14px;}.grid2{grid-template-columns:1fr;}}
+@media(max-width:820px){.grid2{grid-template-columns:1fr;}}
 </style>
-</head>
-<body>
 
-<div class="top">
-    <div class="page-title">📣 Sosyal <span>Paylaşım</span></div>
-    <a href="index.php" class="btn">← Panele Dön</a>
-</div>
-
-<?php if ($bildirim): ?>
-<div class="alert <?= $bildirim[0] === 'basari' ? 'alert-success' : 'alert-danger' ?>"><?= h($bildirim[1]) ?></div>
-<?php endif; ?>
+<div class="page-title">📣 Sosyal <span>Paylaşım</span></div>
 
 <?php if (!$fbHazir): ?>
 <div class="alert alert-info">
-    <strong>Kurulum gerekli:</strong> Facebook sayfası bağlanabilmesi için sunucudaki <code>.env</code> dosyasında
-    <code>FB_APP_ID</code>, <code>FB_APP_SECRET</code> ve <code>APP_KEY</code> tanımlı olmalıdır.
-    Facebook uygulamasının "Geçerli OAuth Yönlendirme URI'leri" alanına bu sitedeki <code>facebook_callback.php</code>
-    adresi eklenmelidir. Otomatik yayın için cron: <code>* * * * * php <?= h(__DIR__) ?>/cron_paylasim.php</code>
+    <strong>Facebook bağlantısı henüz yapılandırılmamış.</strong>
+    <?php if (isAdmin()): ?>
+        <a href="admin.php?s=ayarlar">Admin → Sistem Ayarları</a>'ndan Facebook App ID ve App Secret'ı girin; adımlar orada anlatılıyor.
+    <?php else: ?>
+        Site yöneticisinin Facebook uygulama bilgilerini girmesi gerekiyor.
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -321,7 +268,7 @@ td form{display:inline;}
                     </div>
                     <input type="datetime-local" name="planlanan_zaman" id="planlananZaman" style="display:none;margin-top:6px"
                            min="<?= date('Y-m-d\TH:i') ?>" value="<?= date('Y-m-d\TH:i', time() + 3600) ?>">
-                    <span class="ipucu">Planlı paylaşımlar sunucudaki cron tarafından zamanı gelince otomatik yayınlanır (saat dilimi: <?= h(date_default_timezone_get()) ?>).</span>
+                    <span class="ipucu">Planlı paylaşımlar zamanı gelince otomatik yayınlanır (saat dilimi: <?= h(date_default_timezone_get()) ?>).</span>
                 </div>
                 <button class="btn btn-primary" id="gonderBtn">🚀 Paylaş</button>
             </div>
@@ -445,5 +392,4 @@ td form{display:inline;}
     onizle();
 })();
 </script>
-</body>
-</html>
+<?php panelBitir();

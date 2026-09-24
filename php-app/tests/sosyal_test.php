@@ -6,27 +6,7 @@
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../SosyalMedya.php';
 
-$basarisiz = 0; $toplam = 0;
-function test(string $ad, callable $fn): void {
-    global $basarisiz, $toplam;
-    $toplam++;
-    try { $fn(); echo "✔ $ad\n"; }
-    catch (Throwable $e) { $basarisiz++; echo "✘ $ad\n   " . $e->getMessage() . "\n"; }
-}
-function esit($beklenen, $gercek, string $not = ''): void {
-    if ($beklenen !== $gercek) {
-        throw new Exception(($not ? "$not: " : '') . 'beklenen ' . var_export($beklenen, true) . ', gelen ' . var_export($gercek, true));
-    }
-}
-
-/** Sahte HTTP: çağrıları kaydeder, sıradaki yanıtı döner. */
-function sahteHttp(array $yanitlar, array &$cagrilar): callable {
-    return function (string $metot, string $url, array $params) use (&$yanitlar, &$cagrilar) {
-        $cagrilar[] = compact('metot', 'url', 'params');
-        $y = array_shift($yanitlar);
-        return [$y[0], json_encode($y[1])];
-    };
-}
+require_once __DIR__ . '/test_yardimci.php';
 
 // ---- Doğrulama ----
 test('boş paylaşım reddedilir', function () {
@@ -141,5 +121,4 @@ test('Graph hatası FacebookHata olarak fırlar', function () {
     throw new Exception('istisna bekleniyordu');
 });
 
-echo "\n$toplam test, $basarisiz başarısız\n";
-exit($basarisiz ? 1 : 0);
+testSonucu();

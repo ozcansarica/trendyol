@@ -12,15 +12,17 @@
 //
 //  Güvenlik:
 //   - Sayfa erişim token'ları DB'de AES-256-GCM ile şifreli saklanır
-//     (anahtar: .env APP_KEY). APP_KEY yoksa hesap bağlanamaz.
+//     (anahtar: uygulamaAnahtari() — .env APP_KEY, yoksa otomatik üretilen).
 //   - Graph çağrılarına appsecret_proof eklenir.
-//   - Saat dilimi: tüm zamanlar PHP tarafında APP_TIMEZONE ile üretilir
+//   - Facebook uygulama bilgileri admin panelinden (Sistem Ayarları) girilir.
+//   - Saat dilimi: tüm zamanlar PHP tarafında panel ayarı app_timezone ile üretilir
 //     (MySQL NOW() kullanılmaz — sunucu/DB saat dilimi farkı sorun olmasın).
 // ============================================================
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/sistem.php';
 
-date_default_timezone_set(env('APP_TIMEZONE', 'Europe/Istanbul'));
+if (!@date_default_timezone_set(ayar('app_timezone'))) date_default_timezone_set('Europe/Istanbul');
 
 const SOSYAL_MAX_DENEME        = 3;    // geçici hatada toplam deneme sayısı
 const SOSYAL_DENEME_ARALIGI_DK = 5;    // n. denemeden sonra n × 5 dk bekle
@@ -79,32 +81,10 @@ function simdi(): string {
 //  Token şifreleme (AES-256-GCM)
 // ------------------------------------------------------------
 function sosyalAnahtarVarMi(): bool {
-    return env('APP_KEY') !== '';
+    return uygulamaAnahtari() !== '';
 }
 
-function tokenSifrele(string $duz, ?string $anahtar = null): string {
-    $anahtar = $anahtar ?? env('APP_KEY');
-    if ($anahtar === '') throw new RuntimeException('APP_KEY tanımlı değil (.env).');
-    $k   = hash('sha256', $anahtar, true);
-    $iv  = random_bytes(12);
-    $tag = '';
-    $sifreli = openssl_encrypt($duz, 'aes-256-gcm', $k, OPENSSL_RAW_DATA, $iv, $tag);
-    if ($sifreli === false) throw new RuntimeException('Token şifrelenemedi.');
-    return 'v1:' . base64_encode($iv . $tag . $sifreli);
-}
-
-function tokenCoz(string $kayit, ?string $anahtar = null): string {
-    $anahtar = $anahtar ?? env('APP_KEY');
-    if ($anahtar === '') throw new RuntimeException('APP_KEY tanımlı değil (.env).');
-    if (!str_starts_with($kayit, 'v1:')) throw new RuntimeException('Bilinmeyen token biçimi.');
-    $ham = base64_decode(substr($kayit, 3), true);
-    if ($ham === false || strlen($ham) < 29) throw new RuntimeException('Bozuk token kaydı.');
-    $k   = hash('sha256', $anahtar, true);
-    $duz = openssl_decrypt(substr($ham, 28), 'aes-256-gcm', $k, OPENSSL_RAW_DATA,
-                           substr($ham, 0, 12), substr($ham, 12, 16));
-    if ($duz === false) throw new RuntimeException('Token çözülemedi (APP_KEY değişmiş olabilir — hesabı yeniden bağlayın).');
-    return $duz;
-}
+// tokenSifrele() / tokenCoz(): sistem.php (gizli panel ayarları da kullanır)
 
 // ------------------------------------------------------------
 //  Saf yardımcılar (tests/sosyal_test.php ile test edilir)
@@ -240,13 +220,13 @@ class FacebookGraph {
 
     public static function ayarlardan(): self {
         if (!self::yapilandirildi()) {
-            throw new RuntimeException('Facebook uygulaması yapılandırılmamış (.env: FB_APP_ID, FB_APP_SECRET).');
+            throw new RuntimeException('Facebook uygulaması yapılandırılmamış (Admin → Sistem Ayarları: Facebook App ID / Secret).');
         }
-        return new self(env('FB_APP_ID'), env('FB_APP_SECRET'), env('FB_GRAPH_VERSION', 'v23.0'));
+        return new self(ayar('fb_app_id'), ayar('fb_app_secret'), ayar('fb_graph_version') ?: 'v23.0');
     }
 
     public static function yapilandirildi(): bool {
-        return env('FB_APP_ID') !== '' && env('FB_APP_SECRET') !== '';
+        return ayar('fb_app_id') !== '' && ayar('fb_app_secret') !== '';
     }
 
     public function girisUrl(string $yonlendirme, string $state): string {
@@ -360,6 +340,22 @@ class FacebookGraph {
     }
 }
 
+/** Facebook uygulamasındaki "Geçerli OAuth Yönlendirme URI'leri" ile birebir aynı olmalı. */
+function facebookYonlendirmeUrl(): string {
+    return siteTabanUrl() . '/facebook_callback.php';
+}
+
+/** Sitenin kök adresi: panel ayarı app_url, boşsa istekten türetilir. */
+function siteTabanUrl(): string {
+    $taban = rtrim(ayar('app_url'), '/');
+    if ($taban === '' && isset($_SERVER['HTTP_HOST'])) {
+        $https = ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off';
+        $taban = ($https ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST']
+               . rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'])), '/');
+    }
+    return $taban;
+}
+
 // ------------------------------------------------------------
 //  Hesap kaydı
 // ------------------------------------------------------------
@@ -459,4 +455,56 @@ function paylasimKuyrugunuIsle(?FacebookGraph $fb = null, int $limit = 25, array
         }
     }
     return $ozet;
+}
+
+// ------------------------------------------------------------
+//  Zamanlayıcı: CLI cron, web cron URL'si ve site ziyaretleri
+// ------------------------------------------------------------
+
+/** Kuyruğu çalıştırır ve son çalışmayı admin panelinde göstermek için kaydeder. */
+function kuyrukCalistir(string $kaynak, int $limit = 50): array {
+    $ozet = paylasimKuyrugunuIsle(null, $limit);
+    DB::exec("INSERT INTO sistem_ayarlari (anahtar, deger, guncelleme) VALUES ('__cron_son_calisma', ?, ?)
+              ON DUPLICATE KEY UPDATE deger=VALUES(deger), guncelleme=VALUES(guncelleme)",
+             [json_encode(['kaynak' => $kaynak] + $ozet), simdi()]);
+    return $ozet;
+}
+
+/** Harici cron servisleri için gizli URL anahtarı (uygulama anahtarından türetilir). */
+function webCronAnahtari(): string {
+    $k = uygulamaAnahtari();
+    return $k === '' ? '' : substr(hash_hmac('sha256', 'web-cron', $k), 0, 32);
+}
+
+/**
+ * Sunucuda cron kurulmamışsa paylaşımlar site ziyaretleriyle yayınlanır:
+ * en fazla dakikada bir, sayfa yanıtı gönderildikten sonra (PHP-FPM'de
+ * fastcgi_finish_request). Panel ayarı `web_cron` ile kapatılabilir.
+ */
+function webCronTetikle(): void {
+    register_shutdown_function('webCronCalistir');
+}
+
+/** webCronTetikle()'nin yanıt sonrası çalışan gövdesi. */
+function webCronCalistir(): void {
+    try {
+        if (ayar('web_cron') !== '1') return;
+        sosyalSemaKur();
+        $simdi = time();
+        DB::exec("INSERT IGNORE INTO sistem_ayarlari (anahtar, deger, guncelleme) VALUES ('__web_cron_tetik', '0', ?)", [simdi()]);
+        // Atomik sahiplenme: aynı dakikada yalnızca bir istek çalıştırır
+        $alindi = DB::exec("UPDATE sistem_ayarlari SET deger=?, guncelleme=?
+                            WHERE anahtar='__web_cron_tetik' AND CAST(deger AS UNSIGNED) <= ?",
+                           [(string)$simdi, simdi(), $simdi - 60]);
+        if ($alindi !== 1) return;
+        // Bekleyen iş yoksa hiç uğraşma
+        $bekleyen = (int)DB::scalar("SELECT COUNT(*) FROM sosyal_paylasimlar WHERE durum='bekliyor' AND planlanan_zaman <= ?", [simdi()]);
+        if ($bekleyen === 0) return;
+        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+        $arkaPlan = function_exists('fastcgi_finish_request') && fastcgi_finish_request();
+        ignore_user_abort(true);
+        kuyrukCalistir('ziyaret', $arkaPlan ? 25 : 5);
+    } catch (Throwable $e) {
+        error_log('webCronCalistir: ' . $e->getMessage());
+    }
 }

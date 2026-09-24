@@ -277,16 +277,15 @@ aittir (mağazadan bağımsız). Şu an tek platform **Facebook Sayfası**'dır.
 | `php-app/SosyalMedya.php` | Şema (`sosyal_hesaplar`, `sosyal_paylasimlar`), token şifreleme, `FacebookGraph` istemcisi, kuyruk işleyici `paylasimKuyrugunuIsle()` |
 | `php-app/sosyal.php` | Hesap listesi, yeni paylaşım (hemen / planlı, ürün şablonu + önizleme), paylaşım geçmişi |
 | `php-app/facebook_callback.php` | OAuth akışı: `?baslat=1` → Facebook, dönüşte uzun ömürlü token → yönetilen sayfalar kaydedilir |
-| `php-app/cron_paylasim.php` | Yalnızca CLI; zamanı gelen paylaşımları yayınlar. Sunucuda her dakika çalışmalı |
+| `php-app/cron_paylasim.php` | Zamanı gelen paylaşımları yayınlar: CLI ya da anahtarlı web URL'si (isteğe bağlı — site ziyaretleri de tetikler) |
 | `php-app/tests/sosyal_test.php` | DB gerektirmeyen mantık testleri (`php php-app/tests/sosyal_test.php`, PHP CI'da da çalışır) |
 
-- **Kurulum (`.env`):** `APP_KEY` (token şifreleme anahtarı — değişirse hesaplar
-  yeniden bağlanmalı), `FB_APP_ID`, `FB_APP_SECRET`, isteğe bağlı `APP_URL`,
-  `FB_GRAPH_VERSION`, `APP_TIMEZONE`. Facebook uygulamasında Facebook Login
-  ürünü açılmalı ve `APP_URL/facebook_callback.php` geçerli yönlendirme URI'si
-  olarak eklenmeli; izinler: `pages_show_list`, `pages_manage_posts`,
-  `pages_read_engagement` (uygulama sahibi dışındaki kullanıcılar için App Review gerekir).
-- **Cron:** `* * * * * php /yol/cron_paylasim.php`
+- **Kurulum:** Facebook App ID / Secret, Graph sürümü ve site adresi **Admin →
+  Sistem Ayarları**'ndan girilir (rehber ve yönlendirme URI'si orada gösterilir).
+  Facebook uygulamasında Facebook Login açılmalı ve `APP_URL/facebook_callback.php`
+  geçerli yönlendirme URI'si olarak eklenmeli; izinler: `pages_show_list`,
+  `pages_manage_posts`, `pages_read_engagement` (diğer kullanıcılar için App Review gerekir).
+- **Zamanlayıcı:** cron gerekmez (bkz. Üyelik bölümü); isteğe bağlı `* * * * * php /yol/cron_paylasim.php`
 - **Token'lar** AES-256-GCM ile şifreli saklanır; sayfa token'ları uzun ömürlü
   kullanıcı token'ından alındığı için süresi dolmaz. Facebook token hatası (190/102)
   gelirse hesap `yeniden_baglan` durumuna geçer.
@@ -294,6 +293,39 @@ aittir (mağazadan bağımsız). Şu an tek platform **Facebook Sayfası**'dır.
 - **Hata/tekrar:** geçici hatada `SOSYAL_MAX_DENEME` (3) kez, `n × 5 dk` arayla
   tekrar; kalıcı hatada (izin, parametre, token) doğrudan `hata`. `gonderiliyor`da
   takılı kalan kayıt çift gönderi riskine karşı otomatik tekrarlanmaz, `hata` olur.
-- **Zamanlar** PHP tarafında `APP_TIMEZONE` ile üretilir; bu tablolarda MySQL `NOW()` kullanılmaz.
+- **Zamanlar** PHP tarafında `app_timezone` ayarıyla üretilir; bu tablolarda MySQL `NOW()` kullanılmaz.
 - Yeni platform eklemek: `sosyal_hesaplar.platform` değeri + `paylasimKuyrugunuIsle()`
   içinde o platformun istemcisi + bağlama akışı.
+
+## Üyelik, Admin ve Kullanıcı Paneli (`php-app/`)
+
+Tüm sistem tarayıcıdan kurulur ve yönetilir; dosya düzenlemek gerekmez.
+
+| Dosya | İş |
+|-------|-----|
+| `php-app/kurulum.php` | Sihirbaz: 1) MySQL bilgileri → test → `.env` yazılır (+ otomatik `APP_KEY`), 2) tablolar + ilk admin. `.env` varsa 1. adım üzerine yazmaz; gerçek admin varsa sayfa kilitlenir |
+| `php-app/login.php` | Giriş / kayıt. Kurulum yoksa `kurulum.php`'ye gider. Kayıt `kayit_acik` ayarına bağlı; e-posta+IP başına 5 hatalı denemede 15 dk kilit |
+| `php-app/hesabim.php` | Kullanıcı paneli: profil, şifre değiştir, kendi mağazaları (ekle/düzenle/API anahtarları/pasif/sil) |
+| `php-app/admin.php` | Admin paneli: genel bakış, kullanıcılar (ekle/düzenle/rol/pasif/şifre sıfırla/sil), tüm mağazalar, tüm sosyal hesap ve paylaşımlar, sistem ayarları |
+| `php-app/sistem.php` | Çekirdek: `sistem_ayarlari` tablosu + `ayar()`, token şifreleme, CSRF, bildirim, giriş kilidi, `magazaFormundanKaydet()` |
+| `php-app/arayuz.php` | Ortak görünüm: `panelBasla()/panelBitir()`, `kutuBasla()/kutuBitir()`, `kullaniciMenusu()` |
+| `php-app/tests/*_test.php` | DB gerektirmeyen testler (`test_yardimci.php` ortak); PHP CI hepsini çalıştırır |
+
+- **Ayar önceliği:** `ayar('anahtar')` = panel (DB) → `.env` karşılığı → varsayılan.
+  Yeni ayar eklemek için yalnızca `SISTEM_AYARLARI`'na satır ekle; admin formu
+  otomatik oluşur. Türü `gizli` olanlar şifreli saklanır ve formda maskelenir.
+  `.env`'de kalması zorunlu olan tek şey DB bağlantısıdır (kurulum yazar).
+- **`APP_KEY`:** önce `.env`; yoksa ilk ihtiyaçta üretilip DB'ye (`__app_key`) yazılır.
+  Değişirse şifreli değerler (sosyal token'lar, FB secret) çözülemez.
+- **Gizli alanlar** (mağaza API secret, Anthropic anahtarı, FB secret) formlarda
+  geri gösterilmez; boş bırakılırsa mevcut değer korunur.
+- **Yetki kuralları:** admin kendi yetkisini kaldıramaz, kendini pasif edemez/silemez;
+  en az bir aktif admin kalır. `requireLogin()` her istekte kullanıcıyı DB'den
+  tazeler — pasif edilen/silinen kullanıcının oturumu hemen kapanır.
+- **Silme onayı:** kullanıcı/mağaza silme, e-postayı/mağaza adını birebir yazdırır
+  (cascade ile tüm veriler gider).
+- **Zamanlayıcı cron'suz çalışır:** `web_cron` ayarı açıkken planlı paylaşımlar
+  oturum açık sayfa ziyaretlerinde, yanıt gönderildikten sonra ve dakikada en
+  fazla bir kez yayınlanır (`webCronCalistir()`). İsteğe bağlı: sunucu cron'u ya da
+  admin panelinde gösterilen gizli anahtarlı `cron_paylasim.php?anahtar=…` URL'si.
+- `.htaccess` `.env`, `*.sql`, `tests/`, `vendor/` gibi dosyaları web'e kapatır (Apache).
