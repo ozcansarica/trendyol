@@ -36,6 +36,9 @@ jobs:
             -exec php -l {} \; | tee /tmp/php-lint.log
           grep -v "No syntax errors" /tmp/php-lint.log && exit 1 || true
 
+      - name: Sosyal paylaşım testleri
+        run: php php-app/tests/sosyal_test.php
+
       - name: Kritik güvenlik kontrolleri
         run: |
           echo "=== Olası hardcoded credential taraması ==="

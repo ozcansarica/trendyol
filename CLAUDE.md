@@ -265,3 +265,35 @@ Veri `trendyol_yildizli_urun_v1`'de barkoda göre saklanır ve panelde
 **canlı olarak** `activeUrunler` ile eşleştirilir — ürün nesnelerine
 yazılmadığından ana tabloyu, Maliyet Girişi'ni veya diğer hesaplamaları
 hiçbir şekilde etkilemez.
+
+## Sosyal Paylaşım (`php-app/`, sunucu tarafı)
+
+Statik siteden bağımsızdır; `php-app/` (MySQL + oturum açma) içinde çalışır,
+kenar çubuğundaki **📣 Sosyal Paylaşım** linkiyle açılır. Hesaplar kullanıcıya
+aittir (mağazadan bağımsız). Şu an tek platform **Facebook Sayfası**'dır.
+
+| Dosya | İş |
+|-------|-----|
+| `php-app/SosyalMedya.php` | Şema (`sosyal_hesaplar`, `sosyal_paylasimlar`), token şifreleme, `FacebookGraph` istemcisi, kuyruk işleyici `paylasimKuyrugunuIsle()` |
+| `php-app/sosyal.php` | Hesap listesi, yeni paylaşım (hemen / planlı, ürün şablonu + önizleme), paylaşım geçmişi |
+| `php-app/facebook_callback.php` | OAuth akışı: `?baslat=1` → Facebook, dönüşte uzun ömürlü token → yönetilen sayfalar kaydedilir |
+| `php-app/cron_paylasim.php` | Yalnızca CLI; zamanı gelen paylaşımları yayınlar. Sunucuda her dakika çalışmalı |
+| `php-app/tests/sosyal_test.php` | DB gerektirmeyen mantık testleri (`php php-app/tests/sosyal_test.php`, PHP CI'da da çalışır) |
+
+- **Kurulum (`.env`):** `APP_KEY` (token şifreleme anahtarı — değişirse hesaplar
+  yeniden bağlanmalı), `FB_APP_ID`, `FB_APP_SECRET`, isteğe bağlı `APP_URL`,
+  `FB_GRAPH_VERSION`, `APP_TIMEZONE`. Facebook uygulamasında Facebook Login
+  ürünü açılmalı ve `APP_URL/facebook_callback.php` geçerli yönlendirme URI'si
+  olarak eklenmeli; izinler: `pages_show_list`, `pages_manage_posts`,
+  `pages_read_engagement` (uygulama sahibi dışındaki kullanıcılar için App Review gerekir).
+- **Cron:** `* * * * * php /yol/cron_paylasim.php`
+- **Token'lar** AES-256-GCM ile şifreli saklanır; sayfa token'ları uzun ömürlü
+  kullanıcı token'ından alındığı için süresi dolmaz. Facebook token hatası (190/102)
+  gelirse hesap `yeniden_baglan` durumuna geçer.
+- **Gönderi türü:** görsel URL'si varsa `/photos` (link açıklamaya eklenir), yoksa `/feed`.
+- **Hata/tekrar:** geçici hatada `SOSYAL_MAX_DENEME` (3) kez, `n × 5 dk` arayla
+  tekrar; kalıcı hatada (izin, parametre, token) doğrudan `hata`. `gonderiliyor`da
+  takılı kalan kayıt çift gönderi riskine karşı otomatik tekrarlanmaz, `hata` olur.
+- **Zamanlar** PHP tarafında `APP_TIMEZONE` ile üretilir; bu tablolarda MySQL `NOW()` kullanılmaz.
+- Yeni platform eklemek: `sosyal_hesaplar.platform` değeri + `paylasimKuyrugunuIsle()`
+  içinde o platformun istemcisi + bağlama akışı.
