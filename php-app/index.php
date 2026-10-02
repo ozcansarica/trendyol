@@ -1395,11 +1395,21 @@ $filter  = $_GET['filter'] ?? '';
 $srch    = trim($_GET['q'] ?? '');
 $sort    = $_GET['sort'] ?? 'desc';   // desc = yeniden eskiye, asc = eskiden yeniye
 $sort    = in_array($sort, ['desc','asc']) ? $sort : 'desc';
+$ulke    = $_GET['ulke'] ?? '';
+$ulke    = in_array($ulke, ['Türkiye','Azerbaycan','Avrupa']) ? $ulke : '';
+$ulkeParam = $ulke ? '&ulke='.urlencode($ulke) : '';
 $pg      = max(1,(int)($_GET['p'] ?? 1));
 $pp      = 100;
 $off     = ($pg-1)*$pp;
 $conds   = ["s.magaza_id = ?"];
 $prms    = [$magazaId];
+if ($ulke === 'Türkiye') {
+    $conds[] = "(s.ulke LIKE '%rkiye%' OR s.ulke = '' OR s.ulke IS NULL)";
+} elseif ($ulke === 'Azerbaycan') {
+    $conds[] = "(s.ulke LIKE '%azerbaycan%' OR s.ulke LIKE '%azerbeycan%')";
+} elseif ($ulke === 'Avrupa') {
+    $conds[] = "(s.ulke IS NOT NULL AND s.ulke != '' AND s.ulke NOT LIKE '%rkiye%' AND s.ulke NOT LIKE '%azerbaycan%' AND s.ulke NOT LIKE '%azerbeycan%')";
+}
 if ($filter) {
     // Türkçe filtre → İngilizce API karşılıklarını bul, hepsini sorgula
     $filterMap = [
@@ -1474,6 +1484,36 @@ foreach ($orders as &$o) {
 }
 unset($o);
 $pages   = (int)ceil($totSip/$pp);
+
+// Ülke bazlı sayılar (filtre uygulanmadan toplam)
+$ulkeCounts = DB::row("SELECT
+    SUM(CASE WHEN ulke LIKE '%rkiye%' OR ulke='' OR ulke IS NULL THEN 1 ELSE 0 END) AS tr_adet,
+    SUM(CASE WHEN ulke LIKE '%azerbaycan%' OR ulke LIKE '%azerbeycan%' THEN 1 ELSE 0 END) AS az_adet,
+    SUM(CASE WHEN ulke IS NOT NULL AND ulke != '' AND ulke NOT LIKE '%rkiye%' AND ulke NOT LIKE '%azerbaycan%' AND ulke NOT LIKE '%azerbeycan%' THEN 1 ELSE 0 END) AS eu_adet
+FROM siparisler WHERE magaza_id=?", [$magazaId]);
+
+// Ülke filtresi aktifse statü sayılarını da o ülkeye göre hesapla
+if ($ulke) {
+    $ulkeConds = $conds; // magaza_id + ulke koşulları
+    $ulkePrms  = $prms;
+    $_ulkeStatusWhere = implode(' AND ', $ulkeConds);
+    $_rawStatusUlke = DB::rows("
+        SELECT CASE WHEN api_statusu IS NOT NULL AND api_statusu != '' THEN api_statusu
+                    ELSE siparis_statusu END AS raw_s,
+               COUNT(*) as adet
+        FROM siparisler s WHERE $_ulkeStatusWhere GROUP BY raw_s
+    ", $ulkePrms);
+    $_groupedUlke = [];
+    foreach ($_rawStatusUlke as $_r) {
+        $_tr = $statusMapTR[$_r['raw_s']] ?? $_r['raw_s'];
+        $_groupedUlke[$_tr] = ($_groupedUlke[$_tr] ?? 0) + (int)$_r['adet'];
+    }
+    arsort($_groupedUlke);
+    $statusDataFiltered = [];
+    foreach ($_groupedUlke as $_s => $_n) $statusDataFiltered[] = ['siparis_statusu' => $_s, 'adet' => $_n];
+} else {
+    $statusDataFiltered = $statusData;
+}
 
 // Sayfadaki siparişler için kalem detaylarını çek
 $satirDetayMap = [];
@@ -1563,9 +1603,9 @@ foreach (DB::rows("SELECT ROUND(sale_price,2) as fiyat, COUNT(*) as adet FROM tr
 }
 ?>
 <div class="page-title">📦 <span>Siparişler</span>
-    <?php if ($filter || $srch): ?>
+    <?php if ($ulke || $filter || $srch): ?>
     <span style="font-size:13px;color:var(--text2);font-weight:400;margin-left:8px">
-        — <?= htmlspecialchars($filter ?: '"'.$srch.'"') ?> filtresi
+        — <?= htmlspecialchars(implode(' · ', array_filter([$ulke, $filter ?: ($srch ? '"'.$srch.'"' : '')]))) ?>
     </span>
     <?php endif; ?>
 </div>
@@ -1626,17 +1666,41 @@ foreach (DB::rows("SELECT ROUND(sale_price,2) as fiyat, COUNT(*) as adet FROM tr
 </div>
 <!-- ========================================== -->
 
+<!-- Ülke/Pazar filtreleri -->
+<?php
+$trAdet = (int)($ulkeCounts['tr_adet'] ?? 0);
+$azAdet = (int)($ulkeCounts['az_adet'] ?? 0);
+$euAdet = (int)($ulkeCounts['eu_adet'] ?? 0);
+?>
+<?php if ($azAdet > 0 || $euAdet > 0): ?>
+<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;color:var(--text2);padding:5px 0">Pazar:</span>
+    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>"
+       class="tab-btn <?= !$ulke?'active':'' ?>">🌍 Tümü (<?= $stats['toplam_siparis'] ?>)</a>
+    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=Türkiye"
+       class="tab-btn <?= $ulke==='Türkiye'?'active':'' ?>">🇹🇷 Türkiye (<?= $trAdet ?>)</a>
+    <?php if ($azAdet > 0): ?>
+    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=Azerbaycan"
+       class="tab-btn <?= $ulke==='Azerbaycan'?'active':'' ?>">🇦🇿 Azerbaycan (<?= $azAdet ?>)</a>
+    <?php endif; ?>
+    <?php if ($euAdet > 0): ?>
+    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=Avrupa"
+       class="tab-btn <?= $ulke==='Avrupa'?'active':'' ?>">🇪🇺 Avrupa (<?= $euAdet ?>)</a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <div style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
-    <a href="?action=siparisler" class="tab-btn <?= !$filter?'active':'' ?>">Tümü (<?= $stats['toplam_siparis'] ?>)</a>
-    <?php foreach ($statusData as $s): ?>
-    <a href="?action=siparisler&filter=<?= urlencode($s['siparis_statusu']) ?>" class="tab-btn <?= $filter===$s['siparis_statusu']?'active':'' ?>"><?= htmlspecialchars($s['siparis_statusu']) ?> (<?= $s['adet'] ?>)</a>
+    <a href="?action=siparisler<?= $ulkeParam ?>" class="tab-btn <?= !$filter?'active':'' ?>">Tümü (<?= $totSip ?>)</a>
+    <?php foreach ($statusDataFiltered as $s): ?>
+    <a href="?action=siparisler&filter=<?= urlencode($s['siparis_statusu']) ?><?= $ulkeParam ?>" class="tab-btn <?= $filter===$s['siparis_statusu']?'active':'' ?>"><?= htmlspecialchars($s['siparis_statusu']) ?> (<?= $s['adet'] ?>)</a>
     <?php endforeach; ?>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=desc"
+        <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=desc<?= $ulkeParam ?>"
            class="tab-btn <?= $sort==='desc'?'active':'' ?>" style="padding:5px 10px;font-size:12px">↓ Yeniden Eskiye</a>
-        <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=asc"
+        <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=asc<?= $ulkeParam ?>"
            class="tab-btn <?= $sort==='asc'?'active':'' ?>" style="padding:5px 10px;font-size:12px">↑ Eskiden Yeniye</a>
-        <form method="GET" style="display:flex;gap:6px"><input type="hidden" name="action" value="siparisler"><input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>"><input type="hidden" name="sort" value="<?= $sort ?>">
+        <form method="GET" style="display:flex;gap:6px"><input type="hidden" name="action" value="siparisler"><input type="hidden" name="filter" value="<?= htmlspecialchars($filter) ?>"><input type="hidden" name="sort" value="<?= $sort ?>"><input type="hidden" name="ulke" value="<?= htmlspecialchars($ulke) ?>">
             <input type="text" name="q" value="<?= htmlspecialchars($srch) ?>" placeholder="Sipariş no, müşteri, ürün..." style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;outline:none;width:200px">
             <button type="submit" class="btn btn-sm btn-primary">🔍</button>
         </form>
@@ -1851,7 +1915,7 @@ foreach (DB::rows("SELECT ROUND(sale_price,2) as fiyat, COUNT(*) as adet FROM tr
 </tbody></table></div>
 <?php if ($pages>1): ?>
 <div style="padding:15px 20px;display:flex;gap:6px;flex-wrap:wrap">
-    <?php for ($i=1;$i<=$pages;$i++): ?><a href="?action=siparisler&p=<?= $i ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>" class="tab-btn <?= $i===$pg?'active':'' ?>" style="padding:5px 10px;font-size:12px"><?= $i ?></a><?php endfor; ?>
+    <?php for ($i=1;$i<=$pages;$i++): ?><a href="?action=siparisler&p=<?= $i ?>&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?><?= $ulkeParam ?>" class="tab-btn <?= $i===$pg?'active':'' ?>" style="padding:5px 10px;font-size:12px"><?= $i ?></a><?php endfor; ?>
 </div><?php endif; ?>
 <?php endif; ?>
 </div>
