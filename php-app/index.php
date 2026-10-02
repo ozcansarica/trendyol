@@ -501,6 +501,7 @@ if (!$dbError && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['excel_f
                              iptal,iade,diger,net_tutar,platform_hizmet,yukleme_tarihi)
                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                             ON DUPLICATE KEY UPDATE
+                                ulke             = VALUES(ulke),
                                 siparis_statusu  = VALUES(siparis_statusu),
                                 siparis_tutari   = VALUES(siparis_tutari),
                                 komisyon         = VALUES(komisyon),

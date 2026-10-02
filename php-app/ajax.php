@@ -527,6 +527,15 @@ try {
             }
             break;
 
+        // ------ Ülke debug: DB'deki ulke değerlerini listele ------
+        case 'ulke_debug':
+            $rows = DB::rows(
+                "SELECT ulke, COUNT(*) AS adet FROM siparisler WHERE magaza_id=? GROUP BY ulke ORDER BY adet DESC",
+                [$magazaId]
+            );
+            echo json_encode(['ulke_degerleri' => $rows]);
+            break;
+
         // ------ API test: ham response döndür ------
         case 'api_test':
             $api = new TrendyolApi($magaza);
