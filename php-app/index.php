@@ -1396,19 +1396,29 @@ $srch    = trim($_GET['q'] ?? '');
 $sort    = $_GET['sort'] ?? 'desc';   // desc = yeniden eskiye, asc = eskiden yeniye
 $sort    = in_array($sort, ['desc','asc']) ? $sort : 'desc';
 $ulke    = $_GET['ulke'] ?? '';
-$ulke    = in_array($ulke, ['Türkiye','Azerbaycan','Avrupa']) ? $ulke : '';
+$ulke    = in_array($ulke, ['Türkiye, Körfez','Azerbaycan','Avrupa']) ? $ulke : '';
 $ulkeParam = $ulke ? '&ulke='.urlencode($ulke) : '';
 $pg      = max(1,(int)($_GET['p'] ?? 1));
 $pp      = 100;
 $off     = ($pg-1)*$pp;
+
+// Körfez ülkeleri SQL koşulu (Suudi Arabistan, BAE, Katar, Kuveyt, Bahreyn, Umman)
+$korfezSQL = "(s.ulke LIKE '%suudi%' OR s.ulke LIKE '%arabistan%' OR s.ulke LIKE '%emirlik%'
+    OR s.ulke = 'BAE' OR s.ulke LIKE '%katar%' OR s.ulke LIKE '%kuveyt%'
+    OR s.ulke LIKE '%bahreyn%' OR s.ulke LIKE '%umman%')";
+$trKorfezSQL = "(s.ulke LIKE '%rkiye%' OR s.ulke = '' OR s.ulke IS NULL OR $korfezSQL)";
+$azSQL  = "(s.ulke LIKE '%azerbaycan%' OR s.ulke LIKE '%azerbeycan%')";
+$avSQL  = "(s.ulke IS NOT NULL AND s.ulke != ''
+    AND s.ulke NOT LIKE '%rkiye%' AND NOT $azSQL AND NOT $korfezSQL)";
+
 $conds   = ["s.magaza_id = ?"];
 $prms    = [$magazaId];
-if ($ulke === 'Türkiye') {
-    $conds[] = "(s.ulke LIKE '%rkiye%' OR s.ulke = '' OR s.ulke IS NULL)";
+if ($ulke === 'Türkiye, Körfez') {
+    $conds[] = $trKorfezSQL;
 } elseif ($ulke === 'Azerbaycan') {
-    $conds[] = "(s.ulke LIKE '%azerbaycan%' OR s.ulke LIKE '%azerbeycan%')";
+    $conds[] = $azSQL;
 } elseif ($ulke === 'Avrupa') {
-    $conds[] = "(s.ulke IS NOT NULL AND s.ulke != '' AND s.ulke NOT LIKE '%rkiye%' AND s.ulke NOT LIKE '%azerbaycan%' AND s.ulke NOT LIKE '%azerbeycan%')";
+    $conds[] = $avSQL;
 }
 if ($filter) {
     // Türkçe filtre → İngilizce API karşılıklarını bul, hepsini sorgula
@@ -1487,9 +1497,19 @@ $pages   = (int)ceil($totSip/$pp);
 
 // Ülke bazlı sayılar (filtre uygulanmadan toplam)
 $ulkeCounts = DB::row("SELECT
-    SUM(CASE WHEN ulke LIKE '%rkiye%' OR ulke='' OR ulke IS NULL THEN 1 ELSE 0 END) AS tr_adet,
+    SUM(CASE WHEN ulke LIKE '%rkiye%' OR ulke='' OR ulke IS NULL
+             OR ulke LIKE '%suudi%' OR ulke LIKE '%arabistan%' OR ulke LIKE '%emirlik%'
+             OR ulke = 'BAE' OR ulke LIKE '%katar%' OR ulke LIKE '%kuveyt%'
+             OR ulke LIKE '%bahreyn%' OR ulke LIKE '%umman%'
+             THEN 1 ELSE 0 END) AS tr_adet,
     SUM(CASE WHEN ulke LIKE '%azerbaycan%' OR ulke LIKE '%azerbeycan%' THEN 1 ELSE 0 END) AS az_adet,
-    SUM(CASE WHEN ulke IS NOT NULL AND ulke != '' AND ulke NOT LIKE '%rkiye%' AND ulke NOT LIKE '%azerbaycan%' AND ulke NOT LIKE '%azerbeycan%' THEN 1 ELSE 0 END) AS eu_adet
+    SUM(CASE WHEN ulke IS NOT NULL AND ulke != ''
+             AND ulke NOT LIKE '%rkiye%'
+             AND ulke NOT LIKE '%azerbaycan%' AND ulke NOT LIKE '%azerbeycan%'
+             AND ulke NOT LIKE '%suudi%' AND ulke NOT LIKE '%arabistan%' AND ulke NOT LIKE '%emirlik%'
+             AND ulke != 'BAE' AND ulke NOT LIKE '%katar%' AND ulke NOT LIKE '%kuveyt%'
+             AND ulke NOT LIKE '%bahreyn%' AND ulke NOT LIKE '%umman%'
+             THEN 1 ELSE 0 END) AS eu_adet
 FROM siparisler WHERE magaza_id=?", [$magazaId]);
 
 // Ülke filtresi aktifse statü sayılarını da o ülkeye göre hesapla
@@ -1677,8 +1697,8 @@ $euAdet = (int)($ulkeCounts['eu_adet'] ?? 0);
     <span style="font-size:11px;color:var(--text2);padding:5px 0">Pazar:</span>
     <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>"
        class="tab-btn <?= !$ulke?'active':'' ?>">🌍 Tümü (<?= $stats['toplam_siparis'] ?>)</a>
-    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=Türkiye"
-       class="tab-btn <?= $ulke==='Türkiye'?'active':'' ?>">🇹🇷 Türkiye (<?= $trAdet ?>)</a>
+    <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=<?= urlencode('Türkiye, Körfez') ?>"
+       class="tab-btn <?= $ulke==='Türkiye, Körfez'?'active':'' ?>">🇹🇷 Türkiye, Körfez (<?= $trAdet ?>)</a>
     <?php if ($azAdet > 0): ?>
     <a href="?action=siparisler&filter=<?= urlencode($filter) ?>&q=<?= urlencode($srch) ?>&sort=<?= $sort ?>&ulke=Azerbaycan"
        class="tab-btn <?= $ulke==='Azerbaycan'?'active':'' ?>">🇦🇿 Azerbaycan (<?= $azAdet ?>)</a>
