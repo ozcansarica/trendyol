@@ -1945,6 +1945,26 @@ $euAdet = (int)($ulkeCounts['eu_adet'] ?? 0);
 <?php
 $sortOpts = ['net_ciro'=>'Net Ciro','net_satis'=>'Net Satış','komisyon'=>'Komisyon','siparis_sayisi'=>'Sipariş'];
 $sortBy   = in_array($_GET['sort']??'', array_keys($sortOpts)) ? $_GET['sort'] : 'net_ciro';
+$katFilt  = trim($_GET['kat'] ?? '');
+
+// Mevcut kategorileri çek (filtre dropdown için)
+$kategoriler = DB::rows(
+    "SELECT DISTINCT tu.category_name FROM trendyol_urunler tu
+     JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
+     WHERE tu.magaza_id = ? AND tu.category_name IS NOT NULL AND tu.category_name != ''
+     ORDER BY tu.category_name",
+    [$magazaId]
+);
+
+$urunlerWhere = "WHERE tu.magaza_id = ?
+      AND s.siparis_statusu NOT LIKE '%İptal%'
+      AND s.siparis_statusu NOT LIKE '%Cancel%'";
+$urunlerPrms = [$magazaId];
+if ($katFilt !== '') {
+    $urunlerWhere .= " AND tu.category_name = ?";
+    $urunlerPrms[] = $katFilt;
+}
+
 $urunler  = DB::rows("
     SELECT tu.ty_id, tu.title, tu.image_url, tu.barcode, tu.category_name,
            tu.sale_price, tu.quantity as guncel_stok,
@@ -1971,23 +1991,34 @@ $urunler  = DB::rows("
     FROM trendyol_urunler tu
     JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
     LEFT JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
-    WHERE tu.magaza_id = ?
-      AND s.siparis_statusu NOT LIKE '%İptal%'
-      AND s.siparis_statusu NOT LIKE '%Cancel%'
+    $urunlerWhere
     GROUP BY tu.ty_id, tu.title, tu.image_url, tu.barcode, tu.category_name,
              tu.sale_price, tu.quantity,
              m.birim_maliyet, m.kargo_maliyeti, m.paket_maliyeti, m.diger_maliyet
     ORDER BY $sortBy DESC
-", [$magazaId]);
+", $urunlerPrms);
 $maliyetsizSayisi = count(array_filter($urunler, fn($r) => $r['birim_maliyet'] === null));
+$katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
 ?>
 <div class="page-title">🏷️ <span>Ürün Analizi</span>
     <span style="font-size:13px;color:var(--text2);font-weight:400;margin-left:8px">Sipariş verisinden</span>
 </div>
+<?php if (!empty($kategoriler)): ?>
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <span style="color:var(--text2);font-size:12px;align-self:center">Kategori:</span>
+    <a href="?action=urunler&sort=<?= $sortBy ?>" class="tab-btn <?= $katFilt===''?'active':'' ?>">Tümü</a>
+    <?php foreach ($kategoriler as $kat): ?>
+    <a href="?action=urunler&sort=<?= $sortBy ?>&kat=<?= urlencode($kat['category_name']) ?>"
+       class="tab-btn <?= $katFilt===$kat['category_name']?'active':'' ?>"
+       style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+       title="<?= htmlspecialchars($kat['category_name']) ?>"><?= htmlspecialchars($kat['category_name']) ?></a>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <div style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
     <span style="color:var(--text2);font-size:12px;align-self:center">Sırala:</span>
     <?php foreach ($sortOpts as $k=>$v): ?>
-    <a href="?action=urunler&sort=<?= $k ?>" class="tab-btn <?= $sortBy===$k?'active':'' ?>"><?= $v ?></a>
+    <a href="?action=urunler&sort=<?= $k ?><?= $katParam ?>" class="tab-btn <?= $sortBy===$k?'active':'' ?>"><?= $v ?></a>
     <?php endforeach; ?>
     <span style="margin-left:auto;color:var(--text2);font-size:12px">
         <?= count($urunler) ?> ürün
