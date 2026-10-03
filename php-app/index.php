@@ -1246,7 +1246,7 @@ $tyUrunler= DB::rows(
     "SELECT tu.*, m.birim_maliyet, m.kargo_maliyeti, m.paket_maliyeti, m.diger_maliyet, m.id as m_id
      FROM trendyol_urunler tu
      LEFT JOIN maliyetler m ON tu.ty_id=m.ty_urun_id AND m.magaza_id=tu.magaza_id
-     $where ORDER BY tu.title LIMIT $perPage OFFSET $offset", $params);
+     $where ORDER BY tu.ty_id DESC LIMIT $perPage OFFSET $offset", $params);
 $pages    = (int)ceil($total / $perPage);
 $lastSync = DB::scalar("SELECT MAX(cekme_tarihi) FROM trendyol_urunler WHERE magaza_id=?",[$magazaId]);
 
