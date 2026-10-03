@@ -1946,8 +1946,9 @@ $euAdet = (int)($ulkeCounts['eu_adet'] ?? 0);
 $sortOpts = ['net_ciro'=>'Net Ciro','net_satis'=>'Net Satış','komisyon'=>'Komisyon','siparis_sayisi'=>'Sipariş'];
 $sortBy   = in_array($_GET['sort']??'', array_keys($sortOpts)) ? $_GET['sort'] : 'net_ciro';
 $katFilt  = trim($_GET['kat'] ?? '');
+$donem    = in_array($_GET['donem']??'', ['bu_ay','gecen_ay','son_3_ay']) ? $_GET['donem'] : '';
 
-// Mevcut kategorileri çek (filtre dropdown için)
+// Mevcut kategorileri çek
 $kategoriler = DB::rows(
     "SELECT DISTINCT tu.category_name FROM trendyol_urunler tu
      JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
@@ -1960,17 +1961,56 @@ $urunlerWhere = "WHERE tu.magaza_id = ?
       AND s.siparis_statusu NOT LIKE '%İptal%'
       AND s.siparis_statusu NOT LIKE '%Cancel%'";
 $urunlerPrms = [$magazaId];
+
 if ($katFilt !== '') {
     $urunlerWhere .= " AND tu.category_name = ?";
     $urunlerPrms[] = $katFilt;
 }
 
-$urunler  = DB::rows("
+// Dönem filtresi
+$buYil = (int)date('Y'); $buAy = (int)date('n');
+$gunSayisi = 30;
+if ($donem) {
+    $bdc = fn(int $ay, int $yil) =>
+        "(s.siparis_tarihi LIKE '__." . str_pad($ay,2,'0',STR_PAD_LEFT) . ".$yil%'" .
+        " OR s.siparis_tarihi LIKE '$yil-" . str_pad($ay,2,'0',STR_PAD_LEFT) . "-%')";
+    if ($donem === 'bu_ay') {
+        $urunlerWhere .= " AND " . $bdc($buAy, $buYil);
+        $gunSayisi = (int)date('j');
+    } elseif ($donem === 'gecen_ay') {
+        $gAy = $buAy===1?12:$buAy-1; $gYil = $buAy===1?$buYil-1:$buYil;
+        $urunlerWhere .= " AND " . $bdc($gAy, $gYil);
+        $gunSayisi = (int)date('t', mktime(0,0,0,$gAy,1,$gYil));
+    } elseif ($donem === 'son_3_ay') {
+        $d3=[];
+        for ($i=0;$i<3;$i++) { $ay=$buAy-$i; $yil=$buYil; if($ay<=0){$ay+=12;$yil--;} $d3[]=$bdc($ay,$yil); }
+        $urunlerWhere .= " AND (" . implode(' OR ', $d3) . ")";
+        $gunSayisi = 90;
+    }
+} else {
+    try {
+        $tr = DB::row("SELECT
+            MIN(CASE WHEN siparis_tarihi REGEXP '^[0-9]{2}\\\\.[0-9]{2}\\\\.[0-9]{4}'
+                THEN STR_TO_DATE(SUBSTRING(siparis_tarihi,1,10),'%d.%m.%Y')
+                WHEN siparis_tarihi REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                THEN STR_TO_DATE(SUBSTRING(siparis_tarihi,1,10),'%Y-%m-%d') END) AS ilk,
+            MAX(CASE WHEN siparis_tarihi REGEXP '^[0-9]{2}\\\\.[0-9]{2}\\\\.[0-9]{4}'
+                THEN STR_TO_DATE(SUBSTRING(siparis_tarihi,1,10),'%d.%m.%Y')
+                WHEN siparis_tarihi REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                THEN STR_TO_DATE(SUBSTRING(siparis_tarihi,1,10),'%Y-%m-%d') END) AS son
+            FROM siparisler WHERE magaza_id=?", [$magazaId]);
+        if ($tr && $tr['ilk'] && $tr['son'])
+            $gunSayisi = max(1, (int)((strtotime($tr['son'])-strtotime($tr['ilk']))/86400)+1);
+    } catch(Exception $e) {}
+}
+
+$urunler = DB::rows("
     SELECT tu.ty_id, tu.title, tu.image_url, tu.barcode, tu.category_name,
            tu.sale_price, tu.quantity as guncel_stok,
            COUNT(DISTINCT s.id)                AS siparis_sayisi,
            SUM(s.urun_adedi)                   AS net_satis,
            SUM(s.siparis_tutari)               AS net_ciro,
+           ROUND(SUM(s.siparis_tutari)/NULLIF(SUM(s.urun_adedi),0),2) AS ort_satis_fiyati,
            SUM(ABS(s.komisyon))                AS komisyon,
            SUM(ABS(s.gonderi_kargo)+ABS(s.iade_kargo)) AS kargo,
            SUM(ABS(s.platform_hizmet))         AS platform,
@@ -1987,28 +2027,85 @@ $urunler  = DB::rows("
                ROUND(((SUM(s.siparis_tutari) - SUM(ABS(s.komisyon)) - SUM(ABS(s.gonderi_kargo)+ABS(s.iade_kargo)) - SUM(ABS(s.platform_hizmet)))
                - SUM(s.urun_adedi)*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet))
                    / SUM(s.siparis_tutari)*100, 1)
-           ELSE NULL END AS kar_marji
+           ELSE NULL END AS kar_marji,
+           MAX(us.iade_adedi)  AS us_iade_adedi,
+           MAX(us.iade_orani)  AS us_iade_orani
     FROM trendyol_urunler tu
     JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
     LEFT JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
+    LEFT JOIN urun_satis us ON us.ty_urun_id = tu.ty_id AND us.magaza_id = tu.magaza_id
     $urunlerWhere
     GROUP BY tu.ty_id, tu.title, tu.image_url, tu.barcode, tu.category_name,
              tu.sale_price, tu.quantity,
              m.birim_maliyet, m.kargo_maliyeti, m.paket_maliyeti, m.diger_maliyet
     ORDER BY $sortBy DESC
 ", $urunlerPrms);
+
 $maliyetsizSayisi = count(array_filter($urunler, fn($r) => $r['birim_maliyet'] === null));
-$katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
+$katParam   = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
+$donemParam = $donem   !== '' ? '&donem='.$donem : '';
+
+// Kategori KPI
+$katKpi = null;
+if ($katFilt !== '' && !empty($urunler)) {
+    $kpCiro = array_sum(array_column($urunler,'net_ciro'));
+    $kpKar  = array_sum(array_filter(array_column($urunler,'kar'), fn($v)=>$v!==null));
+    $katKpi = ['urun'=>count($urunler),'siparis'=>array_sum(array_column($urunler,'siparis_sayisi')),
+               'ciro'=>$kpCiro,'kar'=>$kpKar,'marj'=>$kpCiro>0?round($kpKar/$kpCiro*100,1):0];
+}
+
+// Kategori karşılaştırma
+$katKarsilastirma = [];
+if ($katFilt === '') {
+    $katKarsilastirma = DB::rows("
+        SELECT tu.category_name,
+               COUNT(DISTINCT tu.ty_id)        AS urun_sayisi,
+               COUNT(DISTINCT s.id)            AS siparis_sayisi,
+               SUM(s.urun_adedi)               AS net_satis,
+               SUM(s.siparis_tutari)           AS net_ciro,
+               SUM(ABS(s.komisyon))            AS komisyon,
+               SUM(ABS(s.gonderi_kargo)+ABS(s.iade_kargo)) AS kargo,
+               COUNT(DISTINCT CASE WHEN m.ty_urun_id IS NULL THEN tu.ty_id END) AS maliyetsiz,
+               SUM(CASE WHEN m.birim_maliyet IS NOT NULL THEN
+                   s.siparis_tutari - ABS(s.komisyon) - ABS(s.gonderi_kargo) - ABS(s.iade_kargo) - ABS(s.platform_hizmet)
+                   - s.urun_adedi*(m.birim_maliyet+m.kargo_maliyeti+m.paket_maliyeti+m.diger_maliyet)
+               END) AS kar
+        FROM trendyol_urunler tu
+        JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
+        LEFT JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
+        WHERE tu.magaza_id=? AND s.siparis_statusu NOT LIKE '%İptal%' AND s.siparis_statusu NOT LIKE '%Cancel%'
+          AND tu.category_name IS NOT NULL AND tu.category_name != ''
+        GROUP BY tu.category_name ORDER BY net_ciro DESC
+    ", [$magazaId]);
+}
+
+// Scatter verisi (ort fiyat vs kar marjı, yalnızca maliyeti olan ürünler)
+$scatterData = array_values(array_filter(array_map(fn($u) =>
+    $u['birim_maliyet'] !== null ? [
+        'n' => mb_substr($u['title']??'', 0, 35),
+        'x' => (float)round((float)($u['ort_satis_fiyati'] ?: $u['sale_price']), 2),
+        'y' => (float)$u['kar_marji'],
+        'r' => (float)min(24, max(6, (float)$u['net_ciro'] / 1000)),
+    ] : null,
+    $urunler
+)));
 ?>
 <div class="page-title">🏷️ <span>Ürün Analizi</span>
     <span style="font-size:13px;color:var(--text2);font-weight:400;margin-left:8px">Sipariş verisinden</span>
 </div>
+<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <span style="color:var(--text2);font-size:12px;align-self:center">Dönem:</span>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $katParam ?>" class="tab-btn <?= $donem===''?'active':'' ?>">Tümü</a>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $katParam ?>&donem=bu_ay" class="tab-btn <?= $donem==='bu_ay'?'active':'' ?>">Bu ay</a>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $katParam ?>&donem=gecen_ay" class="tab-btn <?= $donem==='gecen_ay'?'active':'' ?>">Geçen ay</a>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $katParam ?>&donem=son_3_ay" class="tab-btn <?= $donem==='son_3_ay'?'active':'' ?>">Son 3 ay</a>
+</div>
 <?php if (!empty($kategoriler)): ?>
 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
     <span style="color:var(--text2);font-size:12px;align-self:center">Kategori:</span>
-    <a href="?action=urunler&sort=<?= $sortBy ?>" class="tab-btn <?= $katFilt===''?'active':'' ?>">Tümü</a>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $donemParam ?>" class="tab-btn <?= $katFilt===''?'active':'' ?>">Tümü</a>
     <?php foreach ($kategoriler as $kat): ?>
-    <a href="?action=urunler&sort=<?= $sortBy ?>&kat=<?= urlencode($kat['category_name']) ?>"
+    <a href="?action=urunler&sort=<?= $sortBy ?>&kat=<?= urlencode($kat['category_name']) ?><?= $donemParam ?>"
        class="tab-btn <?= $katFilt===$kat['category_name']?'active':'' ?>"
        style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
        title="<?= htmlspecialchars($kat['category_name']) ?>"><?= htmlspecialchars($kat['category_name']) ?></a>
@@ -2018,22 +2115,43 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
 <div style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
     <span style="color:var(--text2);font-size:12px;align-self:center">Sırala:</span>
     <?php foreach ($sortOpts as $k=>$v): ?>
-    <a href="?action=urunler&sort=<?= $k ?><?= $katParam ?>" class="tab-btn <?= $sortBy===$k?'active':'' ?>"><?= $v ?></a>
+    <a href="?action=urunler&sort=<?= $k ?><?= $katParam ?><?= $donemParam ?>" class="tab-btn <?= $sortBy===$k?'active':'' ?>"><?= $v ?></a>
     <?php endforeach; ?>
-    <span style="margin-left:auto;color:var(--text2);font-size:12px">
-        <?= count($urunler) ?> ürün
-        <?php if ($maliyetsizSayisi>0): ?> · <a href="?action=ty_urunler&maliyet=yok" style="color:var(--yellow);text-decoration:none">⚠️ <?= $maliyetsizSayisi ?> maliyetsiz</a><?php endif; ?>
-    </span>
+    <input type="search" id="urunAra" placeholder="Ürün adı veya barkod ara…"
+        oninput="filterUrunler(this.value)"
+        style="margin-left:8px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:12px;width:200px;outline:none">
+    <span style="margin-left:auto;color:var(--text2);font-size:12px" id="urunSayac"><?= count($urunler) ?> ürün<?php if ($maliyetsizSayisi>0): ?> · <a href="?action=ty_urunler&maliyet=yok" style="color:var(--yellow);text-decoration:none">⚠️ <?= $maliyetsizSayisi ?> maliyetsiz</a><?php endif; ?></span>
 </div>
+<?php if ($katKpi): ?>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+    <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--text1)"><?= $katKpi['urun'] ?></div>
+        <div style="font-size:11px;color:var(--text2)">Ürün</div>
+    </div>
+    <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--text1)"><?= fmt($katKpi['siparis'],0) ?></div>
+        <div style="font-size:11px;color:var(--text2)">Sipariş</div>
+    </div>
+    <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:var(--blue)"><?= fmtTL($katKpi['ciro']) ?></div>
+        <div style="font-size:11px;color:var(--text2)">Ciro</div>
+    </div>
+    <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:<?= $katKpi['kar']>=0?'var(--green)':'var(--red)' ?>"><?= fmtTL($katKpi['kar']) ?></div>
+        <div style="font-size:11px;color:var(--text2)">Kâr · <?= $katKpi['marj'] ?>%</div>
+    </div>
+</div>
+<?php endif; ?>
 <div class="card" style="padding:0;overflow:hidden">
 <?php if (empty($urunler)): ?>
 <div class="no-data"><div class="icon">🏷️</div><p>Henüz sipariş verisi yok. API'den sipariş çekin veya Excel yükleyin.</p></div>
 <?php else: ?>
-<div style="overflow-x:auto"><table>
+<div style="overflow-x:auto"><table id="urunlerTablo">
 <thead><tr>
     <th>Görsel</th><th>Ürün Adı</th><th>Kategori</th>
     <th style="text-align:right">Sipariş</th>
     <th style="text-align:right">Adet</th>
+    <th style="text-align:right">Satış Hızı</th>
     <th style="text-align:right">Brüt Ciro</th>
     <th style="text-align:right">Komisyon</th>
     <th style="text-align:right">Kargo</th>
@@ -2042,6 +2160,7 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
     <th style="text-align:right">Birim Maliyet</th>
     <th style="text-align:right">Toplam Maliyet</th>
     <th style="text-align:right">Stok</th>
+    <th style="text-align:right">İade %</th>
     <th style="text-align:right">Kar</th>
     <th style="text-align:right">Marj</th>
 </tr></thead>
@@ -2052,8 +2171,12 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
     $tT = $hm ? (float)$u['toplam_maliyet'] : null;
     $kr = $hm ? (float)$u['kar'] : null;
     $mj = $hm ? (float)$u['kar_marji'] : null;
+    $satisHizi = $gunSayisi > 0 ? round((float)$u['net_satis'] / $gunSayisi, 2) : null;
+    $stok = (int)($u['guncel_stok'] ?? 0);
+    $stokBadge = $stok <= 0 ? '🔴' : ($stok <= 5 ? '⚠️' : '');
+    $iadePct = $u['us_iade_orani'] !== null ? (float)$u['us_iade_orani'] : null;
 ?>
-<tr>
+<tr data-title="<?= htmlspecialchars(strtolower($u['title']??'')) ?>" data-barcode="<?= htmlspecialchars(strtolower($u['barcode']??'')) ?>">
     <td><?php if ($u['image_url']): ?><img src="<?= htmlspecialchars($u['image_url']) ?>" class="product-img" loading="lazy"><?php else: ?><div class="product-img" style="display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--bg3)">📦</div><?php endif; ?></td>
     <td style="max-width:180px">
         <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= htmlspecialchars($u['title']) ?></div>
@@ -2063,6 +2186,7 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
     <td><span class="badge badge-blue" style="font-size:10px"><?= htmlspecialchars($u['category_name']??'-') ?></span></td>
     <td style="text-align:right;font-weight:600"><?= fmt($u['siparis_sayisi'],0) ?></td>
     <td style="text-align:right"><?= fmt($u['net_satis'],0) ?></td>
+    <td style="text-align:right;font-size:12px;color:var(--text2)"><?= $satisHizi !== null ? number_format($satisHizi,2,',','.').' /g' : '—' ?></td>
     <td style="text-align:right;font-weight:600"><?= fmtTL($u['net_ciro']) ?></td>
     <td style="text-align:right" class="negative"><?= fmtTL($u['komisyon']) ?></td>
     <td style="text-align:right"><?= (float)$u['kargo']>0 ? '<span class="negative">'.fmtTL($u['kargo']).'</span>' : '<span class="neutral">—</span>' ?></td>
@@ -2091,7 +2215,10 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
         <?php endif; ?>
     </td>
     <td style="text-align:right"><?= $tT!==null ? '<span class="negative">'.fmtTL($tT).'</span>' : '<span class="neutral">—</span>' ?></td>
-    <td style="text-align:right"><?= fmt($u['guncel_stok'],0) ?></td>
+    <td style="text-align:right;white-space:nowrap"><?= $stokBadge ?> <?= $stok<=0 ? '<span style="color:var(--red);font-weight:600">0</span>' : fmt($stok,0) ?></td>
+    <td style="text-align:right">
+        <?php if ($iadePct !== null): ?><span class="badge <?= $iadePct>=20?'badge-red':($iadePct>=10?'badge-orange':'badge-green') ?>"><?= number_format($iadePct,1,',','.') ?>%</span><?php else: ?><span class="neutral">—</span><?php endif; ?>
+    </td>
     <td style="text-align:right;font-weight:600"><?php if ($kr!==null): ?><span class="<?= $kr>=0?'positive':'negative' ?>"><?= fmtTL($kr) ?></span><?php else: ?><span class="neutral">—</span><?php endif; ?></td>
     <td style="text-align:right"><?php if ($mj!==null): ?><span class="badge <?= $mj>=30?'badge-green':($mj>=10?'badge-yellow':($mj>=0?'badge-orange':'badge-red')) ?>"><?= $mj ?>%</span><?php else: ?><span class="neutral">—</span><?php endif; ?></td>
 </tr>
@@ -2099,6 +2226,117 @@ $katParam = $katFilt !== '' ? '&kat='.urlencode($katFilt) : '';
 </tbody></table></div>
 <?php endif; ?>
 </div>
+
+<?php if (!empty($katKarsilastirma)): ?>
+<div class="page-title" style="margin-top:24px">📊 Kategori Karşılaştırması</div>
+<div class="card" style="padding:0;overflow:hidden">
+<div style="overflow-x:auto"><table>
+<thead><tr>
+    <th>Kategori</th>
+    <th style="text-align:right">Ürün</th>
+    <th style="text-align:right">Sipariş</th>
+    <th style="text-align:right">Adet</th>
+    <th style="text-align:right">Ciro</th>
+    <th style="text-align:right">Komisyon</th>
+    <th style="text-align:right">Kargo</th>
+    <th style="text-align:right">Kâr</th>
+    <th style="text-align:right">Maliyetsiz</th>
+</tr></thead>
+<tbody>
+<?php foreach ($katKarsilastirma as $kk): ?>
+<tr>
+    <td><a href="?action=urunler&sort=<?= $sortBy ?>&kat=<?= urlencode($kk['category_name']) ?><?= $donemParam ?>"
+           style="color:var(--blue);text-decoration:none;font-weight:500"><?= htmlspecialchars($kk['category_name']) ?></a></td>
+    <td style="text-align:right"><?= fmt($kk['urun_sayisi'],0) ?></td>
+    <td style="text-align:right"><?= fmt($kk['siparis_sayisi'],0) ?></td>
+    <td style="text-align:right"><?= fmt($kk['net_satis'],0) ?></td>
+    <td style="text-align:right;font-weight:600"><?= fmtTL($kk['net_ciro']) ?></td>
+    <td style="text-align:right" class="negative"><?= fmtTL($kk['komisyon']) ?></td>
+    <td style="text-align:right" class="negative"><?= fmtTL($kk['kargo']) ?></td>
+    <td style="text-align:right;font-weight:600"><?php if ($kk['kar']!==null): ?><span class="<?= $kk['kar']>=0?'positive':'negative' ?>"><?= fmtTL($kk['kar']) ?></span><?php else: ?><span class="neutral">—</span><?php endif; ?></td>
+    <td style="text-align:right"><?= $kk['maliyetsiz']>0 ? '<span style="color:var(--yellow)">⚠️ '.$kk['maliyetsiz'].'</span>' : '<span class="neutral">0</span>' ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody></table></div>
+</div>
+<?php endif; ?>
+
+<?php if (count($scatterData) >= 2): ?>
+<div class="page-title" style="margin-top:24px">💹 Fiyat–Marj Grafiği
+    <span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:8px">Baloncuk büyüklüğü = ciro · Yalnızca maliyeti olan ürünler</span>
+</div>
+<div class="card" style="padding:16px">
+    <canvas id="scatterChart" style="width:100%;max-height:360px"></canvas>
+</div>
+<script>
+(function(){
+const raw = <?= json_encode($scatterData, JSON_UNESCAPED_UNICODE) ?>;
+const canvas = document.getElementById('scatterChart');
+if (!canvas || !raw.length) return;
+const dpr = window.devicePixelRatio || 1;
+const W = canvas.parentElement.clientWidth - 32;
+const H = Math.min(360, Math.max(240, W * 0.45));
+canvas.width = W * dpr; canvas.height = H * dpr;
+canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+const ctx = canvas.getContext('2d');
+ctx.scale(dpr, dpr);
+const PAD = {t:20,r:20,b:50,l:60};
+const cw = W - PAD.l - PAD.r, ch = H - PAD.t - PAD.b;
+const xs = raw.map(d=>d.x), ys = raw.map(d=>d.y);
+const xMin = Math.min(...xs)*0.95, xMax = Math.max(...xs)*1.05;
+const yMin = Math.min(Math.min(...ys)-5, -5), yMax = Math.max(Math.max(...ys)+5, 10);
+const tx = x => PAD.l + (x-xMin)/(xMax-xMin)*cw;
+const ty = y => PAD.t + (1-(y-yMin)/(yMax-yMin))*ch;
+const isDark = document.documentElement.getAttribute('data-theme')==='dark' ||
+    (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme:dark)').matches);
+const clr = {grid:isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)',
+             ax:isDark?'rgba(255,255,255,.3)':'rgba(0,0,0,.3)',
+             txt:isDark?'#aaa':'#666',dot:isDark?'rgba(99,179,237,.8)':'rgba(49,130,206,.8)',
+             zero:isDark?'rgba(255,100,100,.4)':'rgba(220,50,50,.35)'};
+ctx.strokeStyle=clr.grid; ctx.lineWidth=1;
+for (let i=0;i<=4;i++){
+    const gx=PAD.l+i/4*cw; ctx.beginPath();ctx.moveTo(gx,PAD.t);ctx.lineTo(gx,PAD.t+ch);ctx.stroke();
+    const gy=PAD.t+i/4*ch; ctx.beginPath();ctx.moveTo(PAD.l,gy);ctx.lineTo(PAD.l+cw,gy);ctx.stroke();
+}
+if (yMin<0&&yMax>0){ ctx.strokeStyle=clr.zero; ctx.lineWidth=1.5; const zy=ty(0); ctx.beginPath();ctx.moveTo(PAD.l,zy);ctx.lineTo(PAD.l+cw,zy);ctx.stroke(); }
+ctx.fillStyle=clr.txt; ctx.font='11px system-ui'; ctx.textAlign='center';
+[0,.25,.5,.75,1].forEach(t=>{ ctx.fillText(Math.round(xMin+t*(xMax-xMin))+'₺', tx(xMin+t*(xMax-xMin)), PAD.t+ch+18); });
+ctx.textAlign='right';
+[0,.25,.5,.75,1].forEach(t=>{ ctx.fillText(Math.round(yMin+t*(yMax-yMin))+'%', PAD.l-6, ty(yMin+t*(yMax-yMin))+4); });
+ctx.textAlign='center'; ctx.fillStyle=clr.txt; ctx.font='11px system-ui';
+ctx.fillText('Ortalama Satış Fiyatı (₺)', PAD.l+cw/2, H-8);
+ctx.save(); ctx.translate(14,PAD.t+ch/2); ctx.rotate(-Math.PI/2); ctx.fillText('Kâr Marjı (%)',0,0); ctx.restore();
+raw.forEach(d=>{
+    const x=tx(d.x), y=ty(d.y), r=d.r;
+    const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r);
+    g.addColorStop(0,'rgba(130,200,255,.9)'); g.addColorStop(1,clr.dot);
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=g; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=.8; ctx.stroke();
+});
+canvas.addEventListener('mousemove',e=>{
+    const rect=canvas.getBoundingClientRect(), mx=e.clientX-rect.left, my=e.clientY-rect.top;
+    let found=-1;
+    raw.forEach((d,i)=>{ if(Math.hypot(tx(d.x)-mx,ty(d.y)-my)<=d.r+4) found=i; });
+    canvas.title=found>=0?`${raw[found].n}\nFiyat: ${raw[found].x}₺ | Marj: ${raw[found].y}%`:'';
+});
+})();
+</script>
+<?php endif; ?>
+
+<script>
+function filterUrunler(q) {
+    q = q.toLowerCase().trim();
+    let vis = 0;
+    document.querySelectorAll('#urunlerTablo tbody tr').forEach(tr => {
+        const show = !q || tr.dataset.title.includes(q) || tr.dataset.barcode.includes(q);
+        tr.style.display = show ? '' : 'none';
+        if (show) vis++;
+    });
+    const el = document.getElementById('urunSayac');
+    if (el) el.childNodes[0].textContent = vis + ' ürün ';
+}
+</script>
 
 <?php elseif ($action === 'kar_zarar'): ?>
 <?php
