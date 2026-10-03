@@ -13,6 +13,11 @@ if (!$magazaId) { http_response_code(403); echo json_encode(['error'=>'Mağaza s
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+// Otomatik migrasyon: tarihli maliyet geçmişi
+try { DB::exec("ALTER TABLE maliyetler ADD COLUMN gecerli_baslangic DATE NOT NULL DEFAULT '2000-01-01'"); } catch(Exception $e) {}
+try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {}
+try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {}
+
 try {
     switch ($action) {
 
@@ -374,15 +379,17 @@ try {
             $kargo  = (float)($_POST['kargo_maliyeti'] ?? 0);
             $paket  = (float)($_POST['paket_maliyeti'] ?? 0);
             $diger  = (float)($_POST['diger_maliyet']  ?? 0);
+            $tarih  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['gecerli_baslangic'] ?? '')
+                      ? $_POST['gecerli_baslangic'] : date('Y-m-d');
             DB::exec(
-                "INSERT INTO maliyetler (magaza_id,ty_urun_id,barcode,urun_adi,birim_maliyet,kargo_maliyeti,paket_maliyeti,diger_maliyet,guncelleme)
-                 VALUES (?,?,?,?,?,?,?,?,NOW())
+                "INSERT INTO maliyetler (magaza_id,ty_urun_id,barcode,urun_adi,birim_maliyet,kargo_maliyeti,paket_maliyeti,diger_maliyet,gecerli_baslangic,guncelleme)
+                 VALUES (?,?,?,?,?,?,?,?,?,NOW())
                  ON DUPLICATE KEY UPDATE
                    barcode=VALUES(barcode), urun_adi=VALUES(urun_adi),
                    birim_maliyet=VALUES(birim_maliyet), kargo_maliyeti=VALUES(kargo_maliyeti),
                    paket_maliyeti=VALUES(paket_maliyeti), diger_maliyet=VALUES(diger_maliyet),
                    guncelleme=NOW()",
-                [$magazaId, $tyId, $barcode, $ad, $birim, $kargo, $paket, $diger]
+                [$magazaId, $tyId, $barcode, $ad, $birim, $kargo, $paket, $diger, $tarih]
             );
             echo json_encode(['ok' => true]);
             break;

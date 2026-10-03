@@ -1245,7 +1245,7 @@ $total    = (int)DB::scalar(
 $tyUrunler= DB::rows(
     "SELECT tu.*, m.birim_maliyet, m.kargo_maliyeti, m.paket_maliyeti, m.diger_maliyet, m.id as m_id
      FROM trendyol_urunler tu
-     LEFT JOIN maliyetler m ON tu.ty_id=m.ty_urun_id AND m.magaza_id=tu.magaza_id
+     LEFT JOIN maliyetler m ON m.id = (SELECT id FROM maliyetler WHERE ty_urun_id=tu.ty_id AND magaza_id=tu.magaza_id AND gecerli_baslangic<=CURDATE() ORDER BY gecerli_baslangic DESC LIMIT 1)
      $where ORDER BY tu.ty_id DESC LIMIT $perPage OFFSET $offset", $params);
 $pages    = (int)ceil($total / $perPage);
 $lastSync = DB::scalar("SELECT MAX(cekme_tarihi) FROM trendyol_urunler WHERE magaza_id=?",[$magazaId]);
@@ -1373,7 +1373,7 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 <!-- Maliyet Modal -->
 <div id="costModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center">
 <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:25px;width:400px;max-width:90vw">
-    <h3 style="margin-bottom:15px">💰 Maliyet Ekle</h3>
+    <h3 style="margin-bottom:15px">💰 Maliyet Ekle / Güncelle</h3>
     <input type="hidden" id="m_ty_id"><input type="hidden" id="m_barcode">
     <div id="m_urun_adi" style="color:var(--text2);font-size:12px;margin-bottom:15px"></div>
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
@@ -1381,6 +1381,10 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
         <div class="form-group"><label>Kargo Maliyeti ₺</label><input type="number" id="m_kargo" step="0.01" min="0" value="0"></div>
         <div class="form-group"><label>Paketleme ₺</label><input type="number" id="m_paket" step="0.01" min="0" value="0"></div>
         <div class="form-group"><label>Diğer ₺</label><input type="number" id="m_diger" step="0.01" min="0" value="0"></div>
+    </div>
+    <div class="form-group" style="margin-top:10px">
+        <label style="font-size:12px">Geçerlilik Başlangıcı <span style="color:var(--text2);font-weight:400">(bu tarihten itibaren geçerli — farklı tarih = yeni kayıt)</span></label>
+        <input type="date" id="m_baslangic" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px">
     </div>
     <div style="display:flex;gap:10px;margin-top:15px">
         <button class="btn btn-primary" onclick="saveCost()">💾 Kaydet</button>
@@ -2032,7 +2036,7 @@ $urunler = DB::rows("
            MAX(us.iade_orani)  AS us_iade_orani
     FROM trendyol_urunler tu
     JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
-    LEFT JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
+    LEFT JOIN maliyetler m ON m.id = (SELECT id FROM maliyetler WHERE ty_urun_id=tu.ty_id AND magaza_id=tu.magaza_id AND gecerli_baslangic<=CURDATE() ORDER BY gecerli_baslangic DESC LIMIT 1)
     LEFT JOIN urun_satis us ON us.ty_urun_id = tu.ty_id AND us.magaza_id = tu.magaza_id
     $urunlerWhere
     GROUP BY tu.ty_id, tu.title, tu.image_url, tu.barcode, tu.category_name,
@@ -2072,7 +2076,7 @@ if ($katFilt === '') {
                END) AS kar
         FROM trendyol_urunler tu
         JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
-        LEFT JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
+        LEFT JOIN maliyetler m ON m.id = (SELECT id FROM maliyetler WHERE ty_urun_id=tu.ty_id AND magaza_id=tu.magaza_id AND gecerli_baslangic<=CURDATE() ORDER BY gecerli_baslangic DESC LIMIT 1)
         WHERE tu.magaza_id=? AND s.siparis_statusu NOT LIKE '%İptal%' AND s.siparis_statusu NOT LIKE '%Cancel%'
           AND tu.category_name IS NOT NULL AND tu.category_name != ''
         GROUP BY tu.category_name ORDER BY net_ciro DESC
@@ -2329,7 +2333,7 @@ $karAnaliz = DB::rows("
            ELSE 0 END AS kar_marji
     FROM trendyol_urunler tu
     JOIN siparisler s ON s.ty_urun_id = tu.ty_id AND s.magaza_id = tu.magaza_id
-    JOIN maliyetler m ON m.ty_urun_id = tu.ty_id AND m.magaza_id = tu.magaza_id
+    JOIN maliyetler m ON m.id = (SELECT id FROM maliyetler WHERE ty_urun_id=tu.ty_id AND magaza_id=tu.magaza_id AND gecerli_baslangic<=CURDATE() ORDER BY gecerli_baslangic DESC LIMIT 1)
     WHERE tu.magaza_id = ?
       AND s.siparis_statusu NOT LIKE '%İptal%'
       AND s.siparis_statusu NOT LIKE '%Cancel%'
@@ -2459,7 +2463,7 @@ $maliyetler = DB::rows("SELECT m.*, tu.title, tu.image_url, tu.sale_price,
     LEFT JOIN trendyol_urunler tu ON m.ty_urun_id = tu.ty_id AND tu.magaza_id = m.magaza_id
     LEFT JOIN urun_satis u ON u.ty_urun_id = m.ty_urun_id AND u.magaza_id = m.magaza_id
     WHERE m.magaza_id=?
-    ORDER BY m.urun_adi", [$magazaId]);
+    ORDER BY m.urun_adi, m.gecerli_baslangic DESC", [$magazaId]);
 $tyListForCost = DB::rows("SELECT ty_id, barcode, title, sale_price FROM trendyol_urunler WHERE magaza_id=? ORDER BY title LIMIT 2000", [$magazaId]);
 ?>
 <div class="page-title">💰 <span>Maliyet Yönetimi</span></div>
@@ -2498,7 +2502,7 @@ $tyListForCost = DB::rows("SELECT ty_id, barcode, title, sale_price FROM trendyo
     <div class="no-data"><div class="icon">💸</div><p>Henüz maliyet girilmemiş.</p></div>
     <?php else: ?>
     <div style="overflow-x:auto"><table>
-    <thead><tr><th>Ürün</th><th style="text-align:right">Birim</th><th style="text-align:right">Net Ciro</th><th style="text-align:right">Kar</th><th></th></tr></thead>
+    <thead><tr><th>Ürün</th><th style="text-align:right">Birim</th><th style="text-align:right">Geçerlilik</th><th style="text-align:right">Net Ciro</th><th style="text-align:right">Kar</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($maliyetler as $m): $t=(float)$m['birim_maliyet']+(float)$m['kargo_maliyeti']+(float)$m['paket_maliyeti']+(float)$m['diger_maliyet']; ?>
     <tr>
@@ -2507,6 +2511,7 @@ $tyListForCost = DB::rows("SELECT ty_id, barcode, title, sale_price FROM trendyo
             <div style="font-size:10px;color:var(--text2);font-family:monospace"><?= htmlspecialchars($m['barcode']) ?></div>
         </td>
         <td style="text-align:right;font-size:12px"><?= fmtTL($t) ?></td>
+        <td style="text-align:right;font-size:11px;color:var(--text2)"><?= $m['gecerli_baslangic']&&$m['gecerli_baslangic']!='2000-01-01' ? htmlspecialchars($m['gecerli_baslangic']) : '—' ?></td>
         <td style="text-align:right;font-size:12px"><?= $m['net_ciro'] ? fmtTL($m['net_ciro']) : '—' ?></td>
         <td style="text-align:right"><?= $m['kar']!==null ? "<span class='".($m['kar']>=0?'positive':'negative')."'>".fmtTL($m['kar'])."</span>" : '<span class="neutral">—</span>' ?></td>
         <td><a href="#" onclick="deleteCost(<?= $m['id'] ?>,this);return false" class="btn btn-danger btn-sm">🗑</a></td>
@@ -4445,6 +4450,7 @@ function openCostModal(tyId, barcode, title) {
     document.getElementById('m_kargo').value = '0';
     document.getElementById('m_paket').value = '0';
     document.getElementById('m_diger').value = '0';
+    document.getElementById('m_baslangic').value = new Date().toISOString().slice(0,10);
     document.getElementById('costModal').style.display = 'flex';
 }
 
@@ -4457,6 +4463,7 @@ function saveCost() {
         kargo_maliyeti: document.getElementById('m_kargo').value,
         paket_maliyeti: document.getElementById('m_paket').value,
         diger_maliyet: document.getElementById('m_diger').value,
+        gecerli_baslangic: document.getElementById('m_baslangic').value,
     }).then(d => {
         document.getElementById('costModal').style.display = 'none';
         if (d.ok) { toast('✅ Maliyet kaydedildi'); setTimeout(()=>location.reload(),800); }
@@ -4496,6 +4503,7 @@ function saveCostFromForm() {
         kargo_maliyeti: document.getElementById('cm_kargo').value,
         paket_maliyeti: document.getElementById('cm_paket').value,
         diger_maliyet:  document.getElementById('cm_diger').value,
+        gecerli_baslangic: new Date().toISOString().slice(0,10),
     }).then(d => {
         if (d.ok) { toast('✅ Maliyet kaydedildi'); setTimeout(()=>location.reload(),800); }
         else toast('❌ '+d.error, false);
