@@ -2151,21 +2151,23 @@ $scatterData = array_values(array_filter(array_map(fn($u) =>
 <?php else: ?>
 <div style="overflow-x:auto"><table id="urunlerTablo">
 <thead><tr>
-    <th>Görsel</th><th>Ürün Adı</th><th>Kategori</th>
-    <th style="text-align:right">Sipariş</th>
-    <th style="text-align:right">Adet</th>
-    <th style="text-align:right">Satış Hızı</th>
-    <th style="text-align:right">Brüt Ciro</th>
-    <th style="text-align:right">Komisyon</th>
-    <th style="text-align:right">Kargo</th>
-    <th style="text-align:right">Platform</th>
-    <th style="text-align:right">Net Tutar</th>
-    <th style="text-align:right">Birim Maliyet</th>
-    <th style="text-align:right">Toplam Maliyet</th>
-    <th style="text-align:right">Stok</th>
-    <th style="text-align:right">İade %</th>
-    <th style="text-align:right">Kar</th>
-    <th style="text-align:right">Marj</th>
+    <th>Görsel</th>
+    <th data-col="1" onclick="sortUrunler(1)" style="cursor:pointer;user-select:none">Ürün Adı <span class="sa"></span></th>
+    <th data-col="2" onclick="sortUrunler(2)" style="cursor:pointer;user-select:none">Kategori <span class="sa"></span></th>
+    <th data-col="3" onclick="sortUrunler(3)" style="text-align:right;cursor:pointer;user-select:none">Sipariş <span class="sa"></span></th>
+    <th data-col="4" onclick="sortUrunler(4)" style="text-align:right;cursor:pointer;user-select:none">Adet <span class="sa"></span></th>
+    <th data-col="5" onclick="sortUrunler(5)" style="text-align:right;cursor:pointer;user-select:none">Satış Hızı <span class="sa"></span></th>
+    <th data-col="6" onclick="sortUrunler(6)" style="text-align:right;cursor:pointer;user-select:none">Brüt Ciro <span class="sa"></span></th>
+    <th data-col="7" onclick="sortUrunler(7)" style="text-align:right;cursor:pointer;user-select:none">Komisyon <span class="sa"></span></th>
+    <th data-col="8" onclick="sortUrunler(8)" style="text-align:right;cursor:pointer;user-select:none">Kargo <span class="sa"></span></th>
+    <th data-col="9" onclick="sortUrunler(9)" style="text-align:right;cursor:pointer;user-select:none">Platform <span class="sa"></span></th>
+    <th data-col="10" onclick="sortUrunler(10)" style="text-align:right;cursor:pointer;user-select:none">Net Tutar <span class="sa"></span></th>
+    <th data-col="11" onclick="sortUrunler(11)" style="text-align:right;cursor:pointer;user-select:none">Birim Maliyet <span class="sa"></span></th>
+    <th data-col="12" onclick="sortUrunler(12)" style="text-align:right;cursor:pointer;user-select:none">Toplam Maliyet <span class="sa"></span></th>
+    <th data-col="13" onclick="sortUrunler(13)" style="text-align:right;cursor:pointer;user-select:none">Stok <span class="sa"></span></th>
+    <th data-col="14" onclick="sortUrunler(14)" style="text-align:right;cursor:pointer;user-select:none">İade % <span class="sa"></span></th>
+    <th data-col="15" onclick="sortUrunler(15)" style="text-align:right;cursor:pointer;user-select:none">Kar <span class="sa"></span></th>
+    <th data-col="16" onclick="sortUrunler(16)" style="text-align:right;cursor:pointer;user-select:none">Marj <span class="sa"></span></th>
 </tr></thead>
 <tbody>
 <?php foreach ($urunler as $u):
@@ -2178,8 +2180,18 @@ $scatterData = array_values(array_filter(array_map(fn($u) =>
     $stok = (int)($u['guncel_stok'] ?? 0);
     $stokBadge = $stok <= 0 ? '🔴' : ($stok <= 5 ? '⚠️' : '');
     $iadePct = $u['us_iade_orani'] !== null ? (float)$u['us_iade_orani'] : null;
+    $netHesap = (float)$u['net_hesapli'];
+    $netDb    = (float)$u['net_tutar_toplam'];
+    $netGoster= $netHesap !== 0.0 ? $netHesap : $netDb;
+    $_vals = json_encode([
+        $u['title']??'', $u['category_name']??'',
+        (float)$u['siparis_sayisi'], (float)$u['net_satis'], (float)($satisHizi??0),
+        (float)$u['net_ciro'], (float)$u['komisyon'], (float)$u['kargo'], (float)$u['platform'],
+        $netGoster, (float)($bT??0), (float)($tT??0), $stok,
+        (float)($iadePct??-1), (float)($kr??-1e9), (float)($mj??-1e9),
+    ], JSON_UNESCAPED_UNICODE);
 ?>
-<tr data-title="<?= htmlspecialchars(strtolower($u['title']??'')) ?>" data-barcode="<?= htmlspecialchars(strtolower($u['barcode']??'')) ?>">
+<tr data-title="<?= htmlspecialchars(strtolower($u['title']??'')) ?>" data-barcode="<?= htmlspecialchars(strtolower($u['barcode']??'')) ?>" data-vals="<?= htmlspecialchars($_vals) ?>">
     <td><?php if ($u['image_url']): ?><img src="<?= htmlspecialchars($u['image_url']) ?>" class="product-img" loading="lazy"><?php else: ?><div class="product-img" style="display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--bg3)">📦</div><?php endif; ?></td>
     <td style="max-width:180px">
         <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= htmlspecialchars($u['title']) ?></div>
@@ -2194,11 +2206,6 @@ $scatterData = array_values(array_filter(array_map(fn($u) =>
     <td style="text-align:right" class="negative"><?= fmtTL($u['komisyon']) ?></td>
     <td style="text-align:right"><?= (float)$u['kargo']>0 ? '<span class="negative">'.fmtTL($u['kargo']).'</span>' : '<span class="neutral">—</span>' ?></td>
     <td style="text-align:right"><?= (float)$u['platform']>0 ? '<span class="negative">'.fmtTL($u['platform']).'</span>' : '<span class="neutral">—</span>' ?></td>
-    <?php
-    $netHesap = (float)$u['net_hesapli'];
-    $netDb    = (float)$u['net_tutar_toplam'];
-    $netGoster= $netHesap !== 0.0 ? $netHesap : $netDb;
-    ?>
     <td style="text-align:right;font-weight:600">
         <span><?= fmtTL($netGoster) ?></span>
         <?php if ($netDb > 0 && abs($netHesap - $netDb) > 1): ?>
@@ -2264,69 +2271,6 @@ $scatterData = array_values(array_filter(array_map(fn($u) =>
 </div>
 <?php endif; ?>
 
-<?php if (count($scatterData) >= 2): ?>
-<div class="page-title" style="margin-top:24px">💹 Fiyat–Marj Grafiği
-    <span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:8px">Baloncuk büyüklüğü = ciro · Yalnızca maliyeti olan ürünler</span>
-</div>
-<div class="card" style="padding:16px">
-    <canvas id="scatterChart" style="width:100%;max-height:360px"></canvas>
-</div>
-<script>
-(function(){
-const raw = <?= json_encode($scatterData, JSON_UNESCAPED_UNICODE) ?>;
-const canvas = document.getElementById('scatterChart');
-if (!canvas || !raw.length) return;
-const dpr = window.devicePixelRatio || 1;
-const W = canvas.parentElement.clientWidth - 32;
-const H = Math.min(360, Math.max(240, W * 0.45));
-canvas.width = W * dpr; canvas.height = H * dpr;
-canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-const ctx = canvas.getContext('2d');
-ctx.scale(dpr, dpr);
-const PAD = {t:20,r:20,b:50,l:60};
-const cw = W - PAD.l - PAD.r, ch = H - PAD.t - PAD.b;
-const xs = raw.map(d=>d.x), ys = raw.map(d=>d.y);
-const xMin = Math.min(...xs)*0.95, xMax = Math.max(...xs)*1.05;
-const yMin = Math.min(Math.min(...ys)-5, -5), yMax = Math.max(Math.max(...ys)+5, 10);
-const tx = x => PAD.l + (x-xMin)/(xMax-xMin)*cw;
-const ty = y => PAD.t + (1-(y-yMin)/(yMax-yMin))*ch;
-const isDark = document.documentElement.getAttribute('data-theme')==='dark' ||
-    (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme:dark)').matches);
-const clr = {grid:isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)',
-             ax:isDark?'rgba(255,255,255,.3)':'rgba(0,0,0,.3)',
-             txt:isDark?'#aaa':'#666',dot:isDark?'rgba(99,179,237,.8)':'rgba(49,130,206,.8)',
-             zero:isDark?'rgba(255,100,100,.4)':'rgba(220,50,50,.35)'};
-ctx.strokeStyle=clr.grid; ctx.lineWidth=1;
-for (let i=0;i<=4;i++){
-    const gx=PAD.l+i/4*cw; ctx.beginPath();ctx.moveTo(gx,PAD.t);ctx.lineTo(gx,PAD.t+ch);ctx.stroke();
-    const gy=PAD.t+i/4*ch; ctx.beginPath();ctx.moveTo(PAD.l,gy);ctx.lineTo(PAD.l+cw,gy);ctx.stroke();
-}
-if (yMin<0&&yMax>0){ ctx.strokeStyle=clr.zero; ctx.lineWidth=1.5; const zy=ty(0); ctx.beginPath();ctx.moveTo(PAD.l,zy);ctx.lineTo(PAD.l+cw,zy);ctx.stroke(); }
-ctx.fillStyle=clr.txt; ctx.font='11px system-ui'; ctx.textAlign='center';
-[0,.25,.5,.75,1].forEach(t=>{ ctx.fillText(Math.round(xMin+t*(xMax-xMin))+'₺', tx(xMin+t*(xMax-xMin)), PAD.t+ch+18); });
-ctx.textAlign='right';
-[0,.25,.5,.75,1].forEach(t=>{ ctx.fillText(Math.round(yMin+t*(yMax-yMin))+'%', PAD.l-6, ty(yMin+t*(yMax-yMin))+4); });
-ctx.textAlign='center'; ctx.fillStyle=clr.txt; ctx.font='11px system-ui';
-ctx.fillText('Ortalama Satış Fiyatı (₺)', PAD.l+cw/2, H-8);
-ctx.save(); ctx.translate(14,PAD.t+ch/2); ctx.rotate(-Math.PI/2); ctx.fillText('Kâr Marjı (%)',0,0); ctx.restore();
-raw.forEach(d=>{
-    const x=tx(d.x), y=ty(d.y), r=d.r;
-    const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r);
-    g.addColorStop(0,'rgba(130,200,255,.9)'); g.addColorStop(1,clr.dot);
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle=g; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=.8; ctx.stroke();
-});
-canvas.addEventListener('mousemove',e=>{
-    const rect=canvas.getBoundingClientRect(), mx=e.clientX-rect.left, my=e.clientY-rect.top;
-    let found=-1;
-    raw.forEach((d,i)=>{ if(Math.hypot(tx(d.x)-mx,ty(d.y)-my)<=d.r+4) found=i; });
-    canvas.title=found>=0?`${raw[found].n}\nFiyat: ${raw[found].x}₺ | Marj: ${raw[found].y}%`:'';
-});
-})();
-</script>
-<?php endif; ?>
-
 <script>
 function filterUrunler(q) {
     q = q.toLowerCase().trim();
@@ -2338,6 +2282,26 @@ function filterUrunler(q) {
     });
     const el = document.getElementById('urunSayac');
     if (el) el.childNodes[0].textContent = vis + ' ürün ';
+}
+let _sc = -1, _sa = false;
+function sortUrunler(col) {
+    const isStr = col <= 2;
+    _sa = _sc === col ? !_sa : (isStr ? true : false);
+    _sc = col;
+    const tbody = document.querySelector('#urunlerTablo tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const vi = col - 1;
+    rows.sort((a, b) => {
+        const av = JSON.parse(a.dataset.vals)[vi];
+        const bv = JSON.parse(b.dataset.vals)[vi];
+        const cmp = isStr ? String(av).localeCompare(String(bv), 'tr') : ((+av||0) - (+bv||0));
+        return _sa ? cmp : -cmp;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+    document.querySelectorAll('#urunlerTablo thead th[data-col] .sa').forEach(s => s.textContent = '');
+    const th = document.querySelector(`#urunlerTablo thead th[data-col="${col}"] .sa`);
+    if (th) th.textContent = _sa ? ' ↑' : ' ↓';
 }
 </script>
 
