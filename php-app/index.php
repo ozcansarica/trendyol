@@ -2101,15 +2101,18 @@ $scatterData = array_values(array_filter(array_map(fn($u) =>
     <a href="?action=urunler&sort=<?= $sortBy ?><?= $katParam ?>&donem=son_3_ay" class="tab-btn <?= $donem==='son_3_ay'?'active':'' ?>">Son 3 ay</a>
 </div>
 <?php if (!empty($kategoriler)): ?>
-<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-    <span style="color:var(--text2);font-size:12px;align-self:center">Kategori:</span>
-    <a href="?action=urunler&sort=<?= $sortBy ?><?= $donemParam ?>" class="tab-btn <?= $katFilt===''?'active':'' ?>">Tümü</a>
-    <?php foreach ($kategoriler as $kat): ?>
-    <a href="?action=urunler&sort=<?= $sortBy ?>&kat=<?= urlencode($kat['category_name']) ?><?= $donemParam ?>"
-       class="tab-btn <?= $katFilt===$kat['category_name']?'active':'' ?>"
-       style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-       title="<?= htmlspecialchars($kat['category_name']) ?>"><?= htmlspecialchars($kat['category_name']) ?></a>
-    <?php endforeach; ?>
+<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+    <label for="katSelect" style="color:var(--text2);font-size:12px;white-space:nowrap">Kategori:</label>
+    <select id="katSelect" onchange="location='?action=urunler&sort=<?= $sortBy ?><?= $donemParam ?>'+(this.value?'&kat='+encodeURIComponent(this.value):'')"
+        style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:12px;max-width:300px;outline:none;cursor:pointer">
+        <option value="">Tüm kategoriler (<?= count($kategoriler) ?>)</option>
+        <?php foreach ($kategoriler as $kat): ?>
+        <option value="<?= htmlspecialchars($kat['category_name'],ENT_QUOTES) ?>" <?= $katFilt===$kat['category_name']?'selected':'' ?>><?= htmlspecialchars($kat['category_name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <?php if ($katFilt !== ''): ?>
+    <a href="?action=urunler&sort=<?= $sortBy ?><?= $donemParam ?>" style="font-size:12px;color:var(--text2);text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg2)" title="Filtreyi temizle">✕</a>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 <div style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
