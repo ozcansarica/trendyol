@@ -1348,9 +1348,9 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
     <td><?= $u['approved'] ? '<span class="badge badge-green">Onaylı</span>' : '<span class="badge badge-yellow">Onaysız</span>' ?></td>
     <td style="text-align:right">
     <?php if ($birimM !== null): ?>
-        <div class="tip"><span class="cost-chip has"><?= fmtTL($birimM) ?></span>
+        <div class="tip"><a href="#" onclick="openCostModal('<?= htmlspecialchars($u['ty_id'],ENT_QUOTES) ?>','<?= htmlspecialchars($u['barcode']??'',ENT_QUOTES) ?>','<?= htmlspecialchars(addslashes($u['title']??'')) ?>');return false" style="text-decoration:none"><span class="cost-chip has"><?= fmtTL($birimM) ?></span></a>
         <div class="tip-box">Ürün: <?= fmtTL($u['birim_maliyet']) ?><br>Kargo: <?= fmtTL($u['kargo_maliyeti']) ?><br>Paket: <?= fmtTL($u['paket_maliyeti']) ?><br>Diğer: <?= fmtTL($u['diger_maliyet']) ?></div></div>
-        <a href="#" onclick="deleteCost(<?= $u['m_id'] ?>,this);return false" style="color:var(--red);font-size:10px;margin-left:4px">✕</a>
+        <a href="#" onclick="deleteCost(<?= $u['m_id'] ?>,this);return false" style="color:var(--red);font-size:10px;margin-left:4px" title="Sil">✕</a>
     <?php else: ?>
         <button class="btn btn-sm" style="background:var(--bg3);color:var(--text2);font-size:10px" onclick="openCostModal('<?= htmlspecialchars($u['ty_id'],ENT_QUOTES) ?>','<?= htmlspecialchars($u['barcode']??'',ENT_QUOTES) ?>','<?= htmlspecialchars(addslashes($u['title']??'')) ?>')">+ Maliyet</button>
     <?php endif; ?>
