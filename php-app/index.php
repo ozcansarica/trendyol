@@ -187,6 +187,11 @@ try {
     // api_komisyon_orani kolonu — Faz 3
     $migrate('trendyol_urunler', 'api_komisyon_orani', 'DECIMAL(6,2) DEFAULT NULL');
 
+    // Tarihli maliyet geçmişi — gecerli_baslangic
+    $migrate('maliyetler', 'gecerli_baslangic', "DATE NOT NULL DEFAULT '2000-01-01'");
+    try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {}
+    try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {}
+
     // musteri_sorulari tablosu — Faz 2
     try {
         DB::get()->exec("CREATE TABLE IF NOT EXISTS `musteri_sorulari` (
