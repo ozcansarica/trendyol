@@ -15,8 +15,12 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Otomatik migrasyon: tarihli maliyet geçmişi
 try { DB::exec("ALTER TABLE maliyetler ADD COLUMN gecerli_baslangic DATE NOT NULL DEFAULT '2000-01-01'"); } catch(Exception $e) {}
-try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {}
-try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {}
+// Eski 2-kolonlu unique key varsa düşür
+$_oldKey = (int)DB::scalar("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='maliyetler' AND CONSTRAINT_NAME='uk_magaza_urun' AND CONSTRAINT_TYPE='UNIQUE'");
+if ($_oldKey) { try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {} }
+// Yeni 3-kolonlu unique key yoksa ekle
+$_newKey = (int)DB::scalar("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='maliyetler' AND CONSTRAINT_NAME='uk_magaza_urun_tarih' AND CONSTRAINT_TYPE='UNIQUE'");
+if (!$_newKey) { try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {} }
 
 try {
     switch ($action) {
@@ -393,17 +397,21 @@ try {
             $diger  = (float)($_POST['diger_maliyet']  ?? 0);
             $tarih  = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['gecerli_baslangic'] ?? '')
                       ? $_POST['gecerli_baslangic'] : date('Y-m-d');
-            DB::exec(
-                "INSERT INTO maliyetler (magaza_id,ty_urun_id,barcode,urun_adi,birim_maliyet,kargo_maliyeti,paket_maliyeti,diger_maliyet,gecerli_baslangic,guncelleme)
-                 VALUES (?,?,?,?,?,?,?,?,?,NOW())
-                 ON DUPLICATE KEY UPDATE
-                   barcode=VALUES(barcode), urun_adi=VALUES(urun_adi),
-                   birim_maliyet=VALUES(birim_maliyet), kargo_maliyeti=VALUES(kargo_maliyeti),
-                   paket_maliyeti=VALUES(paket_maliyeti), diger_maliyet=VALUES(diger_maliyet),
-                   guncelleme=NOW()",
-                [$magazaId, $tyId, $barcode, $ad, $birim, $kargo, $paket, $diger, $tarih]
-            );
-            echo json_encode(['ok' => true]);
+            try {
+                DB::exec(
+                    "INSERT INTO maliyetler (magaza_id,ty_urun_id,barcode,urun_adi,birim_maliyet,kargo_maliyeti,paket_maliyeti,diger_maliyet,gecerli_baslangic,guncelleme)
+                     VALUES (?,?,?,?,?,?,?,?,?,NOW())
+                     ON DUPLICATE KEY UPDATE
+                       barcode=VALUES(barcode), urun_adi=VALUES(urun_adi),
+                       birim_maliyet=VALUES(birim_maliyet), kargo_maliyeti=VALUES(kargo_maliyeti),
+                       paket_maliyeti=VALUES(paket_maliyeti), diger_maliyet=VALUES(diger_maliyet),
+                       guncelleme=NOW()",
+                    [$magazaId, $tyId, $barcode, $ad, $birim, $kargo, $paket, $diger, $tarih]
+                );
+                echo json_encode(['ok' => true]);
+            } catch (Exception $e) {
+                echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            }
             break;
 
         // ------ Maliyet sil ------

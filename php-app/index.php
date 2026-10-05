@@ -189,8 +189,10 @@ try {
 
     // Tarihli maliyet geçmişi — gecerli_baslangic
     $migrate('maliyetler', 'gecerli_baslangic', "DATE NOT NULL DEFAULT '2000-01-01'");
-    try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {}
-    try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {}
+    $_oldKey = (int)DB::scalar("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='maliyetler' AND CONSTRAINT_NAME='uk_magaza_urun' AND CONSTRAINT_TYPE='UNIQUE'");
+    if ($_oldKey) { try { DB::exec("ALTER TABLE maliyetler DROP INDEX uk_magaza_urun"); } catch(Exception $e) {} }
+    $_newKey = (int)DB::scalar("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='maliyetler' AND CONSTRAINT_NAME='uk_magaza_urun_tarih' AND CONSTRAINT_TYPE='UNIQUE'");
+    if (!$_newKey) { try { DB::exec("ALTER TABLE maliyetler ADD UNIQUE KEY uk_magaza_urun_tarih (magaza_id, ty_urun_id, gecerli_baslangic)"); } catch(Exception $e) {} }
 
     // musteri_sorulari tablosu — Faz 2
     try {
@@ -4550,7 +4552,7 @@ function saveCost() {
             const title   = document.getElementById('m_urun_adi').textContent;
             openCostModal(tyId, barcode, title);
         } else toast('❌ '+(d.error||'Hata'), false);
-    });
+    }).catch(() => toast('❌ Bağlantı hatası', false));
 }
 
 function deleteCost(id, el) {
