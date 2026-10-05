@@ -370,6 +370,18 @@ try {
             echo json_encode(['ok' => true]);
             break;
 
+        // ------ Maliyet geçmişi getir ------
+        case 'get_cost_history':
+            $tyId = trim($_POST['ty_urun_id'] ?? '');
+            $rows = DB::rows(
+                "SELECT id, birim_maliyet, kargo_maliyeti, paket_maliyeti, diger_maliyet, gecerli_baslangic
+                 FROM maliyetler WHERE magaza_id=? AND ty_urun_id=?
+                 ORDER BY gecerli_baslangic DESC",
+                [$magazaId, $tyId]
+            );
+            echo json_encode(['ok' => true, 'rows' => $rows]);
+            break;
+
         // ------ Maliyet kaydet ------
         case 'save_cost':
             $tyId   = trim($_POST['ty_urun_id']  ?? '');

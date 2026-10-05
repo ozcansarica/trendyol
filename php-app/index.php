@@ -1377,10 +1377,34 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
 
 <!-- Maliyet Modal -->
 <div id="costModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center">
-<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:25px;width:400px;max-width:90vw">
-    <h3 style="margin-bottom:15px">💰 Maliyet Ekle / Güncelle</h3>
+<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:25px;width:500px;max-width:93vw;max-height:90vh;overflow-y:auto">
+    <h3 style="margin-bottom:4px">💰 Maliyet Geçmişi</h3>
+    <div id="m_urun_adi" style="color:var(--text2);font-size:12px;margin-bottom:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
     <input type="hidden" id="m_ty_id"><input type="hidden" id="m_barcode">
-    <div id="m_urun_adi" style="color:var(--text2);font-size:12px;margin-bottom:15px"></div>
+
+    <!-- Geçmiş kayıtlar -->
+    <div id="m_gecmis_wrap" style="display:none;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Geçmiş Dönemler</div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="background:var(--bg2)">
+                <th style="text-align:left;padding:6px 8px;font-weight:600">Başlangıç</th>
+                <th style="text-align:right;padding:6px 8px">Birim</th>
+                <th style="text-align:right;padding:6px 8px">Kargo</th>
+                <th style="text-align:right;padding:6px 8px">Paket</th>
+                <th style="text-align:right;padding:6px 8px">Toplam</th>
+                <th style="padding:6px 8px"></th>
+            </tr></thead>
+            <tbody id="m_gecmis_tbody"></tbody>
+        </table></div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:14px 0 10px">
+    </div>
+
+    <!-- Form bölümü -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px" id="m_form_baslik">➕ Yeni Dönem Ekle</div>
+        <button class="btn btn-sm" id="m_yeni_btn" style="display:none;background:rgba(52,152,219,.12);color:var(--primary);border:1px solid rgba(52,152,219,.3);font-size:11px" onclick="costFormYeni()">➕ Yeni Dönem</button>
+    </div>
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
         <div class="form-group"><label>Birim Maliyet ₺ *</label><input type="number" id="m_birim" step="0.01" min="0" placeholder="0.00"></div>
         <div class="form-group"><label>Kargo Maliyeti ₺</label><input type="number" id="m_kargo" step="0.01" min="0" value="0"></div>
@@ -1388,12 +1412,12 @@ $cntYok = (int)DB::scalar("SELECT COUNT(*) FROM trendyol_urunler tu LEFT JOIN ma
         <div class="form-group"><label>Diğer ₺</label><input type="number" id="m_diger" step="0.01" min="0" value="0"></div>
     </div>
     <div class="form-group" style="margin-top:10px">
-        <label style="font-size:12px">Geçerlilik Başlangıcı <span style="color:var(--text2);font-weight:400">(bu tarihten itibaren geçerli — farklı tarih = yeni kayıt)</span></label>
+        <label style="font-size:12px">Geçerlilik Başlangıcı <span style="color:var(--text2);font-weight:400">— farklı tarih yeni kayıt oluşturur</span></label>
         <input type="date" id="m_baslangic" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px">
     </div>
     <div style="display:flex;gap:10px;margin-top:15px">
         <button class="btn btn-primary" onclick="saveCost()">💾 Kaydet</button>
-        <button class="btn" style="background:var(--bg3);color:var(--text2)" onclick="document.getElementById('costModal').style.display='none'">İptal</button>
+        <button class="btn" style="background:var(--bg3);color:var(--text2)" onclick="document.getElementById('costModal').style.display='none'">Kapat</button>
     </div>
 </div>
 </div>
@@ -4451,12 +4475,61 @@ function openCostModal(tyId, barcode, title) {
     document.getElementById('m_ty_id').value = tyId;
     document.getElementById('m_barcode').value = barcode;
     document.getElementById('m_urun_adi').textContent = title;
+    costFormYeni();
+    document.getElementById('m_gecmis_wrap').style.display = 'none';
+    document.getElementById('m_gecmis_tbody').innerHTML = '';
+    document.getElementById('m_yeni_btn').style.display = 'none';
+    document.getElementById('costModal').style.display = 'flex';
+    post({action:'get_cost_history', ty_urun_id: tyId}).then(d => {
+        if (!d.ok || !d.rows || !d.rows.length) return;
+        const tbody = document.getElementById('m_gecmis_tbody');
+        tbody.innerHTML = '';
+        d.rows.forEach((r, i) => {
+            const tot = (+r.birim_maliyet||0)+(+r.kargo_maliyeti||0)+(+r.paket_maliyeti||0)+(+r.diger_maliyet||0);
+            const tarih = r.gecerli_baslangic && r.gecerli_baslangic !== '2000-01-01' ? r.gecerli_baslangic : '(varsayılan)';
+            const isAktif = i === 0;
+            const tr = document.createElement('tr');
+            tr.style.cssText = 'border-top:1px solid var(--border)' + (isAktif ? ';background:rgba(52,152,219,.06)' : '');
+            tr.innerHTML = `<td style="padding:6px 8px;font-family:monospace">${tarih}${isAktif ? ' <span style="font-size:10px;color:var(--green);font-weight:600">●geçerli</span>' : ''}</td>
+                <td style="text-align:right;padding:6px 8px">${(+r.birim_maliyet).toFixed(2)}</td>
+                <td style="text-align:right;padding:6px 8px;color:var(--text2)">${(+r.kargo_maliyeti).toFixed(2)}</td>
+                <td style="text-align:right;padding:6px 8px;color:var(--text2)">${(+r.paket_maliyeti).toFixed(2)}</td>
+                <td style="text-align:right;padding:6px 8px;font-weight:600">${tot.toFixed(2)} ₺</td>
+                <td style="padding:6px 8px;white-space:nowrap">
+                    <a href="#" onclick="costFormDuzenle(${JSON.stringify(r).replace(/"/g,'&quot;')});return false" style="font-size:11px;color:var(--primary);margin-right:6px">✏️ Düzenle</a>
+                    <a href="#" onclick="deleteCostRow(${r.id},this);return false" style="font-size:11px;color:var(--red)">🗑</a>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+        document.getElementById('m_gecmis_wrap').style.display = 'block';
+        document.getElementById('m_yeni_btn').style.display = '';
+        const latest = d.rows[0];
+        document.getElementById('m_birim').value = latest.birim_maliyet;
+        document.getElementById('m_kargo').value = latest.kargo_maliyeti;
+        document.getElementById('m_paket').value = latest.paket_maliyeti;
+        document.getElementById('m_diger').value = latest.diger_maliyet;
+    });
+}
+
+function costFormYeni() {
     document.getElementById('m_birim').value = '';
     document.getElementById('m_kargo').value = '0';
     document.getElementById('m_paket').value = '0';
     document.getElementById('m_diger').value = '0';
     document.getElementById('m_baslangic').value = new Date().toISOString().slice(0,10);
-    document.getElementById('costModal').style.display = 'flex';
+    document.getElementById('m_form_baslik').textContent = '➕ Yeni Dönem Ekle';
+}
+
+function costFormDuzenle(r) {
+    document.getElementById('m_birim').value = r.birim_maliyet;
+    document.getElementById('m_kargo').value = r.kargo_maliyeti;
+    document.getElementById('m_paket').value = r.paket_maliyeti;
+    document.getElementById('m_diger').value = r.diger_maliyet;
+    const tarih = r.gecerli_baslangic && r.gecerli_baslangic !== '2000-01-01' ? r.gecerli_baslangic : new Date().toISOString().slice(0,10);
+    document.getElementById('m_baslangic').value = tarih;
+    document.getElementById('m_form_baslik').textContent = '✏️ Dönem Düzenle';
+    document.getElementById('m_yeni_btn').style.display = '';
+    document.getElementById('m_birim').focus();
 }
 
 function saveCost() {
@@ -4470,9 +4543,13 @@ function saveCost() {
         diger_maliyet: document.getElementById('m_diger').value,
         gecerli_baslangic: document.getElementById('m_baslangic').value,
     }).then(d => {
-        document.getElementById('costModal').style.display = 'none';
-        if (d.ok) { toast('✅ Maliyet kaydedildi'); setTimeout(()=>location.reload(),800); }
-        else toast('❌ '+d.error, false);
+        if (d.ok) {
+            toast('✅ Maliyet kaydedildi');
+            const tyId    = document.getElementById('m_ty_id').value;
+            const barcode = document.getElementById('m_barcode').value;
+            const title   = document.getElementById('m_urun_adi').textContent;
+            openCostModal(tyId, barcode, title);
+        } else toast('❌ '+(d.error||'Hata'), false);
     });
 }
 
@@ -4480,6 +4557,21 @@ function deleteCost(id, el) {
     if (!confirm('Bu maliyeti sil?')) return;
     post({action:'delete_cost', id}).then(d => {
         if (d.ok) { toast('🗑 Silindi'); setTimeout(()=>location.reload(),600); }
+    });
+}
+
+function deleteCostRow(id, el) {
+    if (!confirm('Bu maliyet kaydını sil?')) return;
+    post({action:'delete_cost', id}).then(d => {
+        if (!d.ok) return;
+        const tr = el.closest('tr');
+        if (tr) tr.remove();
+        toast('🗑 Silindi');
+        const tbody = document.getElementById('m_gecmis_tbody');
+        if (!tbody.querySelector('tr')) {
+            document.getElementById('m_gecmis_wrap').style.display = 'none';
+            document.getElementById('m_yeni_btn').style.display = 'none';
+        }
     });
 }
 
